@@ -92,7 +92,7 @@ export default function TransactionsScreen() {
                   + {formatAmount(income)}
                 </Text>
                 <Text style={{ color: theme.expense, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
-                  − {formatAmount(expense + fees)}
+                  −{formatAmount(expense + fees)}
                 </Text>
               </View>
             </View>

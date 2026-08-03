@@ -1,5 +1,5 @@
 export function formatAmount(amount: number): string {
-  return `${amount.toLocaleString("fr-FR")} F`;
+  return `${amount.toLocaleString("fr-FR").replace("-", "−")} F`;
 }
 
 export function formatMonthLabel(year: number, month: number): string {

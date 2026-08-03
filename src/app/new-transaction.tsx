@@ -1,4 +1,4 @@
-import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { useCallback, useMemo, useState } from "react";
@@ -325,8 +325,8 @@ export default function NewTransactionScreen() {
             mode="date"
             value={date}
             onValueChange={(_, d) => {
-              setDate(d);
               setShowDatePicker(false);
+              setDate(d);
             }}
             onDismiss={() => setShowDatePicker(false)}
           />
@@ -336,8 +336,8 @@ export default function NewTransactionScreen() {
             mode="time"
             value={date}
             onValueChange={(_, d) => {
-              setDate(d);
               setShowTimePicker(false);
+              setDate(d);
             }}
             onDismiss={() => setShowTimePicker(false)}
           />

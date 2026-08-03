@@ -1,4 +1,3 @@
-import { Host } from "@expo/ui";
 import { Stack } from "expo-router/stack";
 import {
   DarkTheme,
@@ -12,8 +11,7 @@ export default function RootLayout() {
   const scheme = useColorScheme();
   const theme = useTheme();
   return (
-    <Host>
-      <ThemeProvider value={scheme === "dark" ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={scheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.background },
@@ -32,6 +30,5 @@ export default function RootLayout() {
           <Stack.Screen name="accounts/[id]" options={{ title: "Compte" }} />
         </Stack>
       </ThemeProvider>
-    </Host>
   );
 }

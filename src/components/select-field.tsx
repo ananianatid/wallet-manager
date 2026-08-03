@@ -1,5 +1,12 @@
-import { MenuView } from "@expo/ui/community/menu";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { radius, spacing, useTheme } from "@/theme";
 
 export interface SelectOption {
@@ -16,34 +23,71 @@ interface Props {
 
 export function SelectField({ label, value, options, onChange }: Props) {
   const theme = useTheme();
-  const actions = options.map((o) => ({
-    title: o.label,
-    id: String(o.id),
-  }));
+  const [open, setOpen] = useState(false);
+
+  const select = (id: number) => {
+    onChange(id);
+    setOpen(false);
+  };
 
   return (
     <View style={styles.container}>
       <Text style={[styles.label, { color: theme.secondaryLabel }]}>{label}</Text>
-      <MenuView
-        actions={actions}
-        onPressAction={(e) => onChange(Number(e.nativeEvent.event))}
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [
+          styles.field,
+          { backgroundColor: theme.surface, borderColor: theme.separator },
+          pressed && { opacity: 0.7 },
+        ]}
+      >
+        <Text
+          style={{ color: value ? theme.label : theme.secondaryLabel, flex: 1 }}
+          numberOfLines={1}
+        >
+          {value ?? "Sélectionner…"}
+        </Text>
+        <Text style={{ color: theme.secondaryLabel }}>▾</Text>
+      </Pressable>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
       >
         <Pressable
-          style={({ pressed }) => [
-            styles.field,
-            { backgroundColor: theme.surface, borderColor: theme.separator },
-            pressed && { opacity: 0.7 },
-          ]}
+          style={styles.backdrop}
+          onPress={() => setOpen(false)}
+          accessibilityLabel="Fermer"
         >
-          <Text
-            style={{ color: value ? theme.label : theme.secondaryLabel, flex: 1 }}
-            numberOfLines={1}
-          >
-            {value ?? "Sélectionner…"}
-          </Text>
-          <Text style={{ color: theme.secondaryLabel }}>▾</Text>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.sheetTitle, { color: theme.label }]}>{label}</Text>
+            <FlatList
+              data={options}
+              keyExtractor={(o) => String(o.id)}
+              style={{ maxHeight: 320 }}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => select(item.id)}
+                  style={({ pressed }) => [
+                    styles.option,
+                    { backgroundColor: pressed ? theme.surface : "transparent" },
+                  ]}
+                >
+                  <Text style={{ color: theme.label, flex: 1 }} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                  {item.id ===
+                  options.find((o) => o.label === value)?.id ? (
+                    <Text style={{ color: theme.accent, fontWeight: "700" }}>✓</Text>
+                  ) : null}
+                </Pressable>
+              )}
+            />
+          </Pressable>
         </Pressable>
-      </MenuView>
+      </Modal>
     </View>
   );
 }
@@ -62,6 +106,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.sm,
+  },
+  sheetTitle: {
+    fontWeight: "700",
+    fontSize: 16,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
   },
 });

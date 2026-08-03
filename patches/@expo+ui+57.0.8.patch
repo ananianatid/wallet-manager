@@ -1,0 +1,44 @@
+diff --git a/node_modules/@expo/ui/src/State/index.fx.ts b/node_modules/@expo/ui/src/State/index.fx.ts
+index 4b9034c..de4ac9b 100644
+--- a/node_modules/@expo/ui/src/State/index.fx.ts
++++ b/node_modules/@expo/ui/src/State/index.fx.ts
+@@ -60,8 +60,12 @@ function registerSharedObjectSerializer(): void {
+   });
+ }
+ 
++// PATCHED (patch-package): skipping worklets side-effect at module load.
++// Calling installOnUIRuntime/getUIRuntimeHolder inside Expo Go 57.0.2 crashes
++// with SIGSEGV in libworklets.so (not catchable by JS try/catch).
++// Upstream bug: expo/expo @expo/ui worklet integration vs Expo Go runtime.
+ try {
+-  if (worklets) {
++  if (false && worklets) {
+     installOnUIRuntime(worklets.getUIRuntimeHolder());
+     registerSharedObjectSerializer();
+   }
+diff --git a/node_modules/@expo/ui/src/State/optionalWorklets.ts b/node_modules/@expo/ui/src/State/optionalWorklets.ts
+index 17aa0b6..d439249 100644
+--- a/node_modules/@expo/ui/src/State/optionalWorklets.ts
++++ b/node_modules/@expo/ui/src/State/optionalWorklets.ts
+@@ -2,11 +2,17 @@
+  * A re-export of `react-native-worklets` that supports optional dependency.
+  */
+ 
++// PATCHED (patch-package): never load `react-native-worklets` inside Expo Go.
++// Requiring it executes its module-scope init() which calls into libworklets.so
++// JSI bindings that SIGSEGV in Expo Go 57.0.2 (not catchable by try/catch).
++// Worklet features of @expo/ui are optional; all consumers guard on `worklets`.
+ let worklets: undefined | typeof import('react-native-worklets');
+-try {
+-  worklets = require('react-native-worklets');
+-} catch {
+-  // Fail silently as worklet support is currently optional in Expo UI
++if (false) {
++  try {
++    worklets = require('react-native-worklets');
++  } catch {
++    // Fail silently as worklet support is currently optional in Expo UI
++  }
+ }
+ 
+ export { worklets };
