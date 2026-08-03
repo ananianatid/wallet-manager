@@ -1,7 +1,7 @@
 import { Stack } from "expo-router/stack";
 import { useTheme } from "@/theme";
 
-export default function CategoriesLayout() {
+export default function StatisticsLayout() {
   const theme = useTheme();
   return (
     <Stack
@@ -13,7 +13,7 @@ export default function CategoriesLayout() {
         contentStyle: { backgroundColor: theme.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Catégories" }} />
+      <Stack.Screen name="index" options={{ title: "Statistiques" }} />
     </Stack>
   );
 }

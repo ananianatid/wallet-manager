@@ -120,13 +120,21 @@ export function listTransactionsByMonth(
   month: number,
 ): Promise<Transaction[]> {
   const { start, end } = getMonthRange(year, month);
+  return listTransactionsByRange(db, start, end);
+}
+
+export function listTransactionsByRange(
+  db: SQLiteDatabase,
+  startMs: number,
+  endMs: number,
+): Promise<Transaction[]> {
   return db
     .getAllAsync<TransactionRow>(
       `SELECT ${SELECT_FIELDS}
        ${FROM_JOINS}
        WHERE t.transaction_date >= ? AND t.transaction_date < ?
-       ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC`,
-      [start, end],
+       ORDER BY t.transaction_date ASC, t.created_at ASC, t.id ASC`,
+      [startMs, endMs],
     )
     .then((rows) => rows.map(mapTransaction));
 }
