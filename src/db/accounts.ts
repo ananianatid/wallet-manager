@@ -10,14 +10,14 @@ interface AccountRow {
   balance: number;
 }
 
-export const BALANCE_SUM = `
+const balanceSum = (accountRef: string): string => `
   SUM(
     CASE
       WHEN type = 'income' THEN amount
       WHEN type = 'expense' THEN -amount
       WHEN type = 'transfer' THEN
         CASE
-          WHEN account_id = ? THEN -(amount + COALESCE(fee, 0))
+          WHEN account_id = ${accountRef} THEN -(amount + COALESCE(fee, 0))
           ELSE amount
         END
     END
@@ -42,14 +42,13 @@ export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
             c.name AS categoryName,
             a.created_at AS createdAt,
             COALESCE((
-              SELECT ${BALANCE_SUM}
+              SELECT ${balanceSum("a.id")}
               FROM transactions t
               WHERE t.account_id = a.id OR t.destination_account_id = a.id
             ), 0) AS balance
      FROM accounts a
      JOIN categories c ON c.id = a.category_id
      ORDER BY a.name`,
-    [0],
   );
   return rows.map(mapAccount);
 }
@@ -64,14 +63,14 @@ export async function getAccount(
             c.name AS categoryName,
             a.created_at AS createdAt,
             COALESCE((
-              SELECT ${BALANCE_SUM}
+              SELECT ${balanceSum("a.id")}
               FROM transactions t
               WHERE t.account_id = a.id OR t.destination_account_id = a.id
             ), 0) AS balance
      FROM accounts a
      JOIN categories c ON c.id = a.category_id
      WHERE a.id = ?`,
-    [id, id],
+    [id],
   );
   return row ? mapAccount(row) : null;
 }
@@ -81,10 +80,10 @@ export async function getAccountBalance(
   id: number,
 ): Promise<number> {
   const row = await db.getFirstAsync<{ balance: number }>(
-    `SELECT COALESCE(${BALANCE_SUM}, 0) AS balance
+    `SELECT COALESCE(${balanceSum("?")}, 0) AS balance
      FROM transactions
      WHERE account_id = ? OR destination_account_id = ?`,
-    [id, id],
+    [id, id, id],
   );
   return row?.balance ?? 0;
 }
