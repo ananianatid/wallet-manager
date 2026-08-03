@@ -1,5 +1,4 @@
 import * as SQLite from "expo-sqlite";
-import { File } from "expo-file-system";
 import {
   buildImportPlan,
   type ImportPlan,
@@ -7,8 +6,6 @@ import {
 } from "./money-manager";
 
 export { applyImportPlan, type ImportReport } from "./import-apply";
-
-const SQLITE_MAGIC = "SQLite format 3";
 
 export interface BackupSummary {
   plan: ImportPlan;
@@ -55,20 +52,7 @@ export async function readMoneyManagerBackup(
   uri: string,
   displayName: string,
 ): Promise<BackupSummary> {
-  const file = new File(uri);
-  if (!file.exists) {
-    throw new Error("Fichier introuvable.");
-  }
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const magic = String.fromCharCode(...bytes.slice(0, SQLITE_MAGIC.length));
-  if (magic !== SQLITE_MAGIC) {
-    throw new Error(
-      "Ce fichier n'est pas une base Money Manager (.mmbak) valide.",
-    );
-  }
-
-  const plainPath = file.uri.replace(/^file:\/\//, "");
+  const plainPath = uri.replace(/^file:\/\//, "");
   const lastSlash = plainPath.lastIndexOf("/");
   if (lastSlash <= 0) {
     throw new Error("Chemin de fichier invalide.");
