@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Pressable, SectionList, StyleSheet, Text, View } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { MonthNavigator } from "@/components/month-navigator";
 import { TransactionRow } from "@/components/transaction-row";
@@ -9,7 +9,18 @@ import { getDatabase } from "@/db/database";
 import { listTransactionsByMonth } from "@/db/transactions";
 import { spacing, useTheme } from "@/theme";
 import type { Account, Transaction } from "@/types";
-import { formatAmount, formatMonthLabel } from "@/utils/format";
+import {
+  formatAmount,
+  formatDayLabel,
+  formatMonthLabel,
+} from "@/utils/format";
+
+interface DaySection {
+  key: string;
+  title: string;
+  total: number;
+  data: Transaction[];
+}
 
 export default function TransactionsScreen() {
   const theme = useTheme();
@@ -35,15 +46,45 @@ export default function TransactionsScreen() {
     }, [load]),
   );
 
-  const income = (transactions ?? []).reduce(
+  const sections = useMemo<DaySection[]>(() => {
+    const rows = transactions ?? [];
+    const groups = new Map<string, DaySection>();
+    for (const t of rows) {
+      const date = new Date(t.transactionDate);
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      let section = groups.get(key);
+      if (!section) {
+        section = {
+          key,
+          title: formatDayLabel(t.transactionDate),
+          total: 0,
+          data: [],
+        };
+        groups.set(key, section);
+      }
+      section.data.push(t);
+      section.total +=
+        t.type === "income"
+          ? t.amount
+          : t.type === "expense"
+            ? -t.amount
+            : t.fee
+              ? -t.fee
+              : 0;
+    }
+    return [...groups.values()];
+  }, [transactions]);
+
+  const rows = transactions ?? [];
+  const income = rows.reduce(
     (sum, t) => (t.type === "income" ? sum + t.amount : sum),
     0,
   );
-  const expense = (transactions ?? []).reduce(
+  const expense = rows.reduce(
     (sum, t) => (t.type === "expense" ? sum + t.amount : sum),
     0,
   );
-  const fees = (transactions ?? []).reduce(
+  const fees = rows.reduce(
     (sum, t) => (t.type === "transfer" && t.fee ? sum + t.fee : sum),
     0,
   );
@@ -57,15 +98,43 @@ export default function TransactionsScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <FlatList
+      <SectionList
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
-        data={transactions ?? []}
+        sections={sections}
         keyExtractor={(t) => String(t.id)}
         renderItem={({ item }) => (
-          <TransactionRow transaction={item} onPress={() => openEdit(item.id)} />
+          <TransactionRow
+            transaction={item}
+            hideDate
+            onPress={() => openEdit(item.id)}
+          />
         )}
+        renderSectionHeader={({ section }) => (
+          <View
+            style={[
+              styles.dayHeader,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "600" }}>
+              {section.title}
+            </Text>
+            <Text
+              style={[
+                styles.dayTotal,
+                {
+                  color:
+                    section.total >= 0 ? theme.label : theme.expense,
+                },
+              ]}
+            >
+              {formatAmount(section.total)}
+            </Text>
+          </View>
+        )}
+        stickySectionHeadersEnabled={false}
         ItemSeparatorComponent={() => (
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separator, marginLeft: spacing.lg + 22 }} />
         )}
@@ -134,6 +203,18 @@ export default function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
+  dayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  dayTotal: {
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
   fab: {
     position: "absolute",
     right: spacing.xl,

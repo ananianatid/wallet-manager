@@ -6,9 +6,10 @@ import { formatAmount, formatDate, formatTime } from "@/utils/format";
 interface Props {
   transaction: Transaction;
   onPress: () => void;
+  hideDate?: boolean;
 }
 
-export function TransactionRow({ transaction, onPress }: Props) {
+export function TransactionRow({ transaction, onPress, hideDate = false }: Props) {
   const theme = useTheme();
   const isIncome = transaction.type === "income";
   const isExpense = transaction.type === "expense";
@@ -20,7 +21,9 @@ export function TransactionRow({ transaction, onPress }: Props) {
     : (transaction.categoryName ?? "Sans catégorie");
   const details = [
     transaction.accountName,
-    `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`,
+    hideDate
+      ? formatTime(transaction.transactionDate)
+      : `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`,
   ];
   if (isTransfer && transaction.fee) {
     details.push(`Frais : ${formatAmount(transaction.fee)}`);
