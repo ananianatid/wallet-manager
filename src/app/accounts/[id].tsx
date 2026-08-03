@@ -1,11 +1,13 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
+import { X } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
   FlatList,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -15,10 +17,11 @@ import {
   deleteAccount,
   getAccount,
   renameAccount,
+  updateAccountFlags,
 } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
 import { listTransactionsByAccount } from "@/db/transactions";
-import { spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 import type { Account, Transaction } from "@/types";
 import { formatAmount } from "@/utils/format";
 
@@ -66,6 +69,12 @@ export default function AccountDetailScreen() {
     }
   };
 
+  const toggleFlag = async (key: "hidden" | "excludeFromTotal", value: boolean) => {
+    const db = await getDatabase();
+    await updateAccountFlags(db, accountId, { [key]: value });
+    await load();
+  };
+
   const confirmDelete = () => {
     if (!account) {
       return;
@@ -107,9 +116,13 @@ export default function AccountDetailScreen() {
                 hitSlop={8}
                 accessibilityLabel="Renommer le compte"
               >
-                <Text style={{ color: theme.accent, fontWeight: "600" }}>
-                  {editing ? "✕" : "Modifier"}
-                </Text>
+                {editing ? (
+                  <X size={20} strokeWidth={2.2} color={theme.accent} />
+                ) : (
+                  <Text style={{ color: theme.accent, fontWeight: "600" }}>
+                    Modifier
+                  </Text>
+                )}
               </Pressable>
             ) : null,
         }}
@@ -190,6 +203,50 @@ export default function AccountDetailScreen() {
                 Supprimer le compte
               </Text>
             </Pressable>
+            <View
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: radius.lg,
+                paddingHorizontal: spacing.lg,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: theme.label, fontWeight: "600" }}>Masquer le compte</Text>
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    Retiré des listes et des sélecteurs de transaction.
+                  </Text>
+                </View>
+                <Switch
+                  value={account?.hidden ?? false}
+                  onValueChange={(v) => toggleFlag("hidden", v)}
+                  trackColor={{ true: theme.accent }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+              <View
+                style={{
+                  height: StyleSheet.hairlineWidth,
+                  backgroundColor: theme.separator,
+                }}
+              />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: theme.label, fontWeight: "600" }}>
+                    Exclure du total (patrimoine)
+                  </Text>
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    Ce compte est exclu du patrimoine.
+                  </Text>
+                </View>
+                <Switch
+                  value={account?.excludeFromTotal ?? false}
+                  onValueChange={(v) => toggleFlag("excludeFromTotal", v)}
+                  trackColor={{ true: theme.accent }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
           </View>
         }
         ListEmptyComponent={

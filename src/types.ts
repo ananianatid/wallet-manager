@@ -14,6 +14,8 @@ export interface Account {
   name: string;
   categoryId: number;
   categoryName: string;
+  hidden: boolean;
+  excludeFromTotal: boolean;
   createdAt: number;
   balance: number;
 }
@@ -42,6 +44,8 @@ export interface CategoryInput {
 export interface AccountInput {
   name: string;
   categoryId: number;
+  hidden?: boolean;
+  excludeFromTotal?: boolean;
 }
 
 export interface TransactionInput {

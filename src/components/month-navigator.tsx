@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { spacing, useTheme } from "@/theme";
 import { formatMonthLabel } from "@/utils/format";
@@ -18,7 +19,7 @@ export function MonthNavigator({ year, month, onChange }: Props) {
   return (
     <View style={styles.row}>
       <Pressable onPress={() => shift(-1)} hitSlop={12} style={styles.arrow}>
-        <Text style={[styles.arrowText, { color: theme.accent }]}>‹</Text>
+        <ChevronLeft size={26} strokeWidth={2.4} color={theme.accent} />
       </Pressable>
       <Text
         style={[
@@ -30,7 +31,7 @@ export function MonthNavigator({ year, month, onChange }: Props) {
         {formatMonthLabel(year, month)}
       </Text>
       <Pressable onPress={() => shift(1)} hitSlop={12} style={styles.arrow}>
-        <Text style={[styles.arrowText, { color: theme.accent }]}>›</Text>
+        <ChevronRight size={26} strokeWidth={2.4} color={theme.accent} />
       </Pressable>
     </View>
   );
@@ -45,10 +46,6 @@ const styles = StyleSheet.create({
   },
   arrow: {
     paddingHorizontal: spacing.md,
-  },
-  arrowText: {
-    fontSize: 24,
-    fontWeight: "600",
   },
   label: {
     fontSize: 16,

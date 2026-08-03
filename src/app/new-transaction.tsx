@@ -77,10 +77,14 @@ export default function NewTransactionScreen() {
     }, [load]),
   );
 
-  const accountOptions = useMemo(
-    () => accounts.map((a) => ({ id: a.id, label: a.name })),
-    [accounts],
-  );
+  const accountOptions = useMemo(() => {
+    const selectedIds = new Set<number>();
+    if (accountId != null) selectedIds.add(accountId);
+    if (destinationId != null) selectedIds.add(destinationId);
+    return accounts
+      .filter((a) => !a.hidden || selectedIds.has(a.id))
+      .map((a) => ({ id: a.id, label: a.name }));
+  }, [accounts, accountId, destinationId]);
   const categoryOptions = useMemo(
     () =>
       categories

@@ -1,3 +1,4 @@
+import { Check, ChevronDown } from "lucide-react-native";
 import { useState } from "react";
 import {
   FlatList,
@@ -47,7 +48,7 @@ export function SelectField({ label, value, options, onChange }: Props) {
         >
           {value ?? "Sélectionner…"}
         </Text>
-        <Text style={{ color: theme.secondaryLabel }}>▾</Text>
+        <ChevronDown size={18} strokeWidth={2} color={theme.secondaryLabel} />
       </Pressable>
 
       <Modal
@@ -80,7 +81,7 @@ export function SelectField({ label, value, options, onChange }: Props) {
                   </Text>
                   {item.id ===
                   options.find((o) => o.label === value)?.id ? (
-                    <Text style={{ color: theme.accent, fontWeight: "700" }}>✓</Text>
+                    <Check size={18} strokeWidth={2.4} color={theme.accent} />
                   ) : null}
                 </Pressable>
               )}

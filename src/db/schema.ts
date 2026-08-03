@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 1;
+export const DATABASE_VERSION = 2;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -12,10 +12,12 @@ CREATE TABLE categories (
 );
 
 CREATE TABLE accounts (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  name        TEXT NOT NULL,
-  category_id INTEGER NOT NULL REFERENCES categories(id),
-  created_at  INTEGER NOT NULL
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  name               TEXT NOT NULL,
+  category_id        INTEGER NOT NULL REFERENCES categories(id),
+  hidden             INTEGER NOT NULL DEFAULT 0,
+  exclude_from_total INTEGER NOT NULL DEFAULT 0,
+  created_at         INTEGER NOT NULL
 );
 
 CREATE TABLE transactions (
@@ -89,6 +91,13 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   if (currentDbVersion === 0) {
     await db.execAsync(SCHEMA_VERSION_1);
     await seedCategories(db);
+  }
+
+  if (currentDbVersion === 1) {
+    await db.execAsync(`
+      ALTER TABLE accounts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE accounts ADD COLUMN exclude_from_total INTEGER NOT NULL DEFAULT 0;
+    `);
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

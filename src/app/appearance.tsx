@@ -1,3 +1,4 @@
+import { Check } from "lucide-react-native";
 import { Stack } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { radius, spacing, useTheme, useThemeControl, type ThemeMode } from "@/theme";
@@ -43,11 +44,9 @@ export default function AppearanceScreen() {
                     {option.hint}
                   </Text>
                 </View>
-                <Text
-                  style={{ color: theme.accent, fontWeight: "700", fontSize: 16 }}
-                >
-                  {mode === option.value ? "✓" : ""}
-                </Text>
+                {mode === option.value ? (
+                  <Check size={18} strokeWidth={2.4} color={theme.accent} />
+                ) : null}
               </Pressable>
             </View>
           ))}

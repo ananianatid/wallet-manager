@@ -1,3 +1,11 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Info,
+  Sun,
+  Wallet,
+} from "lucide-react-native";
 import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import { useState } from "react";
@@ -16,7 +24,7 @@ import { formatDate } from "@/utils/format";
 
 const ENTRIES: {
   label: string;
-  icon: string;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   href:
     | "/categories/income"
     | "/categories/expense"
@@ -24,11 +32,11 @@ const ENTRIES: {
     | "/appearance"
     | "/about";
 }[] = [
-  { label: "Catégories de revenus", icon: "↑", href: "/categories/income" },
-  { label: "Catégories de dépenses", icon: "↓", href: "/categories/expense" },
-  { label: "Catégories de comptes", icon: "▤", href: "/categories/account" },
-  { label: "Apparence", icon: "◐", href: "/appearance" },
-  { label: "À propos", icon: "ℹ", href: "/about" },
+  { label: "Catégories de revenus", icon: ArrowUp, href: "/categories/income" },
+  { label: "Catégories de dépenses", icon: ArrowDown, href: "/categories/expense" },
+  { label: "Catégories de comptes", icon: Wallet, href: "/categories/account" },
+  { label: "Apparence", icon: Sun, href: "/appearance" },
+  { label: "À propos", icon: Info, href: "/about" },
 ];
 
 const errorMessage = (e: unknown): string =>
@@ -118,13 +126,13 @@ export default function SettingsScreen() {
                 pressed && { opacity: 0.6 },
               ]}
             >
-              <Text style={{ color: theme.accent, fontWeight: "600", width: 24 }}>
-                {entry.icon}
-              </Text>
+              <View style={{ width: 24 }}>
+                <entry.icon size={22} strokeWidth={2} color={theme.accent} />
+              </View>
               <Text style={[styles.label, { color: theme.label }]}>
                 {entry.label}
               </Text>
-              <Text style={{ color: theme.secondaryLabel }}>›</Text>
+              <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
             </Pressable>
           </View>
         ))}

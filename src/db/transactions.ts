@@ -139,6 +139,28 @@ export function listTransactionsByRange(
     .then((rows) => rows.map(mapTransaction));
 }
 
+export function searchTransactions(
+  db: SQLiteDatabase,
+  query: string,
+  limit = 200,
+): Promise<Transaction[]> {
+  const pattern = `%${query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+  return db
+    .getAllAsync<TransactionRow>(
+      `SELECT ${SELECT_FIELDS}
+       ${FROM_JOINS}
+       WHERE t.note LIKE ? ESCAPE '\\'
+          OR c.name LIKE ? ESCAPE '\\'
+          OR a.name LIKE ? ESCAPE '\\'
+          OR da.name LIKE ? ESCAPE '\\'
+          OR CAST(t.amount AS TEXT) LIKE ? ESCAPE '\\'
+       ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC
+       LIMIT ?`,
+      [pattern, pattern, pattern, pattern, pattern, limit],
+    )
+    .then((rows) => rows.map(mapTransaction));
+}
+
 export function listTransactionsByAccount(
   db: SQLiteDatabase,
   accountId: number,

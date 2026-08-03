@@ -6,6 +6,8 @@ interface AccountRow {
   name: string;
   categoryId: number;
   categoryName: string;
+  hidden: number;
+  excludeFromTotal: number;
   createdAt: number;
   balance: number;
 }
@@ -30,6 +32,8 @@ function mapAccount(row: AccountRow): Account {
     name: row.name,
     categoryId: row.categoryId,
     categoryName: row.categoryName,
+    hidden: row.hidden !== 0,
+    excludeFromTotal: row.excludeFromTotal !== 0,
     createdAt: row.createdAt,
     balance: row.balance,
   };
@@ -41,6 +45,8 @@ export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
             a.category_id AS categoryId,
             c.name AS categoryName,
             a.created_at AS createdAt,
+            a.hidden AS hidden,
+            a.exclude_from_total AS excludeFromTotal,
             COALESCE((
               SELECT ${balanceSum("a.id")}
               FROM transactions t
@@ -62,6 +68,8 @@ export async function getAccount(
             a.category_id AS categoryId,
             c.name AS categoryName,
             a.created_at AS createdAt,
+            a.hidden AS hidden,
+            a.exclude_from_total AS excludeFromTotal,
             COALESCE((
               SELECT ${balanceSum("a.id")}
               FROM transactions t
@@ -115,6 +123,22 @@ export async function renameAccount(
     throw new Error("Le nom du compte ne peut pas être vide.");
   }
   await db.runAsync("UPDATE accounts SET name = ? WHERE id = ?", trimmed, id);
+}
+
+export async function updateAccountFlags(
+  db: SQLiteDatabase,
+  id: number,
+  flags: { hidden?: boolean; excludeFromTotal?: boolean },
+): Promise<void> {
+  await db.runAsync(
+    `UPDATE accounts
+     SET hidden = COALESCE(?, hidden),
+         exclude_from_total = COALESCE(?, exclude_from_total)
+     WHERE id = ?`,
+    flags.hidden == null ? null : flags.hidden ? 1 : 0,
+    flags.excludeFromTotal == null ? null : flags.excludeFromTotal ? 1 : 0,
+    id,
+  );
 }
 
 export async function deleteAccount(
