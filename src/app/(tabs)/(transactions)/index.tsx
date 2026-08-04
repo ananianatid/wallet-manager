@@ -13,15 +13,17 @@ import {
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { MonthHeader } from "@/components/month-header";
+import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { listAccounts } from "@/db/accounts";
+import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
 import { applyDueRecurring } from "@/db/recurring";
 import { getSetting, setSetting } from "@/db/settings";
 import { listTransactions, searchTransactions } from "@/db/transactions";
 import { filterTransactions, setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Account, Transaction } from "@/types";
+import type { Account, SafeToSpend, Transaction } from "@/types";
 import {
   formatAmount,
   formatDayLabel,
@@ -47,6 +49,7 @@ export default function TransactionsScreen() {
   const filters = useTransactionFilters();
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [safeToSpend, setSafeToSpend] = useState<SafeToSpend | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Transaction[] | null>(
@@ -55,6 +58,7 @@ export default function TransactionsScreen() {
 
   const load = useCallback(async () => {
     const db = await getDatabase();
+    const forecast = await calculateSafeToSpend(db);
     const [rows, accs] = await Promise.all([
       listTransactions(db, {
         startMs:
@@ -71,6 +75,7 @@ export default function TransactionsScreen() {
     ]);
     setTransactions(filterTransactions(rows, filters));
     setAccounts(accs);
+    setSafeToSpend(forecast);
   }, [filters]);
 
   const checkRecurring = useCallback(async () => {
@@ -97,8 +102,11 @@ export default function TransactionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      load();
-      checkRecurring();
+      const refresh = async () => {
+        await checkRecurring();
+        await load();
+      };
+      refresh();
     }, [load, checkRecurring]),
   );
 
@@ -304,18 +312,39 @@ export default function TransactionsScreen() {
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
         sections={sections}
         keyExtractor={(t) => String(t.id)}
-        renderItem={({ item }) => (
-          <TransactionRow
-            transaction={item}
-            hideDate={filters.mode === "month"}
-            onPress={() => openEdit(item.id)}
-          />
-        )}
+        renderItem={({ item, index, section }) => {
+          const isLast = index === section.data.length - 1;
+          return (
+            <View
+              style={[
+                styles.sectionCardRow,
+                { backgroundColor: theme.surface },
+                isLast && styles.sectionCardRowLast,
+              ]}
+            >
+              <TransactionRow
+                transaction={item}
+                hideDate={filters.mode === "month"}
+                onPress={() => openEdit(item.id)}
+              />
+              {!isLast ? (
+                <View
+                  style={{
+                    height: StyleSheet.hairlineWidth,
+                    backgroundColor: theme.separator,
+                    marginLeft: spacing.lg + 22,
+                    marginRight: spacing.lg,
+                  }}
+                />
+              ) : null}
+            </View>
+          );
+        }}
         renderSectionHeader={({ section }) => (
           <View
             style={[
               styles.dayHeader,
-              { backgroundColor: theme.background },
+              { backgroundColor: theme.surface },
             ]}
           >
             <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "600" }}>
@@ -335,12 +364,15 @@ export default function TransactionsScreen() {
           </View>
         )}
         stickySectionHeadersEnabled={false}
-        ItemSeparatorComponent={() => (
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separator, marginLeft: spacing.lg + 22 }} />
-        )}
         ListHeaderComponent={
           activeSearch ? null : (
             <View style={{ gap: spacing.lg, paddingTop: spacing.lg }}>
+              {safeToSpend && accounts.length > 0 ? (
+                <SafeToSpendCard
+                  data={safeToSpend}
+                  onPress={() => router.push("/cashflow")}
+                />
+              ) : null}
               <View style={{ paddingHorizontal: spacing.lg, gap: spacing.xs }}>
                 <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                   {filters.mode === "month"
@@ -474,13 +506,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
   dayTotal: {
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
+  },
+  sectionCardRow: {
+    marginHorizontal: spacing.lg,
+  },
+  sectionCardRowLast: {
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    paddingBottom: spacing.md + spacing.sm,
   },
   fab: {
     position: "absolute",

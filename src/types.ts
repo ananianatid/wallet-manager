@@ -20,6 +20,8 @@ export interface Account {
   excludeFromTotal: boolean;
   createdAt: number;
   balance: number;
+  reservedAmount: number;
+  availableBalance: number;
 }
 
 export interface Transaction {
@@ -117,4 +119,67 @@ export interface SavingsRule {
 export interface SavingsRuleInput {
   categoryId: number | null;
   percent: number;
+}
+
+export type GoalStatus = "active" | "closed";
+
+export interface Goal {
+  id: number;
+  name: string;
+  targetAmount: number;
+  targetDate: number;
+  status: GoalStatus;
+  createdAt: number;
+  reservedAmount: number;
+  remainingAmount: number;
+  progressPercent: number;
+  monthlyRequired: number;
+  isAchieved: boolean;
+  isOverdue: boolean;
+}
+
+export interface GoalInput {
+  name: string;
+  targetAmount: number;
+  targetDate: number;
+}
+
+export interface GoalReservation {
+  id: number;
+  goalId: number;
+  sourceAccountId: number;
+  sourceAccountName: string;
+  amount: number;
+  note: string | null;
+  reservationDate: number;
+  createdAt: number;
+  releasedAt: number | null;
+}
+
+export interface GoalReservationInput {
+  goalId: number;
+  sourceAccountId: number;
+  amount: number;
+  note: string | null;
+  reservationDate: number;
+}
+
+export interface SafeToSpendSuggestion {
+  goalId: number;
+  goalName: string;
+  amount: number;
+}
+
+export interface SafeToSpend {
+  amount: number;
+  currentAvailable: number;
+  horizonDate: number;
+  nextIncomeDate: number | null;
+  usesFallbackHorizon: boolean;
+  plannedIncome: number;
+  plannedOutflows: number;
+  eventCount: number;
+  recurringEventCount: number;
+  futureTransactionCount: number;
+  suggestion: SafeToSpendSuggestion | null;
 }

@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 4;
+export const DATABASE_VERSION = 5;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -72,6 +72,29 @@ CREATE TABLE savings_rules (
 );
 
 CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHERE category_id IS NOT NULL;
+
+CREATE TABLE goals (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  target_amount INTEGER NOT NULL CHECK (target_amount > 0),
+  target_date   INTEGER NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+  created_at    INTEGER NOT NULL
+);
+
+CREATE TABLE goal_reservations (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  goal_id            INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+  source_account_id  INTEGER NOT NULL REFERENCES accounts(id),
+  amount             INTEGER NOT NULL CHECK (amount > 0),
+  note               TEXT,
+  reservation_date   INTEGER NOT NULL,
+  created_at         INTEGER NOT NULL,
+  released_at        INTEGER
+);
+
+CREATE INDEX idx_goal_reservations_goal ON goal_reservations (goal_id);
+CREATE INDEX idx_goal_reservations_source ON goal_reservations (source_account_id);
 `;
 
 export const SEED_CATEGORIES: Record<string, string[]> = {
@@ -174,6 +197,32 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
         );
 
         CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHERE category_id IS NOT NULL;
+      `);
+    }
+    if (currentDbVersion <= 4) {
+      await db.execAsync(`
+        CREATE TABLE goals (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          name          TEXT NOT NULL,
+          target_amount INTEGER NOT NULL CHECK (target_amount > 0),
+          target_date   INTEGER NOT NULL,
+          status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+          created_at    INTEGER NOT NULL
+        );
+
+        CREATE TABLE goal_reservations (
+          id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+          goal_id            INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+          source_account_id  INTEGER NOT NULL REFERENCES accounts(id),
+          amount             INTEGER NOT NULL CHECK (amount > 0),
+          note               TEXT,
+          reservation_date   INTEGER NOT NULL,
+          created_at         INTEGER NOT NULL,
+          released_at        INTEGER
+        );
+
+        CREATE INDEX idx_goal_reservations_goal ON goal_reservations (goal_id);
+        CREATE INDEX idx_goal_reservations_source ON goal_reservations (source_account_id);
       `);
     }
   }

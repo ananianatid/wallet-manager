@@ -168,8 +168,18 @@ export default function AccountDetailScreen() {
                   fontVariant: ["tabular-nums"],
                 }}
               >
-                {account ? formatAmount(account.balance) : "…"}
+                {account ? formatAmount(account.availableBalance) : "…"}
               </Text>
+              <View style={{ gap: 2 }}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                  Disponible après réservations
+                </Text>
+                {account && account.reservedAmount > 0 ? (
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    Solde total : {formatAmount(account.balance)} · Réservé : {formatAmount(account.reservedAmount)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
             {editing ? (
               <View style={{ flexDirection: "row", gap: spacing.sm }}>

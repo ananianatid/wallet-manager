@@ -10,6 +10,8 @@ interface AccountRow {
   excludeFromTotal: number;
   createdAt: number;
   balance: number;
+  reservedAmount: number;
+  availableBalance: number;
 }
 
 const balanceSum = (accountRef: string): string => `
@@ -36,8 +38,19 @@ function mapAccount(row: AccountRow): Account {
     excludeFromTotal: row.excludeFromTotal !== 0,
     createdAt: row.createdAt,
     balance: row.balance,
+    reservedAmount: row.reservedAmount,
+    availableBalance: row.availableBalance,
   };
 }
+
+const reservedSum = (accountRef: string): string => `
+  COALESCE((
+    SELECT SUM(gr.amount)
+    FROM goal_reservations gr
+    WHERE gr.source_account_id = ${accountRef}
+      AND gr.released_at IS NULL
+  ), 0)
+`;
 
 export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
   const rows = await db.getAllAsync<AccountRow>(
@@ -47,11 +60,17 @@ export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
             a.created_at AS createdAt,
             a.hidden AS hidden,
             a.exclude_from_total AS excludeFromTotal,
+            ${reservedSum("a.id")} AS reservedAmount,
             COALESCE((
               SELECT ${balanceSum("a.id")}
               FROM transactions t
               WHERE t.account_id = a.id OR t.destination_account_id = a.id
-            ), 0) AS balance
+            ), 0) AS balance,
+            COALESCE((
+              SELECT ${balanceSum("a.id")}
+              FROM transactions t
+              WHERE t.account_id = a.id OR t.destination_account_id = a.id
+            ), 0) - ${reservedSum("a.id")} AS availableBalance
      FROM accounts a
      JOIN categories c ON c.id = a.category_id
      ORDER BY a.name`,
@@ -70,11 +89,17 @@ export async function getAccount(
             a.created_at AS createdAt,
             a.hidden AS hidden,
             a.exclude_from_total AS excludeFromTotal,
+            ${reservedSum("a.id")} AS reservedAmount,
             COALESCE((
               SELECT ${balanceSum("a.id")}
               FROM transactions t
               WHERE t.account_id = a.id OR t.destination_account_id = a.id
-            ), 0) AS balance
+            ), 0) AS balance,
+            COALESCE((
+              SELECT ${balanceSum("a.id")}
+              FROM transactions t
+              WHERE t.account_id = a.id OR t.destination_account_id = a.id
+            ), 0) - ${reservedSum("a.id")} AS availableBalance
      FROM accounts a
      JOIN categories c ON c.id = a.category_id
      WHERE a.id = ?`,
@@ -94,6 +119,27 @@ export async function getAccountBalance(
     [id, id, id],
   );
   return row?.balance ?? 0;
+}
+
+export async function getAccountAvailableBalance(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<number> {
+  const row = await db.getFirstAsync<{ availableBalance: number }>(
+    `SELECT COALESCE((
+       SELECT ${balanceSum("a.id")}
+       FROM transactions t
+       WHERE t.account_id = a.id OR t.destination_account_id = a.id
+     ), 0) - COALESCE((
+       SELECT SUM(gr.amount)
+       FROM goal_reservations gr
+       WHERE gr.source_account_id = a.id AND gr.released_at IS NULL
+     ), 0) AS availableBalance
+     FROM accounts a
+     WHERE a.id = ?`,
+    id,
+  );
+  return row?.availableBalance ?? 0;
 }
 
 export async function createAccount(
@@ -153,6 +199,15 @@ export async function deleteAccount(
   if (used?.used) {
     throw new Error(
       "Ce compte contient des transactions. Supprimez-les d'abord.",
+    );
+  }
+  const reserved = await db.getFirstAsync<{ reserved: number }>(
+    "SELECT EXISTS(SELECT 1 FROM goal_reservations WHERE source_account_id = ?) AS reserved",
+    id,
+  );
+  if (reserved?.reserved) {
+    throw new Error(
+      "Ce compte contient des sommes réservées à des objectifs. Libérez-les d'abord.",
     );
   }
   await db.runAsync("DELETE FROM accounts WHERE id = ?", id);

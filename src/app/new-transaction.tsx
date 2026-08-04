@@ -15,6 +15,7 @@ import { SelectField } from "@/components/select-field";
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { createGoalReservation, listGoals } from "@/db/goals";
 import {
   createTransaction,
   deleteTransaction,
@@ -22,7 +23,7 @@ import {
   updateTransaction,
 } from "@/db/transactions";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Account, Category, TransactionType } from "@/types";
+import type { Account, Category, Goal, TransactionType } from "@/types";
 import { formatDate, formatTime } from "@/utils/format";
 
 const TYPES: { value: TransactionType; label: string }[] = [
@@ -33,10 +34,14 @@ const TYPES: { value: TransactionType; label: string }[] = [
 
 export default function NewTransactionScreen() {
   const theme = useTheme();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, goalId: goalParam } = useLocalSearchParams<{
+    id?: string;
+    goalId?: string;
+  }>();
   const transactionId = id ? Number(id) : null;
 
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
@@ -52,13 +57,15 @@ export default function NewTransactionScreen() {
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [accs, cats, existing] = await Promise.all([
+    const [accs, cats, goalRows, existing] = await Promise.all([
       listAccounts(db),
       listCategories(db),
+      listGoals(db),
       transactionId ? getTransaction(db, transactionId) : Promise.resolve(null),
     ]);
     setAccounts(accs);
     setCategories(cats);
+    setGoals(goalRows);
     if (existing) {
       setType(existing.type);
       setAmount(String(existing.amount));
@@ -68,8 +75,14 @@ export default function NewTransactionScreen() {
       setFee(existing.fee ? String(existing.fee) : "");
       setNote(existing.note ?? "");
       setDate(new Date(existing.transactionDate));
+    } else if (goalParam) {
+      const parsedGoalId = Number(goalParam);
+      if (Number.isInteger(parsedGoalId) && parsedGoalId > 0) {
+        setType("transfer");
+        setDestinationId(-parsedGoalId);
+      }
     }
-  }, [transactionId]);
+  }, [goalParam, transactionId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,6 +98,15 @@ export default function NewTransactionScreen() {
       .filter((a) => !a.hidden || selectedIds.has(a.id))
       .map((a) => ({ id: a.id, label: a.name }));
   }, [accounts, accountId, destinationId]);
+  const destinationOptions = useMemo(
+    () => [
+      ...accountOptions,
+      ...goals
+        .filter((goal) => goal.status === "active")
+        .map((goal) => ({ id: -goal.id, label: `${goal.name} · Objectif` })),
+    ],
+    [accountOptions, goals],
+  );
   const categoryOptions = useMemo(
     () =>
       categories
@@ -127,13 +149,18 @@ export default function NewTransactionScreen() {
       return;
     }
 
+    const isGoalReservation = type === "transfer" && destinationId != null && destinationId < 0;
+    const destinationAccountId =
+      type === "transfer" && destinationId != null && destinationId > 0
+        ? destinationId
+        : null;
     const input = {
       type,
       amount: parsedAmount,
       categoryId,
       accountId: accountId!,
-      destinationAccountId: type === "transfer" ? destinationId : null,
-      fee: type === "transfer" ? parsedFee : null,
+      destinationAccountId,
+      fee: type === "transfer" && !isGoalReservation ? parsedFee : null,
       note: note.trim() || null,
       transactionDate: date.getTime(),
     };
@@ -141,7 +168,18 @@ export default function NewTransactionScreen() {
     setSaving(true);
     try {
       const db = await getDatabase();
-      if (transactionId) {
+      if (isGoalReservation) {
+        if (transactionId) {
+          throw new Error("Une réservation d'objectif ne se modifie pas comme une transaction.");
+        }
+        await createGoalReservation(db, {
+          goalId: -destinationId!,
+          sourceAccountId: accountId!,
+          amount: parsedAmount,
+          note: note.trim() || null,
+          reservationDate: date.getTime(),
+        });
+      } else if (transactionId) {
         await updateTransaction(db, transactionId, input);
       } else {
         await createTransaction(db, input);
@@ -261,10 +299,10 @@ export default function NewTransactionScreen() {
 
         {type === "transfer" ? (
           <SelectField
-            label="Compte de destination"
-            value={accountOptions.find((o) => o.id === destinationId)?.label ?? null}
-            options={accountOptions}
-            onChange={setDestinationId}
+            label="Destination"
+            value={destinationOptions.find((o) => o.id === destinationId)?.label ?? null}
+            options={destinationOptions}
+            onChange={(id) => setDestinationId(id)}
           />
         ) : (
           <SelectField
@@ -275,7 +313,7 @@ export default function NewTransactionScreen() {
           />
         )}
 
-        {type === "transfer" ? (
+        {type === "transfer" && !(destinationId != null && destinationId < 0) ? (
           <View style={{ gap: spacing.xs + 2 }}>
             <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
               Frais (optionnel)
@@ -292,6 +330,24 @@ export default function NewTransactionScreen() {
                 { backgroundColor: theme.surface, color: theme.label },
               ]}
             />
+          </View>
+        ) : null}
+
+        {type === "transfer" && destinationId != null && destinationId < 0 ? (
+          <View
+            style={{
+              backgroundColor: theme.surfaceElevated,
+              borderRadius: radius.md,
+              padding: spacing.md,
+              gap: spacing.xs,
+            }}
+          >
+            <Text style={{ color: theme.label, fontWeight: "700" }}>
+              Réservation virtuelle
+            </Text>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>
+              Le solde total ne bouge pas. Cette somme sera réservée à l&apos;objectif et retirée du solde disponible.
+            </Text>
           </View>
         ) : null}
 
@@ -374,7 +430,11 @@ export default function NewTransactionScreen() {
           ]}
         >
           <Text style={styles.saveLabel}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
+            {saving
+              ? "Enregistrement…"
+              : type === "transfer" && destinationId != null && destinationId < 0
+                ? "Réserver pour l'objectif"
+                : "Enregistrer"}
           </Text>
         </Pressable>
       </ScrollView>

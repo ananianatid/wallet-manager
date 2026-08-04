@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { Eye, EyeOff, Plus, X } from "lucide-react-native";
+import { Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import {
   Pressable,
@@ -85,7 +85,8 @@ export default function AccountsScreen() {
     const passifs = eligible
       .filter((a) => a.balance < 0)
       .reduce((sum, a) => sum + a.balance, 0);
-    return { actifs, passifs, solde: actifs + passifs };
+    const available = eligible.reduce((sum, a) => sum + a.availableBalance, 0);
+    return { actifs, passifs, solde: actifs + passifs, available };
   }, [accounts]);
 
   return (
@@ -93,17 +94,26 @@ export default function AccountsScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable
-              onPress={() => setShowForm((v) => !v)}
-              hitSlop={8}
-              accessibilityLabel="Ajouter un compte"
-            >
-              {showForm ? (
-                <X size={22} strokeWidth={2.2} color={theme.accent} />
-              ) : (
-                <Plus size={22} strokeWidth={2.2} color={theme.accent} />
-              )}
-            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
+              <Pressable
+                onPress={() => router.push("/goals")}
+                hitSlop={8}
+                accessibilityLabel="Ouvrir les objectifs"
+              >
+                <Target size={21} strokeWidth={2.2} color={theme.accent} />
+              </Pressable>
+              <Pressable
+                onPress={() => setShowForm((v) => !v)}
+                hitSlop={8}
+                accessibilityLabel="Ajouter un compte"
+              >
+                {showForm ? (
+                  <X size={22} strokeWidth={2.2} color={theme.accent} />
+                ) : (
+                  <Plus size={22} strokeWidth={2.2} color={theme.accent} />
+                )}
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -115,63 +125,78 @@ export default function AccountsScreen() {
       keyExtractor={(a) => String(a.id)}
       stickySectionHeadersEnabled={false}
       renderSectionHeader={({ section }) => (
-        <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
+        <View style={[styles.sectionHeader, { backgroundColor: theme.surface }]}>
           <Text style={[styles.sectionHeaderText, { color: theme.secondaryLabel }]}>
             {section.title}
           </Text>
         </View>
       )}
-      renderItem={({ item }) => (
-          <Pressable
-            onPress={() => router.push({ pathname: "/accounts/[id]", params: { id: String(item.id) } })}
-            style={({ pressed }) => [
-              styles.row,
-              item.hidden && { opacity: 0.45 },
-              pressed && { opacity: 0.6 },
-            ]}
-          >
-            <View style={[styles.dot, { backgroundColor: theme.accent }]} />
-            <View style={styles.body}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.name, { color: theme.label }]} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                {item.hidden ? (
-                  <View style={[styles.hiddenBadge, { backgroundColor: theme.surfaceElevated }]}>
-                    <Text style={[styles.hiddenBadgeText, { color: theme.secondaryLabel }]}>
-                      Masqué
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-            <Text
-              selectable
-              style={[
-                styles.balance,
-                {
-                  color:
-                    item.balance > 0
-                      ? theme.income
-                      : item.balance < 0
-                        ? theme.expense
-                        : theme.secondaryLabel,
-                },
+      renderItem={({ item, index, section }) => {
+        const isLast = index === section.data.length - 1;
+        return (
+          <>
+            <Pressable
+              onPress={() => router.push({ pathname: "/accounts/[id]", params: { id: String(item.id) } })}
+              style={({ pressed }) => [
+                styles.row,
+                { backgroundColor: theme.surface, marginHorizontal: spacing.lg },
+                isLast && styles.rowLast,
+                item.hidden && { opacity: 0.45 },
+                pressed && { opacity: 0.6 },
               ]}
             >
-              {formatAmount(item.balance)}
-            </Text>
-          </Pressable>
-      )}
-      ItemSeparatorComponent={() => (
-        <View
-          style={{
-            height: StyleSheet.hairlineWidth,
-            backgroundColor: theme.separator,
-            marginLeft: spacing.lg + 22,
-          }}
-        />
-      )}
+              <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+              <View style={styles.body}>
+                <View style={styles.nameRow}>
+                  <Text style={[styles.name, { color: theme.label }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  {item.hidden ? (
+                    <View style={[styles.hiddenBadge, { backgroundColor: theme.surfaceElevated }]}>
+                      <Text style={[styles.hiddenBadgeText, { color: theme.secondaryLabel }]}>
+                        Masqué
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text
+                  selectable
+                  style={[
+                    styles.balance,
+                    {
+                      color:
+                        item.availableBalance > 0
+                          ? theme.income
+                          : item.availableBalance < 0
+                            ? theme.expense
+                            : theme.secondaryLabel,
+                    },
+                  ]}
+                >
+                  {formatAmount(item.availableBalance)}
+                </Text>
+                {item.reservedAmount > 0 ? (
+                  <Text style={[styles.totalBalance, { color: theme.secondaryLabel }]}>
+                    total {formatAmount(item.balance)}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+            {!isLast ? (
+              <View
+                style={{
+                  height: StyleSheet.hairlineWidth,
+                  backgroundColor: theme.separator,
+                  marginLeft: spacing.lg + 22,
+                  marginRight: spacing.lg,
+                }}
+              />
+            ) : null}
+          </>
+        );
+      }}
       ListHeaderComponent={
         <View style={{ gap: spacing.lg }}>
           <View
@@ -222,6 +247,25 @@ export default function AccountsScreen() {
                   {formatAmount(totals.solde)}
                 </Text>
               </View>
+            </View>
+            <View style={[styles.availableSummary, { borderTopColor: theme.separator }]}>
+              <View>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Disponible</Text>
+                <Text
+                  selectable
+                  style={{
+                    color: totals.available >= 0 ? theme.label : theme.expense,
+                    fontWeight: "800",
+                    fontSize: 18,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {formatAmount(totals.available)}
+                </Text>
+              </View>
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13, flex: 1, textAlign: "right" }}>
+                Après les réservations d&apos;objectifs
+              </Text>
             </View>
             {(accounts ?? []).some((a) => a.excludeFromTotal) ? (
               <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
@@ -344,12 +388,21 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
+  rowLast: {
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    paddingBottom: spacing.md + spacing.sm,
+  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
   sectionHeaderText: {
@@ -403,6 +456,19 @@ const styles = StyleSheet.create({
   balance: {
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
+  },
+  totalBalance: {
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
+  },
+  availableSummary: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   button: {
     paddingHorizontal: spacing.lg,

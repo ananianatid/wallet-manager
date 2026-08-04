@@ -27,6 +27,12 @@ function RootNavigator() {
           options={{ presentation: "modal", title: "Nouvelle transaction" }}
         />
         <Stack.Screen name="accounts/[id]" options={{ title: "Compte" }} />
+        <Stack.Screen name="goals/[id]" options={{ title: "Objectif" }} />
+        <Stack.Screen
+          name="goals/new"
+          options={{ presentation: "modal", title: "Nouvel objectif" }}
+        />
+        <Stack.Screen name="cashflow" options={{ title: "Dépenses sûres" }} />
         <Stack.Screen name="categories/[type]" options={{ title: "Catégories" }} />
         <Stack.Screen name="appearance" options={{ title: "Apparence" }} />
         <Stack.Screen name="about" options={{ title: "À propos" }} />
