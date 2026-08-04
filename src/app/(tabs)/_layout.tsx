@@ -4,7 +4,18 @@ import { useTheme } from "@/theme";
 export default function TabsLayout() {
   const theme = useTheme();
   return (
-    <NativeTabs tintColor={theme.accent}>
+    <NativeTabs
+      tintColor={theme.accent}
+      backgroundColor={theme.background}
+      iconColor={{ default: theme.secondaryLabel, selected: theme.accent }}
+      labelStyle={{
+        default: { color: theme.secondaryLabel, fontWeight: "600" },
+        selected: { color: theme.accent, fontWeight: "700" },
+      }}
+      labelVisibilityMode="labeled"
+      indicatorColor={`${theme.accent}33`}
+      rippleColor={`${theme.accent}1F`}
+    >
       <NativeTabs.Trigger name="(transactions)">
         <NativeTabs.Trigger.Icon sf="list.dash" md="receipt_long" />
         <NativeTabs.Trigger.Label>Transactions</NativeTabs.Trigger.Label>

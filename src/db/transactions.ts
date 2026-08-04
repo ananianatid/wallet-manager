@@ -114,13 +114,54 @@ function validateInput(input: TransactionInput): TransactionInput {
   }
 }
 
+export interface TransactionFilter {
+  accountId?: number | null;
+  startMs?: number | null;
+  endMs?: number | null;
+  order?: "asc" | "desc";
+}
+
+export function listTransactions(
+  db: SQLiteDatabase,
+  filter: TransactionFilter = {},
+): Promise<Transaction[]> {
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filter.accountId != null) {
+    conditions.push("(t.account_id = ? OR t.destination_account_id = ?)");
+    params.push(filter.accountId, filter.accountId);
+  }
+  if (filter.startMs != null) {
+    conditions.push("t.transaction_date >= ?");
+    params.push(filter.startMs);
+  }
+  if (filter.endMs != null) {
+    conditions.push("t.transaction_date < ?");
+    params.push(filter.endMs);
+  }
+
+  const order = filter.order === "asc" ? "ASC" : "DESC";
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return db
+    .getAllAsync<TransactionRow>(
+      `SELECT ${SELECT_FIELDS}
+       ${FROM_JOINS}
+       ${where}
+       ORDER BY t.transaction_date ${order}, t.created_at ${order}, t.id ${order}`,
+      params,
+    )
+    .then((rows) => rows.map(mapTransaction));
+}
+
 export function listTransactionsByMonth(
   db: SQLiteDatabase,
   year: number,
   month: number,
 ): Promise<Transaction[]> {
   const { start, end } = getMonthRange(year, month);
-  return listTransactionsByRange(db, start, end);
+  return listTransactions(db, { startMs: start, endMs: end, order: "asc" });
 }
 
 export function listTransactionsByRange(
@@ -128,15 +169,19 @@ export function listTransactionsByRange(
   startMs: number,
   endMs: number,
 ): Promise<Transaction[]> {
+  return listTransactions(db, { startMs, endMs, order: "asc" });
+}
+
+export function listTransactionYears(db: SQLiteDatabase): Promise<number[]> {
   return db
-    .getAllAsync<TransactionRow>(
-      `SELECT ${SELECT_FIELDS}
-       ${FROM_JOINS}
-       WHERE t.transaction_date >= ? AND t.transaction_date < ?
-       ORDER BY t.transaction_date ASC, t.created_at ASC, t.id ASC`,
-      [startMs, endMs],
+    .getAllAsync<{ year: number }>(
+      `SELECT DISTINCT CAST(
+         strftime('%Y', transaction_date / 1000, 'unixepoch', 'localtime') AS INTEGER
+       ) AS year
+       FROM transactions
+       ORDER BY year DESC`,
     )
-    .then((rows) => rows.map(mapTransaction));
+    .then((rows) => rows.map((r) => r.year));
 }
 
 export function searchTransactions(
@@ -165,15 +210,7 @@ export function listTransactionsByAccount(
   db: SQLiteDatabase,
   accountId: number,
 ): Promise<Transaction[]> {
-  return db
-    .getAllAsync<TransactionRow>(
-      `SELECT ${SELECT_FIELDS}
-       ${FROM_JOINS}
-       WHERE t.account_id = ? OR t.destination_account_id = ?
-       ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC`,
-      [accountId, accountId],
-    )
-    .then((rows) => rows.map(mapTransaction));
+  return listTransactions(db, { accountId, order: "desc" });
 }
 
 export async function getTransaction(

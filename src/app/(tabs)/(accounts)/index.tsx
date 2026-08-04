@@ -1,10 +1,10 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { Eye, EyeOff, Plus, X } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  FlatList,
   Pressable,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -56,6 +56,38 @@ export default function AccountsScreen() {
     await load();
   };
 
+  const sections = useMemo(() => {
+    const visible = (accounts ?? []).filter((a) => !a.hidden || showHidden);
+    const groups = new Map<
+      string,
+      { key: string; title: string; data: Account[] }
+    >();
+    for (const account of visible) {
+      const key = String(account.categoryId);
+      const section = groups.get(key) ?? {
+        key,
+        title: account.categoryName,
+        data: [],
+      };
+      section.data.push(account);
+      groups.set(key, section);
+    }
+    return [...groups.values()].sort((a, b) =>
+      a.title.localeCompare(b.title),
+    );
+  }, [accounts, showHidden]);
+
+  const totals = useMemo(() => {
+    const eligible = (accounts ?? []).filter((a) => !a.excludeFromTotal);
+    const actifs = eligible
+      .filter((a) => a.balance > 0)
+      .reduce((sum, a) => sum + a.balance, 0);
+    const passifs = eligible
+      .filter((a) => a.balance < 0)
+      .reduce((sum, a) => sum + a.balance, 0);
+    return { actifs, passifs, solde: actifs + passifs };
+  }, [accounts]);
+
   return (
     <>
       <Stack.Screen
@@ -75,18 +107,21 @@ export default function AccountsScreen() {
           ),
         }}
       />
-      <FlatList
+      <SectionList
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
-      data={accounts ?? []}
+      sections={sections}
       keyExtractor={(a) => String(a.id)}
-      renderItem={({ item }) => {
-        const hidden = item.hidden && !showHidden;
-        if (hidden) {
-          return null;
-        }
-        return (
+      stickySectionHeadersEnabled={false}
+      renderSectionHeader={({ section }) => (
+        <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
+          <Text style={[styles.sectionHeaderText, { color: theme.secondaryLabel }]}>
+            {section.title}
+          </Text>
+        </View>
+      )}
+      renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: "/accounts/[id]", params: { id: String(item.id) } })}
             style={({ pressed }) => [
@@ -109,22 +144,25 @@ export default function AccountsScreen() {
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.category, { color: theme.secondaryLabel }]}>
-                {item.categoryName}
-              </Text>
             </View>
             <Text
               selectable
               style={[
                 styles.balance,
-                { color: item.balance >= 0 ? theme.label : theme.expense },
+                {
+                  color:
+                    item.balance > 0
+                      ? theme.income
+                      : item.balance < 0
+                        ? theme.expense
+                        : theme.secondaryLabel,
+                },
               ]}
             >
               {formatAmount(item.balance)}
             </Text>
           </Pressable>
-        );
-      }}
+      )}
       ItemSeparatorComponent={() => (
         <View
           style={{
@@ -136,23 +174,55 @@ export default function AccountsScreen() {
       )}
       ListHeaderComponent={
         <View style={{ gap: spacing.lg }}>
-          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xs }}>
+          <View
+            style={{
+              marginHorizontal: spacing.lg,
+              backgroundColor: theme.surface,
+              borderRadius: radius.lg,
+              padding: spacing.lg,
+              gap: spacing.xs,
+            }}
+          >
             <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Patrimoine</Text>
-            <Text
-              selectable
-              style={{
-                color: theme.label,
-                fontSize: 36,
-                fontWeight: "800",
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {formatAmount(
-                (accounts ?? [])
-                  .filter((a) => !a.excludeFromTotal)
-                  .reduce((sum, a) => sum + a.balance, 0),
-              )}
-            </Text>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                  Actifs
+                </Text>
+                <Text
+                  selectable
+                  style={{ color: theme.income, fontWeight: "700", fontVariant: ["tabular-nums"] }}
+                >
+                  + {formatAmount(totals.actifs)}
+                </Text>
+              </View>
+              <View style={[styles.summaryItem, styles.summaryItemCenter]}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                  Passifs
+                </Text>
+                <Text
+                  selectable
+                  style={{ color: theme.expense, fontWeight: "700", fontVariant: ["tabular-nums"] }}
+                >
+                  {formatAmount(totals.passifs)}
+                </Text>
+              </View>
+              <View style={[styles.summaryItem, styles.summaryItemRight]}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                  Solde
+                </Text>
+                <Text
+                  selectable
+                  style={{
+                    color: totals.solde >= 0 ? theme.label : theme.expense,
+                    fontWeight: "800",
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {formatAmount(totals.solde)}
+                </Text>
+              </View>
+            </View>
             {(accounts ?? []).some((a) => a.excludeFromTotal) ? (
               <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                 {(accounts ?? []).filter((a) => a.excludeFromTotal).length} compte
@@ -162,15 +232,27 @@ export default function AccountsScreen() {
               </Text>
             ) : null}
           </View>
-          {(accounts ?? []).some((a) => a.hidden) ? (
-            <Pressable
-              onPress={() => setShowHidden((v) => !v)}
-              style={({ pressed }) => [
-                styles.filterButton,
-                { backgroundColor: theme.surface, borderColor: theme.separator },
-                pressed && { opacity: 0.7 },
-              ]}
+          <View style={{ gap: spacing.sm }}>
+            <Text
+              style={{
+                paddingHorizontal: spacing.lg,
+                color: theme.secondaryLabel,
+                fontSize: 13,
+                fontWeight: "600",
+                letterSpacing: 1.1,
+              }}
             >
+              COMPTES
+            </Text>
+            {(accounts ?? []).some((a) => a.hidden) ? (
+              <Pressable
+                onPress={() => setShowHidden((v) => !v)}
+                style={({ pressed }) => [
+                  styles.filterButton,
+                  { backgroundColor: theme.surface, borderColor: theme.separator },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
               {showHidden ? (
                 <EyeOff size={16} strokeWidth={2.2} color={theme.secondaryLabel} />
               ) : (
@@ -181,6 +263,7 @@ export default function AccountsScreen() {
               </Text>
             </Pressable>
           ) : null}
+          </View>
           {showForm ? (
             <View
               style={{
@@ -233,12 +316,20 @@ export default function AccountsScreen() {
         </View>
       }
       ListEmptyComponent={
-        <EmptyState
-          title="Aucun compte"
-          message="Créez votre premier compte pour commencer à suivre vos transactions."
-          actionLabel="Créer un compte"
-          onAction={() => setShowForm(true)}
-        />
+        (accounts ?? []).length === 0 ? (
+          <EmptyState
+            title="Aucun compte"
+            message="Créez votre premier compte pour commencer à suivre vos transactions."
+            actionLabel="Créer un compte"
+            onAction={() => setShowForm(true)}
+          />
+        ) : (
+          <View style={{ padding: spacing.xl }}>
+            <Text style={{ color: theme.secondaryLabel, textAlign: "center" }}>
+              Aucun compte visible.
+            </Text>
+          </View>
+        )
       }
     />
     </>
@@ -252,6 +343,36 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  summaryItem: {
+    flex: 1,
+    gap: spacing.xs,
+    alignItems: "flex-start",
+  },
+  summaryItemCenter: {
+    alignItems: "center",
+  },
+  summaryItemRight: {
+    alignItems: "flex-end",
   },
   dot: {
     width: 10,
@@ -278,9 +399,6 @@ const styles = StyleSheet.create({
   },
   name: {
     fontWeight: "600",
-  },
-  category: {
-    fontSize: 13,
   },
   balance: {
     fontWeight: "700",

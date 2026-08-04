@@ -14,6 +14,7 @@ export default function TransactionsLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Transactions" }} />
+      <Stack.Screen name="filters" options={{ title: "Filtres" }} />
     </Stack>
   );
 }

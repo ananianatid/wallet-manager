@@ -1,4 +1,4 @@
-import type { Transaction } from "../types";
+import type { SavingsRule, Transaction } from "../types";
 
 export interface MonthRef {
   year: number;
@@ -101,4 +101,64 @@ export function monthlySeries(
     month: m.month,
     ...totals(byMonth.get(monthIndex(m)) ?? []),
   }));
+}
+
+export interface SavingsContribution {
+  rule: SavingsRule;
+  amount: number;
+}
+
+export function savingsByRule(
+  transactions: Transaction[],
+  rules: SavingsRule[],
+): SavingsContribution[] {
+  const specific = new Map<number, SavingsRule>();
+  let global: SavingsRule | null = null;
+  for (const rule of rules) {
+    if (rule.categoryId == null) {
+      global = rule;
+    } else {
+      specific.set(rule.categoryId, rule);
+    }
+  }
+
+  const contributions = new Map<number, number>();
+  for (const rule of rules) {
+    contributions.set(rule.id, 0);
+  }
+
+  for (const t of transactions) {
+    if (t.type !== "income") {
+      continue;
+    }
+    let rule: SavingsRule | null = null;
+    if (t.categoryId != null && specific.has(t.categoryId)) {
+      rule = specific.get(t.categoryId)!;
+    } else if (global) {
+      rule = global;
+    }
+    if (!rule) {
+      continue;
+    }
+    contributions.set(
+      rule.id,
+      (contributions.get(rule.id) ?? 0) + Math.round((t.amount * rule.percent) / 100),
+    );
+  }
+
+  const byName = new Map<number, string>();
+  for (const rule of rules) {
+    byName.set(rule.id, rule.categoryName ?? "");
+  }
+
+  return [...rules]
+    .sort((a, b) => {
+      const an = byName.get(a.id) ?? "";
+      const bn = byName.get(b.id) ?? "";
+      return an.localeCompare(bn, "fr");
+    })
+    .map((rule) => ({
+      rule,
+      amount: contributions.get(rule.id) ?? 0,
+    }));
 }

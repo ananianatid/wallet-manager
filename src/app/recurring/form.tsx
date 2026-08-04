@@ -1,0 +1,492 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Stack } from "expo-router/stack";
+import { useCallback, useMemo, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SelectField } from "@/components/select-field";
+import { listAccounts } from "@/db/accounts";
+import { listCategories } from "@/db/categories";
+import { getDatabase } from "@/db/database";
+import {
+  createRecurring,
+  getRecurring,
+  updateRecurring,
+} from "@/db/recurring";
+import { radius, spacing, useTheme } from "@/theme";
+import type {
+  Account,
+  Category,
+  Frequency,
+  TransactionType,
+} from "@/types";
+import { formatDate } from "@/utils/format";
+
+const TYPES: { value: TransactionType; label: string }[] = [
+  { value: "income", label: "Revenu" },
+  { value: "expense", label: "Dépense" },
+  { value: "transfer", label: "Transfert" },
+];
+
+const FREQUENCIES: { value: Frequency; label: string }[] = [
+  { value: "daily", label: "Tous les jours" },
+  { value: "weekly", label: "Toutes les semaines" },
+  { value: "monthly", label: "Tous les mois" },
+  { value: "yearly", label: "Tous les ans" },
+];
+
+const errorMessage = (e: unknown): string =>
+  e instanceof Error ? e.message : "Une erreur est survenue.";
+
+export default function RecurringFormScreen() {
+  const theme = useTheme();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const recurringId = id ? Number(id) : null;
+
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [type, setType] = useState<TransactionType>("expense");
+  const [amount, setAmount] = useState("");
+  const [accountId, setAccountId] = useState<number | null>(null);
+  const [destinationId, setDestinationId] = useState<number | null>(null);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [fee, setFee] = useState("");
+  const [note, setNote] = useState("");
+  const [frequency, setFrequency] = useState<Frequency>("monthly");
+  const [intervalValue, setIntervalValue] = useState("1");
+  const [startDate, setStartDate] = useState(new Date());
+  const [nextDate, setNextDate] = useState(new Date());
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [isActive, setIsActive] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [picking, setPicking] = useState<"start" | "next" | "end" | null>(null);
+
+  const load = useCallback(async () => {
+    const db = await getDatabase();
+    const [accs, cats, existing] = await Promise.all([
+      listAccounts(db),
+      listCategories(db),
+      recurringId ? getRecurring(db, recurringId) : Promise.resolve(null),
+    ]);
+    setAccounts(accs);
+    setCategories(cats);
+    if (existing) {
+      setType(existing.type);
+      setAmount(String(existing.amount));
+      setAccountId(existing.accountId);
+      setDestinationId(existing.destinationAccountId);
+      setCategoryId(existing.categoryId);
+      setFee(existing.fee ? String(existing.fee) : "");
+      setNote(existing.note ?? "");
+      setFrequency(existing.frequency);
+      setIntervalValue(String(existing.interval));
+      setStartDate(new Date(existing.startDate));
+      setNextDate(new Date(existing.nextDate));
+      setEndDate(existing.endDate ? new Date(existing.endDate) : null);
+      setIsActive(existing.isActive);
+    }
+  }, [recurringId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const accountOptions = useMemo(() => {
+    const selectedIds = new Set<number>();
+    if (accountId != null) selectedIds.add(accountId);
+    if (destinationId != null) selectedIds.add(destinationId);
+    return accounts
+      .filter((a) => !a.hidden || selectedIds.has(a.id))
+      .map((a) => ({ id: a.id, label: a.name }));
+  }, [accounts, accountId, destinationId]);
+
+  const categoryOptions = useMemo(
+    () =>
+      categories
+        .filter((c) => c.type === type)
+        .map((c) => ({ id: c.id, label: c.name })),
+    [categories, type],
+  );
+
+  const switchType = (t: TransactionType) => {
+    setType(t);
+    if (t === "transfer") {
+      setCategoryId(null);
+    } else {
+      setDestinationId(null);
+      setFee("");
+    }
+  };
+
+  const save = async () => {
+    const parsedAmount = Number(amount);
+    const parsedFee = fee.trim() ? Number(fee) : null;
+    const parsedInterval = Number(intervalValue);
+    if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert("Montant invalide", "Saisissez un montant entier positif en FCFA.");
+      return;
+    }
+    if (!Number.isInteger(parsedInterval) || parsedInterval <= 0) {
+      Alert.alert("Intervalle invalide", "Saisissez un intervalle entier positif.");
+      return;
+    }
+    if (accountId == null) {
+      Alert.alert("Compte manquant", "Choisissez un compte.");
+      return;
+    }
+    if (type !== "transfer" && categoryId == null) {
+      Alert.alert("Catégorie manquante", "Choisissez une catégorie.");
+      return;
+    }
+    if (type === "transfer" && destinationId == null) {
+      Alert.alert("Destination manquante", "Choisissez le compte de destination.");
+      return;
+    }
+    if (parsedFee != null && (!Number.isInteger(parsedFee) || parsedFee <= 0)) {
+      Alert.alert("Frais invalide", "Les frais doivent être un entier positif.");
+      return;
+    }
+
+    const input = {
+      type,
+      amount: parsedAmount,
+      categoryId,
+      accountId: accountId!,
+      destinationAccountId: type === "transfer" ? destinationId : null,
+      fee: type === "transfer" ? parsedFee : null,
+      note: note.trim() || null,
+      frequency,
+      interval: parsedInterval,
+      startDate: startDate.getTime(),
+      nextDate: nextDate.getTime(),
+      endDate: endDate?.getTime() ?? null,
+      isActive,
+    };
+
+    setSaving(true);
+    try {
+      const db = await getDatabase();
+      if (recurringId) {
+        await updateRecurring(db, recurringId, input);
+      } else {
+        await createRecurring(db, input);
+      }
+      router.back();
+    } catch (e) {
+      Alert.alert("Impossible d'enregistrer", errorMessage(e));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: recurringId ? "Modifier la récurrence" : "Nouvelle récurrence",
+        }}
+      />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.typeRow}>
+          {TYPES.map((t) => {
+            const active = type === t.value;
+            return (
+              <Pressable
+                key={t.value}
+                onPress={() => switchType(t.value)}
+                style={({ pressed }) => [
+                  styles.typeButton,
+                  {
+                    backgroundColor: active ? theme.accent : theme.surface,
+                    borderColor: active ? theme.accent : theme.separator,
+                  },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: active ? "#0A0A0B" : theme.secondaryLabel,
+                    fontWeight: "700",
+                  }}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View
+          style={{
+            backgroundColor: theme.surface,
+            borderRadius: radius.lg,
+            alignItems: "center",
+            paddingVertical: spacing.lg,
+          }}
+        >
+          <TextInput
+            value={amount}
+            onChangeText={setAmount}
+            placeholder="0"
+            placeholderTextColor={theme.secondaryLabel}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            style={{
+              color: theme.label,
+              fontSize: 40,
+              fontWeight: "800",
+              fontVariant: ["tabular-nums"],
+              textAlign: "center",
+              minWidth: 160,
+            }}
+          />
+          <Text style={{ color: theme.secondaryLabel }}>FCFA</Text>
+        </View>
+
+        <SelectField
+          label="Compte"
+          value={accountOptions.find((o) => o.id === accountId)?.label ?? null}
+          options={accountOptions}
+          onChange={setAccountId}
+        />
+
+        {type === "transfer" ? (
+          <>
+            <SelectField
+              label="Compte de destination"
+              value={accountOptions.find((o) => o.id === destinationId)?.label ?? null}
+              options={accountOptions}
+              onChange={setDestinationId}
+            />
+            <View style={{ gap: spacing.xs + 2 }}>
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                Frais (optionnel)
+              </Text>
+              <TextInput
+                value={fee}
+                onChangeText={setFee}
+                placeholder="0"
+                placeholderTextColor={theme.secondaryLabel}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                style={[
+                  styles.input,
+                  { backgroundColor: theme.surface, color: theme.label },
+                ]}
+              />
+            </View>
+          </>
+        ) : (
+          <SelectField
+            label="Catégorie"
+            value={categoryOptions.find((o) => o.id === categoryId)?.label ?? null}
+            options={categoryOptions}
+            onChange={setCategoryId}
+          />
+        )}
+
+        <View style={styles.row2}>
+          <View style={{ flex: 1 }}>
+            <SelectField
+              label="Fréquence"
+              value={FREQUENCIES.find((f) => f.value === frequency)?.label ?? null}
+              options={FREQUENCIES.map((f, index) => ({ id: index + 1, label: f.label }))}
+              onChange={(id) => setFrequency(FREQUENCIES[id - 1].value)}
+            />
+          </View>
+          <View style={{ flex: 0.6 }}>
+            <View style={{ gap: spacing.xs + 2 }}>
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                Intervalle
+              </Text>
+              <TextInput
+                value={intervalValue}
+                onChangeText={setIntervalValue}
+                placeholder="1"
+                placeholderTextColor={theme.secondaryLabel}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                style={[
+                  styles.input,
+                  { backgroundColor: theme.surface, color: theme.label },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <Pressable
+            onPress={() => setPicking("start")}
+            style={({ pressed }) => [
+              styles.dateButton,
+              { backgroundColor: theme.surface },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Début</Text>
+            <Text style={{ color: theme.label, fontWeight: "600" }}>
+              {formatDate(startDate.getTime())}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setPicking("next")}
+            style={({ pressed }) => [
+              styles.dateButton,
+              { backgroundColor: theme.surface },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Prochaine</Text>
+            <Text style={{ color: theme.label, fontWeight: "600" }}>
+              {formatDate(nextDate.getTime())}
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <Text style={{ flex: 1, color: theme.label, fontWeight: "600" }}>
+            Fin (optionnel)
+          </Text>
+          {endDate ? (
+            <Pressable onPress={() => setEndDate(null)} hitSlop={8}>
+              <Text style={{ color: theme.expense, fontWeight: "600", fontSize: 13 }}>
+                Retirer
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={() => setPicking("end")} hitSlop={8}>
+            <Text style={{ color: theme.secondaryLabel, fontWeight: "600", fontSize: 13 }}>
+              {endDate ? formatDate(endDate.getTime()) : "Choisir"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {picking !== null ? (
+          <DateTimePicker
+            mode="date"
+            value={
+              picking === "start"
+                ? startDate
+                : picking === "next"
+                  ? nextDate
+                  : (endDate ?? new Date())
+            }
+            onValueChange={(_, d) => {
+              setPicking(null);
+              if (picking === "start") {
+                setStartDate(d);
+                if (nextDate.getTime() < d.getTime()) {
+                  setNextDate(d);
+                }
+              } else if (picking === "next") {
+                setNextDate(d);
+              } else {
+                setEndDate(d);
+              }
+            }}
+            onDismiss={() => setPicking(null)}
+          />
+        ) : null}
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <Text style={{ flex: 1, color: theme.label, fontWeight: "600" }}>
+            Récurrence active
+          </Text>
+          <Switch
+            value={isActive}
+            onValueChange={setIsActive}
+            trackColor={{ true: theme.accent }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+
+        <View style={{ gap: spacing.xs + 2 }}>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+            Note (optionnel)
+          </Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            multiline
+            placeholder="Ex. : loyer"
+            placeholderTextColor={theme.secondaryLabel}
+            style={[
+              styles.input,
+              { backgroundColor: theme.surface, color: theme.label, minHeight: 80 },
+            ]}
+          />
+        </View>
+
+        <Pressable
+          onPress={save}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.saveButton,
+            { backgroundColor: theme.accent },
+            (pressed || saving) && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={styles.saveLabel}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  typeRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  typeButton: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  row2: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  input: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md + 2,
+    borderRadius: radius.md,
+  },
+  dateButton: {
+    flex: 1,
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+  },
+  saveButton: {
+    alignItems: "center",
+    paddingVertical: spacing.md + 2,
+    borderRadius: radius.xl,
+    marginTop: spacing.sm,
+  },
+  saveLabel: {
+    color: "#0A0A0B",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+});

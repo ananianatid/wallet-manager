@@ -3,7 +3,10 @@ import {
   ArrowUp,
   ChevronRight,
   Info,
+  PiggyBank,
+  RefreshCcw,
   Sun,
+  Target,
   Wallet,
 } from "lucide-react-native";
 import { router } from "expo-router";
@@ -29,12 +32,18 @@ const ENTRIES: {
     | "/categories/income"
     | "/categories/expense"
     | "/categories/account"
+    | "/budgets"
+    | "/savings"
+    | "/recurring"
     | "/appearance"
     | "/about";
 }[] = [
   { label: "Catégories de revenus", icon: ArrowUp, href: "/categories/income" },
   { label: "Catégories de dépenses", icon: ArrowDown, href: "/categories/expense" },
   { label: "Catégories de comptes", icon: Wallet, href: "/categories/account" },
+  { label: "Budgets", icon: Target, href: "/budgets" },
+  { label: "Épargne", icon: PiggyBank, href: "/savings" },
+  { label: "Transactions récurrentes", icon: RefreshCcw, href: "/recurring" },
   { label: "Apparence", icon: Sun, href: "/appearance" },
   { label: "À propos", icon: Info, href: "/about" },
 ];
