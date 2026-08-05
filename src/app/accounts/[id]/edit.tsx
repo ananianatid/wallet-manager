@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   StyleSheet,
   Switch,
@@ -68,6 +68,13 @@ export default function EditAccountScreen() {
   const reload = resource.reload;
   const account = resource.data?.account ?? null;
   const accountGroups = resource.data?.accountGroups ?? [];
+  const groupOptions = useMemo(
+    () => [
+      { id: -1, label: "Sans groupe" },
+      ...accountGroups.map((g) => ({ id: g.id, label: g.name })),
+    ],
+    [accountGroups],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -86,9 +93,6 @@ export default function EditAccountScreen() {
     const nextErrors: Record<string, string> = {};
     if (!name.trim()) {
       nextErrors.name = "Saisissez un nom.";
-    }
-    if (groupId == null) {
-      nextErrors.group = "Choisissez un groupe de comptes.";
     }
     if (Number.isNaN(target)) {
       nextErrors.amount = "Saisissez un montant entier en FCFA.";
@@ -161,10 +165,14 @@ export default function EditAccountScreen() {
             <SelectField
               label="Groupe de comptes"
               hideLabel
-              value={accountGroups.find((g) => g.id === groupId)?.name ?? null}
-              options={accountGroups.map((g) => ({ id: g.id, label: g.name }))}
+              value={
+                groupId == null
+                  ? "Sans groupe"
+                  : (accountGroups.find((g) => g.id === groupId)?.name ?? null)
+              }
+              options={groupOptions}
               onChange={(value) => {
-                setGroupId(value);
+                setGroupId(value === -1 ? null : value);
                 setErrors((current) => ({ ...current, group: "" }));
               }}
             />
