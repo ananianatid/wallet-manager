@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { Check, Pencil, Plus, Tag, Trash, X } from "lucide-react-native";
+import { Check, Pencil, Tag } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
@@ -10,16 +10,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { LegacySectionHeader, LegacyTextRow } from "@/components/legacy-money-manager";
-import { SelectField } from "@/components/select-field";
-import { IconButton, ScreenState } from "@/components/ui";
+import { ScreenState } from "@/components/ui";
 import { assignAccountGroup, listAccountGroups } from "@/db/account-groups";
 import {
-  createAccount,
-  deleteAccount,
   listAccounts,
   listDeletedAccounts,
   restoreAccount,
@@ -40,9 +36,6 @@ interface Section {
 export default function AccountsManagementScreen() {
   const theme = useTheme();
 
-  const [showForm, setShowForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newGroupId, setNewGroupId] = useState<number | null>(null);
   const [assigningAccount, setAssigningAccount] = useState<Account | null>(null);
 
   const load = useCallback(async () => {
@@ -96,45 +89,6 @@ export default function AccountsManagementScreen() {
     [groups],
   );
 
-  const create = async () => {
-    if (!newName.trim()) {
-      return;
-    }
-    try {
-      const db = await getDatabase();
-      await createAccount(db, { name: newName, groupId: newGroupId });
-      setNewName("");
-      setNewGroupId(null);
-      setShowForm(false);
-      await reload();
-    } catch (e) {
-      Alert.alert("Impossible de créer", errorMessage(e));
-    }
-  };
-
-  const confirmDelete = (account: Account) => {
-    Alert.alert(
-      `Supprimer « ${account.name} » ?`,
-      "Cette action est définitive.",
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Supprimer",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const db = await getDatabase();
-              await deleteAccount(db, account.id);
-              await reload();
-            } catch (e) {
-              Alert.alert("Suppression impossible", errorMessage(e));
-            }
-          },
-        },
-      ],
-    );
-  };
-
   const restore = async (account: Account) => {
     try {
       const db = await getDatabase();
@@ -162,24 +116,7 @@ export default function AccountsManagementScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: "Gestion des comptes",
-          headerRight: () => (
-            <IconButton
-              label={showForm ? "Fermer le formulaire de compte" : "Ajouter un compte"}
-              onPress={() => setShowForm((v) => !v)}
-              icon={
-                showForm ? (
-                  <X size={22} color={theme.accent} strokeWidth={2.2} />
-                ) : (
-                  <Plus size={22} color={theme.accent} strokeWidth={2.2} />
-                )
-              }
-            />
-          ),
-        }}
-      />
+      <Stack.Screen options={{ title: "Gestion des comptes" }} />
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
@@ -192,59 +129,6 @@ export default function AccountsManagementScreen() {
           style={[styles.screen, { backgroundColor: theme.background }]}
           contentContainerStyle={[styles.content, { backgroundColor: theme.background }]}
         >
-          {showForm ? (
-            <View
-              style={[
-                styles.card,
-                styles.formCard,
-                { backgroundColor: theme.surface, borderColor: theme.separator },
-              ]}
-            >
-              <TextInput
-                value={newName}
-                onChangeText={setNewName}
-                placeholder="Nom du compte"
-                placeholderTextColor={theme.secondaryLabel}
-                accessibilityLabel="Nom du nouveau compte"
-                style={[
-                  styles.input,
-                  { backgroundColor: theme.surfaceElevated, color: theme.label, borderColor: theme.separator },
-                ]}
-                autoFocus
-                onSubmitEditing={create}
-                returnKeyType="done"
-              />
-              <SelectField
-                label="Groupe de comptes"
-                value={groups.find((g) => g.id === newGroupId)?.name ?? null}
-                options={groups.map((g) => ({ id: g.id, label: g.name }))}
-                onChange={setNewGroupId}
-              />
-              <View style={styles.formButtons}>
-                <Pressable
-                  onPress={() => setShowForm(false)}
-                  style={({ pressed }) => [
-                    styles.formButton,
-                    { borderColor: theme.separator, borderWidth: StyleSheet.hairlineWidth },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>Annuler</Text>
-                </Pressable>
-                <Pressable
-                  onPress={create}
-                  style={({ pressed }) => [
-                    styles.formButton,
-                    { backgroundColor: theme.accent, flex: 1 },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Créer</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
           {sections.map((section) => (
             <View
               key={section.title}
@@ -282,13 +166,6 @@ export default function AccountsManagementScreen() {
                           accessibilityLabel={`Modifier ${account.name}`}
                         >
                           <Pencil size={20} color={theme.secondaryLabel} strokeWidth={2} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => confirmDelete(account)}
-                          hitSlop={8}
-                          accessibilityLabel={`Supprimer ${account.name}`}
-                        >
-                          <Trash size={20} color={theme.expense} strokeWidth={2} />
                         </Pressable>
                       </View>
                     }
@@ -380,25 +257,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { flexGrow: 1, padding: spacing.lg, gap: spacing.lg },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
-  formCard: { padding: spacing.md },
   accountList: { overflow: "hidden" },
-  input: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  formButtons: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  formButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.xl,
-    alignItems: "center",
-  },
   actions: {
     flexDirection: "row",
     alignItems: "center",
