@@ -43,11 +43,7 @@ export default function AccountsScreen() {
   const openForm = () => {
     setShowForm(true);
     try {
-      listRef.current?.scrollToLocation({
-        sectionIndex: 0,
-        itemIndex: 0,
-        animated: true,
-      });
+      listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: true });
     } catch {
       // liste vide : le formulaire est déjà visible en tête
     }
@@ -69,6 +65,13 @@ export default function AccountsScreen() {
     () => resource.data?.accountGroups ?? [],
     [resource.data?.accountGroups],
   );
+  const groupOptions = useMemo(
+    () => [
+      { id: -1, label: "Sans groupe" },
+      ...accountGroups.map((g) => ({ id: g.id, label: g.name })),
+    ],
+    [accountGroups],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -83,7 +86,7 @@ export default function AccountsScreen() {
     setFormError(null);
     try {
       const db = await getDatabase();
-      await createAccount(db, { name, groupId: groupId ?? accountGroups[0]?.id ?? null });
+      await createAccount(db, { name, groupId });
       setName("");
       setGroupId(null);
       setShowForm(false);
@@ -183,24 +186,40 @@ export default function AccountsScreen() {
 
   const sections = useMemo(() => {
     const visible = (accounts ?? []).filter((a) => !a.hidden || showHidden);
-    const groups = new Map<
+    const byGroup = new Map<
       string,
       { key: string; title: string; data: Account[] }
     >();
     for (const account of visible) {
       const key = account.groupId != null ? String(account.groupId) : "none";
-      const section = groups.get(key) ?? {
+      const section = byGroup.get(key) ?? {
         key,
         title: account.groupName ?? "Sans groupe",
         data: [],
       };
       section.data.push(account);
-      groups.set(key, section);
+      byGroup.set(key, section);
     }
-    return [...groups.values()].sort((a, b) =>
-      a.title.localeCompare(b.title),
-    );
-  }, [accounts, showHidden]);
+    // Respect the user's group order (sort_order) from the groups screen.
+    const ordered: { key: string; title: string; data: Account[] }[] = [];
+    for (const group of accountGroups) {
+      const section = byGroup.get(String(group.id));
+      if (section) {
+        ordered.push(section);
+      }
+    }
+    const ungrouped = byGroup.get("none");
+    if (ungrouped) {
+      ordered.push(ungrouped);
+    }
+    // Fallback: sections whose group is no longer listed, by name.
+    for (const section of byGroup.values()) {
+      if (!ordered.includes(section)) {
+        ordered.push(section);
+      }
+    }
+    return ordered;
+  }, [accounts, showHidden, accountGroups]);
 
   const totals = useMemo(() => {
     const eligible = (accounts ?? []).filter((a) => !a.excludeFromTotal);
@@ -265,6 +284,7 @@ export default function AccountsScreen() {
         return (
           <>
             <Pressable
+              accessibilityRole="button"
               onPress={() => {
                 if (longPressTriggered.current) {
                   longPressTriggered.current = false;
@@ -488,10 +508,12 @@ export default function AccountsScreen() {
               <SelectField
                 label="Groupe de comptes"
                 value={
-                  accountGroups.find((g) => g.id === groupId)?.name ?? null
+                  groupId == null
+                    ? "Sans groupe"
+                    : (accountGroups.find((g) => g.id === groupId)?.name ?? null)
                 }
-                options={accountGroups.map((g) => ({ id: g.id, label: g.name }))}
-                onChange={setGroupId}
+                options={groupOptions}
+                onChange={(id) => setGroupId(id === -1 ? null : id)}
               />
               <View style={{ flexDirection: "row", gap: spacing.sm }}>
                 <Pressable
