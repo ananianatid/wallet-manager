@@ -1,18 +1,22 @@
 import { Stack, useFocusEffect } from "expo-router";
+import { Pencil, Trash } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { SelectField } from "@/components/select-field";
+import { CategoryIcon } from "@/components/category-icons";
+import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { deleteBudget, listBudgets, setBudget } from "@/db/budgets";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { listTransactions } from "@/db/transactions";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, type ThemeColors } from "@/theme";
 import type { Budget, Category } from "@/types";
 import { formatAmount } from "@/utils/format";
@@ -43,7 +47,7 @@ function EditRow({
 }: EditRowProps) {
   const options = [
     { id: 0, label: "Toutes les dépenses" },
-    ...categories.map((c) => ({ id: c.id, label: c.name })),
+    ...categories.map((c) => ({ id: c.id, label: c.name, icon: c.icon })),
   ];
   return (
     <View style={[styles.row, { flexWrap: "wrap", gap: spacing.sm }]}>
@@ -64,6 +68,7 @@ function EditRow({
           placeholderTextColor={theme.secondaryLabel}
           keyboardType="number-pad"
           inputMode="numeric"
+          accessibilityLabel="Montant du budget par mois en FCFA"
           style={[
             styles.input,
             { backgroundColor: theme.surfaceElevated, color: theme.label },
@@ -98,26 +103,48 @@ function EditRow({
 
 export default function BudgetsScreen() {
   const theme = useTheme();
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [b, cats] = await Promise.all([
+    const now = new Date();
+    const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+    const [b, cats, tx] = await Promise.all([
       listBudgets(db),
       listCategories(db, "expense"),
+      listTransactions(db, { startMs, endMs }),
     ]);
-    setBudgets(b);
-    setExpenseCategories(cats);
+    const spentByCategory = new Map<number, number>();
+    let totalExpense = 0;
+    for (const t of tx) {
+      if (t.type !== "expense") {
+        continue;
+      }
+      totalExpense += t.amount;
+      if (t.categoryId != null) {
+        spentByCategory.set(
+          t.categoryId,
+          (spentByCategory.get(t.categoryId) ?? 0) + t.amount,
+        );
+      }
+    }
+    return { budgets: b, expenseCategories: cats, spentByCategory, totalExpense };
   }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const budgets = resource.data?.budgets ?? [];
+  const expenseCategories = resource.data?.expenseCategories ?? [];
+  const spentByCategory = resource.data?.spentByCategory ?? new Map<number, number>();
+  const totalExpense = resource.data?.totalExpense ?? 0;
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const editingBudget =
@@ -157,7 +184,7 @@ export default function BudgetsScreen() {
     try {
       await setBudget(db, categoryId, parsed);
       cancelEdit();
-      await load();
+      await resource.reload();
     } catch (e) {
       Alert.alert("Impossible d'enregistrer", errorMessage(e));
     }
@@ -172,7 +199,7 @@ export default function BudgetsScreen() {
         onPress: async () => {
           const db = await getDatabase();
           await deleteBudget(db, budget.id);
-          await load();
+          await resource.reload();
         },
       },
     ]);
@@ -181,15 +208,20 @@ export default function BudgetsScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Budgets" }} />
-      <ScrollView
-        style={{ flex: 1 }}
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
+      <KeyboardAwareScreen
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           padding: spacing.lg,
           paddingBottom: spacing.xxl,
           gap: spacing.md,
         }}
-        keyboardShouldPersistTaps="handled"
       >
         {budgets.length === 0 && editingKey === null ? (
           <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.xl }}>
@@ -206,6 +238,12 @@ export default function BudgetsScreen() {
         >
           {budgets.map((budget, index) => {
             const isEditing = editingKey === String(budget.id);
+            const spent =
+              budget.categoryId == null
+                ? totalExpense
+                : (spentByCategory.get(budget.categoryId) ?? 0);
+            const pct = Math.min((spent / budget.amount) * 100, 100);
+            const over = spent > budget.amount;
             return (
               <View key={budget.id}>
                 {index > 0 ? (
@@ -232,27 +270,43 @@ export default function BudgetsScreen() {
                   />
                 ) : (
                   <View style={styles.row}>
+                    {budget.categoryIcon ? (
+                      <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
+                        <CategoryIcon name={budget.categoryIcon} size={19} color={theme.accent} />
+                      </View>
+                    ) : null}
                     <View style={styles.body}>
                       <Text style={[styles.name, { color: theme.label }]}>
                         {budget.categoryName ?? "Toutes les dépenses"}
                       </Text>
                       <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                        Par mois
+                        {formatAmount(spent)} / {formatAmount(budget.amount)} ce mois
                       </Text>
+                      <View style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}>
+                        <View
+                          style={[
+                            styles.progressFill,
+                            {
+                              width: `${pct}%`,
+                              backgroundColor: over ? theme.expense : theme.accent,
+                            },
+                          ]}
+                        />
+                      </View>
                     </View>
                     <Text style={[styles.amount, { color: theme.label }]}>
                       {formatAmount(budget.amount)}
                     </Text>
-                    <Pressable onPress={() => startEdit(budget)} hitSlop={8}>
-                      <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                        Modifier
-                      </Text>
-                    </Pressable>
-                    <Pressable onPress={() => confirmDelete(budget)} hitSlop={8}>
-                      <Text style={{ color: theme.expense, fontSize: 13 }}>
-                        Supprimer
-                      </Text>
-                    </Pressable>
+                    <IconButton
+                      label={`Modifier le budget ${budget.categoryName ?? "global"}`}
+                      onPress={() => startEdit(budget)}
+                      icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
+                    />
+                    <IconButton
+                      label={`Supprimer le budget ${budget.categoryName ?? "global"}`}
+                      onPress={() => confirmDelete(budget)}
+                      icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
+                    />
                   </View>
                 )}
               </View>
@@ -296,7 +350,8 @@ export default function BudgetsScreen() {
             </Text>
           </Pressable>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScreen>
+      )}
     </>
   );
 }
@@ -313,6 +368,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  categoryIcon: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+  },
   name: {
     fontWeight: "600",
   },
@@ -325,12 +387,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,
   },
+  progressTrack: {
+    height: 6,
+    overflow: "hidden",
+    borderRadius: 3,
+    marginTop: spacing.xs,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
   button: {
     alignItems: "center",
+    minHeight: 48,
+    justifyContent: "center",
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,
   },
   addButton: {
+    minHeight: 48,
+    justifyContent: "center",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,

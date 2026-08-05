@@ -1,48 +1,31 @@
-import { AlertTriangle, ChevronRight, ShieldCheck } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { radius, spacing, useTheme } from "@/theme";
 import type { SafeToSpend } from "@/types";
-import { formatAmount, formatDate } from "@/utils/format";
+import { formatAmount } from "@/utils/format";
 
 interface Props {
   data: SafeToSpend;
-  onPress: () => void;
+  onPress?: () => void;
+  interactive?: boolean;
 }
 
-export function SafeToSpendCard({ data, onPress }: Props) {
+export function SafeToSpendCard({ data, onPress, interactive = true }: Props) {
   const theme = useTheme();
   const isNegative = data.amount < 0;
   const accent = isNegative ? theme.expense : theme.accent;
-  const horizonLabel = data.usesFallbackHorizon
-    ? "sur les 30 prochains jours"
-    : "jusqu'au prochain revenu";
 
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: theme.surface },
-        pressed && { opacity: 0.7 },
-      ]}
-    >
+  const content = (
+    <>
       <View style={styles.heading}>
-        <View style={[styles.icon, { backgroundColor: isNegative ? `${theme.expense}22` : `${theme.accent}22` }]}>
-          {isNegative ? (
-            <AlertTriangle size={17} strokeWidth={2.2} color={accent} />
-          ) : (
-            <ShieldCheck size={17} strokeWidth={2.2} color={accent} />
-          )}
-        </View>
         <View style={styles.titleBlock}>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "700" }}>
-            DÉPENSABLE SANS RISQUE
-          </Text>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-            {horizonLabel} · {formatDate(data.horizonDate)}
+            DISPONIBLE ESTIMÉ
           </Text>
         </View>
-        <ChevronRight size={18} strokeWidth={2.2} color={theme.secondaryLabel} />
+        {interactive && onPress ? (
+          <ChevronRight size={18} strokeWidth={2.2} color={theme.secondaryLabel} />
+        ) : null}
       </View>
 
       <Text style={[styles.amount, { color: accent }]} selectable>
@@ -53,22 +36,61 @@ export function SafeToSpendCard({ data, onPress }: Props) {
         <Text style={{ color: theme.expense, lineHeight: 18 }}>
           Il manque {formatAmount(Math.abs(data.amount))} pour couvrir les échéances prévues.
         </Text>
-      ) : (
-        <Text style={{ color: theme.secondaryLabel, lineHeight: 18 }}>
-          Après les réservations et les échéances prévues.
-        </Text>
-      )}
+      ) : null}
 
+      {interactive ? (
       <View style={[styles.footer, { borderTopColor: theme.separator }]}>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-          Voir le calcul détaillé
-        </Text>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-          {data.eventCount} élément{data.eventCount > 1 ? "s" : ""} prévu{data.eventCount > 1 ? "s" : ""}
-        </Text>
+        <View style={styles.footerItem}>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Revenus</Text>
+          <Text
+            style={[
+              styles.footerValue,
+              { color: theme.income },
+            ]}
+          >
+            + {formatAmount(data.plannedIncome)}
+          </Text>
+        </View>
+        <View style={[styles.footerItem, styles.footerItemCenter]}>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Dépenses</Text>
+          <Text style={[styles.footerValue, { color: theme.expense }]}>
+            −{formatAmount(data.plannedOutflows)}
+          </Text>
+        </View>
+        <View style={[styles.footerItem, styles.footerItemRight]}>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Solde</Text>
+          <Text
+            style={[
+              styles.footerValue,
+              { color: data.amount >= 0 ? theme.label : theme.expense },
+            ]}
+          >
+            {formatAmount(data.amount)}
+          </Text>
+        </View>
       </View>
-    </Pressable>
+      ) : null}
+    </>
   );
+
+  if (interactive && onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Voir le calcul détaillé du disponible estimé"
+        style={({ pressed }) => [
+          styles.card,
+          { backgroundColor: theme.surface },
+          pressed && { opacity: 0.7 },
+        ]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return <View style={[styles.card, { backgroundColor: theme.surface }]}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -83,16 +105,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  icon: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-  },
   titleBlock: {
     flex: 1,
-    gap: 2,
   },
   amount: {
     fontSize: 28,
@@ -101,9 +115,26 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerItem: {
+    flex: 1,
+    gap: spacing.xs,
+    alignItems: "flex-start",
+  },
+  footerItemCenter: {
+    alignItems: "center",
+  },
+  footerItemRight: {
+    alignItems: "flex-end",
+  },
+  footerValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
 });

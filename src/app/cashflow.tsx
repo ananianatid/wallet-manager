@@ -1,33 +1,43 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronRight } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
+import { ScreenState } from "@/components/ui";
 import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
-import type { SafeToSpend } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 
 export default function CashflowScreen() {
   const theme = useTheme();
-  const [data, setData] = useState<SafeToSpend | null>(null);
-
   const load = useCallback(async () => {
     const db = await getDatabase();
-    setData(await calculateSafeToSpend(db));
+    return calculateSafeToSpend(db);
   }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const data = resource.data;
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   return (
     <>
       <Stack.Screen options={{ title: "Dépenses sûres" }} />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -35,7 +45,7 @@ export default function CashflowScreen() {
       >
         {data ? (
           <>
-            <SafeToSpendCard data={data} onPress={() => undefined} />
+            <SafeToSpendCard data={data} interactive={false} />
 
             <View style={[styles.panel, { backgroundColor: theme.surface }]}>
               <Text style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
@@ -113,6 +123,7 @@ export default function CashflowScreen() {
           </>
         ) : null}
       </ScrollView>
+      )}
     </>
   );
 }

@@ -1,20 +1,30 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Stack, useFocusEffect } from "expo-router";
+import { Pencil, Trash } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { SelectField } from "@/components/select-field";
+import { CategoryIcon } from "@/components/category-icons";
+import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
-import { deleteSavingsRule, listSavingsRules, setSavingsRule } from "@/db/savings";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import {
+  deleteSavingsRule,
+  getFirstIncomeDate,
+  listSavingsRules,
+  setSavingsRule,
+} from "@/db/savings";
 import { radius, spacing, useTheme, type ThemeColors } from "@/theme";
 import type { Category, SavingsRule } from "@/types";
+import { formatDate } from "@/utils/format";
 
 const errorMessage = (e: unknown): string =>
   e instanceof Error ? e.message : "Une erreur est survenue.";
@@ -25,6 +35,8 @@ interface EditRowProps {
   onCategoryChange: (id: number | null) => void;
   percent: string;
   onPercentChange: (value: string) => void;
+  startDate: number | null;
+  onStartDateChange: (value: number | null) => void;
   onCancel: () => void;
   onSave: () => void;
   theme: ThemeColors;
@@ -36,13 +48,16 @@ function EditRow({
   onCategoryChange,
   percent,
   onPercentChange,
+  startDate,
+  onStartDateChange,
   onCancel,
   onSave,
   theme,
 }: EditRowProps) {
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const options = [
     { id: 0, label: "Tous les revenus" },
-    ...categories.map((c) => ({ id: c.id, label: c.name })),
+    ...categories.map((c) => ({ id: c.id, label: c.name, icon: c.icon })),
   ];
   return (
     <View style={[styles.row, { flexWrap: "wrap", gap: spacing.sm }]}>
@@ -63,12 +78,57 @@ function EditRow({
           placeholderTextColor={theme.secondaryLabel}
           keyboardType="number-pad"
           inputMode="numeric"
+          accessibilityLabel="Pourcentage de revenus à épargner"
           style={[
             styles.input,
             { backgroundColor: theme.surfaceElevated, color: theme.label },
           ]}
         />
       </View>
+
+      <View style={{ width: "100%", gap: spacing.xs + 2 }}>
+        <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+          Date de départ
+        </Text>
+        <View style={styles.dateRow}>
+          <Pressable
+            onPress={() => setShowDatePicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Date de départ ${startDate ? formatDate(startDate) : "depuis le début"}`}
+            style={({ pressed }) => [
+              styles.dateButton,
+              { backgroundColor: theme.surfaceElevated, borderColor: theme.separator },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={{ color: startDate ? theme.label : theme.secondaryLabel, fontWeight: "600" }}>
+              {startDate ? `Depuis le ${formatDate(startDate)}` : "Depuis le début"}
+            </Text>
+          </Pressable>
+          {startDate != null ? (
+            <Pressable
+              onPress={() => onStartDateChange(null)}
+              hitSlop={8}
+              accessibilityLabel="Effacer la date de départ"
+              style={({ pressed }) => [styles.clearButton, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={{ color: theme.expense, fontSize: 13 }}>Effacer</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {showDatePicker ? (
+          <DateTimePicker
+            mode="date"
+            value={startDate ? new Date(startDate) : new Date()}
+            onChange={(_, date) => {
+              setShowDatePicker(false);
+              if (date) onStartDateChange(date.getTime());
+            }}
+            onDismiss={() => setShowDatePicker(false)}
+          />
+        ) : null}
+      </View>
+
       <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
         <Pressable
           onPress={onCancel}
@@ -97,44 +157,52 @@ function EditRow({
 
 export default function SavingsScreen() {
   const theme = useTheme();
-  const [rules, setRules] = useState<SavingsRule[]>([]);
-  const [incomeCategories, setIncomeCategories] = useState<Category[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [percent, setPercent] = useState("");
+  const [startDate, setStartDate] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [r, cats] = await Promise.all([
+    const [r, cats, firstIncome] = await Promise.all([
       listSavingsRules(db),
       listCategories(db, "income"),
+      getFirstIncomeDate(db),
     ]);
-    setRules(r);
-    setIncomeCategories(cats);
+    return { rules: r, incomeCategories: cats, firstIncomeDate: firstIncome };
   }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const rules = resource.data?.rules ?? [];
+  const incomeCategories = resource.data?.incomeCategories ?? [];
+  const firstIncomeDate = resource.data?.firstIncomeDate ?? null;
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const startAdd = () => {
     setEditingKey("new");
     setCategoryId(null);
     setPercent("");
+    setStartDate(firstIncomeDate);
   };
 
   const startEdit = (rule: SavingsRule) => {
     setEditingKey(String(rule.id));
     setCategoryId(rule.categoryId);
     setPercent(String(rule.percent));
+    setStartDate(rule.startDate);
   };
 
   const cancelEdit = () => {
     setEditingKey(null);
     setCategoryId(null);
     setPercent("");
+    setStartDate(null);
   };
 
   const save = async () => {
@@ -145,9 +213,9 @@ export default function SavingsScreen() {
     }
     const db = await getDatabase();
     try {
-      await setSavingsRule(db, { categoryId, percent: parsed });
+      await setSavingsRule(db, { categoryId, percent: parsed, startDate });
       cancelEdit();
-      await load();
+      await resource.reload();
     } catch (e) {
       Alert.alert("Impossible d'enregistrer", errorMessage(e));
     }
@@ -162,7 +230,7 @@ export default function SavingsScreen() {
         onPress: async () => {
           const db = await getDatabase();
           await deleteSavingsRule(db, rule.id);
-          await load();
+          await resource.reload();
         },
       },
     ]);
@@ -171,15 +239,20 @@ export default function SavingsScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Épargne" }} />
-      <ScrollView
-        style={{ flex: 1 }}
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
+      <KeyboardAwareScreen
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           padding: spacing.lg,
           paddingBottom: spacing.xxl,
           gap: spacing.md,
         }}
-        keyboardShouldPersistTaps="handled"
       >
         <Text style={{ color: theme.secondaryLabel, lineHeight: 20 }}>
           Projetez combien vous économisez : un pourcentage de vos revenus par
@@ -220,33 +293,41 @@ export default function SavingsScreen() {
                     onCategoryChange={setCategoryId}
                     percent={percent}
                     onPercentChange={setPercent}
+                    startDate={startDate}
+                    onStartDateChange={setStartDate}
                     onCancel={cancelEdit}
                     onSave={save}
                     theme={theme}
                   />
                 ) : (
                   <View style={styles.row}>
+                    {rule.categoryIcon ? (
+                      <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
+                        <CategoryIcon name={rule.categoryIcon} size={19} color={theme.accent} />
+                      </View>
+                    ) : null}
                     <View style={styles.body}>
                       <Text style={[styles.name, { color: theme.label }]}>
                         {rule.categoryName ?? "Tous les revenus"}
                       </Text>
                       <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                         À épargner sur chaque revenu
+                        {rule.startDate != null ? ` depuis le ${formatDate(rule.startDate)}` : ""}
                       </Text>
                     </View>
                     <Text style={[styles.amount, { color: theme.label }]}>
                       {rule.percent} %
                     </Text>
-                    <Pressable onPress={() => startEdit(rule)} hitSlop={8}>
-                      <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                        Modifier
-                      </Text>
-                    </Pressable>
-                    <Pressable onPress={() => confirmDelete(rule)} hitSlop={8}>
-                      <Text style={{ color: theme.expense, fontSize: 13 }}>
-                        Supprimer
-                      </Text>
-                    </Pressable>
+                    <IconButton
+                      label={`Modifier la règle ${rule.categoryName ?? "globale"}`}
+                      onPress={() => startEdit(rule)}
+                      icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
+                    />
+                    <IconButton
+                      label={`Supprimer la règle ${rule.categoryName ?? "globale"}`}
+                      onPress={() => confirmDelete(rule)}
+                      icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
+                    />
                   </View>
                 )}
               </View>
@@ -268,6 +349,8 @@ export default function SavingsScreen() {
                 onCategoryChange={setCategoryId}
                 percent={percent}
                 onPercentChange={setPercent}
+                startDate={startDate}
+                onStartDateChange={setStartDate}
                 onCancel={cancelEdit}
                 onSave={save}
                 theme={theme}
@@ -290,7 +373,8 @@ export default function SavingsScreen() {
             </Text>
           </Pressable>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScreen>
+      )}
     </>
   );
 }
@@ -307,6 +391,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  categoryIcon: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+  },
   name: {
     fontWeight: "600",
   },
@@ -319,12 +410,33 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,
   },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  dateButton: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+  },
+  clearButton: {
+    minHeight: 44,
+    justifyContent: "center",
+  },
   button: {
     alignItems: "center",
+    minHeight: 48,
+    justifyContent: "center",
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,
   },
   addButton: {
+    minHeight: 48,
+    justifyContent: "center",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,

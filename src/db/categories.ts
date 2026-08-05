@@ -1,11 +1,22 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-import type { Category, CategoryInput, CategoryType } from "../types";
+import {
+  DEFAULT_CATEGORY_ICON,
+  isCategoryIconName,
+  normalizeCategoryIcon,
+} from "@/constants/category-icons";
+import type {
+  Category,
+  CategoryInput,
+  CategoryType,
+  CategoryUpdateInput,
+} from "../types";
 
 interface CategoryRow {
   id: number;
   type: CategoryType;
   name: string;
   isSeed: number;
+  icon: string | null;
 }
 
 function mapCategory(row: CategoryRow): Category {
@@ -14,8 +25,11 @@ function mapCategory(row: CategoryRow): Category {
     type: row.type,
     name: row.name,
     isSeed: row.isSeed === 1,
+    icon: row.type === "account" ? null : normalizeCategoryIcon(row.icon),
   };
 }
+
+const SELECT_FIELDS = "id, type, name, is_seed AS isSeed, icon";
 
 export function listCategories(
   db: SQLiteDatabase,
@@ -24,13 +38,13 @@ export function listCategories(
   return type
     ? db
         .getAllAsync<CategoryRow>(
-          "SELECT id, type, name, is_seed AS isSeed FROM categories WHERE type = ? ORDER BY name",
+          `SELECT ${SELECT_FIELDS} FROM categories WHERE type = ? ORDER BY name`,
           type,
         )
         .then((rows) => rows.map(mapCategory))
     : db
         .getAllAsync<CategoryRow>(
-          "SELECT id, type, name, is_seed AS isSeed FROM categories ORDER BY type, name",
+          `SELECT ${SELECT_FIELDS} FROM categories ORDER BY type, name`,
         )
         .then((rows) => rows.map(mapCategory));
 }
@@ -51,12 +65,17 @@ export async function createCategory(
   if (!name) {
     throw new Error("Le nom de la catégorie ne peut pas être vide.");
   }
+  const icon = input.type === "account" ? null : input.icon ?? DEFAULT_CATEGORY_ICON;
+  if (input.type !== "account" && !isCategoryIconName(icon)) {
+    throw new Error("L'icône de la catégorie est invalide.");
+  }
   let result;
   try {
     result = await db.runAsync(
-      "INSERT INTO categories (type, name, is_seed) VALUES (?, ?, 0)",
+      "INSERT INTO categories (type, name, is_seed, icon) VALUES (?, ?, 0, ?)",
       input.type,
       name,
+      icon,
     );
   } catch (e) {
     if (isUniqueViolation(e)) {
@@ -65,7 +84,7 @@ export async function createCategory(
     throw e;
   }
   const row = await db.getFirstAsync<CategoryRow>(
-    "SELECT id, type, name, is_seed AS isSeed FROM categories WHERE id = ?",
+    `SELECT ${SELECT_FIELDS} FROM categories WHERE id = ?`,
     result.lastInsertRowId,
   );
   if (!row) {
@@ -79,18 +98,69 @@ export async function renameCategory(
   id: number,
   name: string,
 ): Promise<void> {
-  const trimmed = name.trim();
+  await updateCategory(db, id, { name });
+}
+
+export async function updateCategory(
+  db: SQLiteDatabase,
+  id: number,
+  input: CategoryUpdateInput,
+): Promise<void> {
+  const trimmed = input.name.trim();
   if (!trimmed) {
     throw new Error("Le nom de la catégorie ne peut pas être vide.");
   }
+  const current = await db.getFirstAsync<{ type: CategoryType; icon: string | null }>(
+    "SELECT type, icon FROM categories WHERE id = ?",
+    id,
+  );
+  if (!current) {
+    throw new Error("Catégorie introuvable.");
+  }
+  let icon = current.type === "account" ? null : normalizeCategoryIcon(current.icon);
+  if (current.type !== "account" && input.icon !== undefined) {
+    if (input.icon == null || !isCategoryIconName(input.icon)) {
+      throw new Error("L'icône de la catégorie est obligatoire.");
+    }
+    icon = input.icon;
+  }
   try {
-    await db.runAsync("UPDATE categories SET name = ? WHERE id = ?", trimmed, id);
+    await db.runAsync(
+      "UPDATE categories SET name = ?, icon = ? WHERE id = ?",
+      trimmed,
+      icon,
+      id,
+    );
   } catch (e) {
     if (isUniqueViolation(e)) {
       throw new Error("Une catégorie de ce type porte déjà ce nom.");
     }
     throw e;
   }
+}
+
+export async function ensureCategory(
+  db: SQLiteDatabase,
+  type: CategoryType,
+  name: string,
+): Promise<number> {
+  const trimmed = name.trim() || "Autre";
+  const existing = await db.getFirstAsync<{ id: number }>(
+    "SELECT id FROM categories WHERE type = ? AND name = ?",
+    type,
+    trimmed,
+  );
+  if (existing) {
+    return existing.id;
+  }
+  const icon = type === "account" ? null : DEFAULT_CATEGORY_ICON;
+  const result = await db.runAsync(
+    "INSERT INTO categories (type, name, is_seed, icon) VALUES (?, ?, 0, ?)",
+    type,
+    trimmed,
+    icon,
+  );
+  return Number(result.lastInsertRowId);
 }
 
 export async function deleteCategory(

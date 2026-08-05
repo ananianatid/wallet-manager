@@ -4,8 +4,8 @@ import { Stack } from "expo-router/stack";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { SelectField } from "@/components/select-field";
+import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
@@ -68,6 +69,8 @@ export default function RecurringFormScreen() {
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState<"start" | "next" | "end" | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -97,7 +100,18 @@ export default function RecurringFormScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      const refresh = async () => {
+        setLoadingOptions(true);
+        setLoadError(null);
+        try {
+          await load();
+        } catch (error) {
+          setLoadError(error instanceof Error ? error.message : "Impossible de charger les comptes.");
+        } finally {
+          setLoadingOptions(false);
+        }
+      };
+      void refresh();
     }, [load]),
   );
 
@@ -114,7 +128,7 @@ export default function RecurringFormScreen() {
     () =>
       categories
         .filter((c) => c.type === type)
-        .map((c) => ({ id: c.id, label: c.name })),
+        .map((c) => ({ id: c.id, label: c.name, icon: c.icon })),
     [categories, type],
   );
 
@@ -195,12 +209,12 @@ export default function RecurringFormScreen() {
           title: recurringId ? "Modifier la récurrence" : "Nouvelle récurrence",
         }}
       />
-      <ScrollView
-        style={{ flex: 1 }}
+      <KeyboardAwareScreen
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
-        keyboardShouldPersistTaps="handled"
       >
+        {loadError ? <InlineError message={loadError} onRetry={() => setLoadError(null)} /> : null}
+        {loadingOptions ? <ActivityIndicator color={theme.accent} accessibilityLabel="Chargement des comptes" /> : null}
         <View style={styles.typeRow}>
           {TYPES.map((t) => {
             const active = type === t.value;
@@ -208,6 +222,9 @@ export default function RecurringFormScreen() {
               <Pressable
                 key={t.value}
                 onPress={() => switchType(t.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={t.label}
                 style={({ pressed }) => [
                   styles.typeButton,
                   {
@@ -245,6 +262,7 @@ export default function RecurringFormScreen() {
             placeholderTextColor={theme.secondaryLabel}
             keyboardType="number-pad"
             inputMode="numeric"
+            accessibilityLabel="Montant en FCFA"
             style={{
               color: theme.label,
               fontSize: 40,
@@ -281,8 +299,9 @@ export default function RecurringFormScreen() {
                 onChangeText={setFee}
                 placeholder="0"
                 placeholderTextColor={theme.secondaryLabel}
-                keyboardType="number-pad"
-                inputMode="numeric"
+              keyboardType="number-pad"
+              inputMode="numeric"
+              accessibilityLabel="Frais en FCFA, optionnels"
                 style={[
                   styles.input,
                   { backgroundColor: theme.surface, color: theme.label },
@@ -320,6 +339,7 @@ export default function RecurringFormScreen() {
                 placeholderTextColor={theme.secondaryLabel}
                 keyboardType="number-pad"
                 inputMode="numeric"
+                accessibilityLabel="Intervalle de répétition"
                 style={[
                   styles.input,
                   { backgroundColor: theme.surface, color: theme.label },
@@ -332,6 +352,8 @@ export default function RecurringFormScreen() {
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <Pressable
             onPress={() => setPicking("start")}
+            accessibilityRole="button"
+            accessibilityLabel={`Date de début ${formatDate(startDate.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
               { backgroundColor: theme.surface },
@@ -345,6 +367,8 @@ export default function RecurringFormScreen() {
           </Pressable>
           <Pressable
             onPress={() => setPicking("next")}
+            accessibilityRole="button"
+            accessibilityLabel={`Prochaine échéance ${formatDate(nextDate.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
               { backgroundColor: theme.surface },
@@ -410,6 +434,8 @@ export default function RecurringFormScreen() {
           <Switch
             value={isActive}
             onValueChange={setIsActive}
+            accessibilityLabel="Récurrence active"
+            accessibilityState={{ checked: isActive }}
             trackColor={{ true: theme.accent }}
             thumbColor="#FFFFFF"
           />
@@ -425,6 +451,7 @@ export default function RecurringFormScreen() {
             multiline
             placeholder="Ex. : loyer"
             placeholderTextColor={theme.secondaryLabel}
+            accessibilityLabel="Note optionnelle"
             style={[
               styles.input,
               { backgroundColor: theme.surface, color: theme.label, minHeight: 80 },
@@ -432,20 +459,12 @@ export default function RecurringFormScreen() {
           />
         </View>
 
-        <Pressable
+        <ActionButton
           onPress={save}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: theme.accent },
-            (pressed || saving) && { opacity: 0.7 },
-          ]}
-        >
-          <Text style={styles.saveLabel}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </Text>
-        </Pressable>
-      </ScrollView>
+          disabled={saving || loadingOptions}
+          label={saving ? "Enregistrement…" : "Enregistrer"}
+        />
+      </KeyboardAwareScreen>
     </>
   );
 }

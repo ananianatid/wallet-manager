@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Pressable,
   SectionList,
@@ -12,48 +12,75 @@ import {
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { SelectField } from "@/components/select-field";
+import { IconButton, InlineError, ScreenState } from "@/components/ui";
+import { listAccountGroups } from "@/db/account-groups";
 import { listAccounts, createAccount } from "@/db/accounts";
-import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Account, Category } from "@/types";
+import type { Account } from "@/types";
 import { formatAmount } from "@/utils/format";
 
 export default function AccountsScreen() {
   const theme = useTheme();
-  const [accounts, setAccounts] = useState<Account[] | null>(null);
-  const [accountCategories, setAccountCategories] = useState<Category[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
+  const listRef = useRef<SectionList>(null);
   const [showForm, setShowForm] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [groupId, setGroupId] = useState<number | null>(null);
+
+  const openForm = () => {
+    setShowForm(true);
+    try {
+      listRef.current?.scrollToLocation({
+        sectionIndex: 0,
+        itemIndex: 0,
+        animated: true,
+      });
+    } catch {
+      // liste vide : le formulaire est déjà visible en tête
+    }
+  };
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [accs, cats] = await Promise.all([
+    const [accs, groups] = await Promise.all([
       listAccounts(db),
-      listCategories(db, "account"),
+      listAccountGroups(db),
     ]);
-    setAccounts(accs);
-    setAccountCategories(cats);
+    return { accounts: accs, accountGroups: groups };
   }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const accounts = useMemo(() => resource.data?.accounts ?? [], [resource.data?.accounts]);
+  const accountGroups = useMemo(
+    () => resource.data?.accountGroups ?? [],
+    [resource.data?.accountGroups],
+  );
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const submit = async () => {
     if (!name.trim()) {
       return;
     }
-    const db = await getDatabase();
-    await createAccount(db, { name, categoryId: categoryId ?? accountCategories[0]?.id ?? 0 });
-    setName("");
-    setCategoryId(null);
-    setShowForm(false);
-    await load();
+    setFormError(null);
+    try {
+      const db = await getDatabase();
+      await createAccount(db, { name, groupId: groupId ?? accountGroups[0]?.id ?? null });
+      setName("");
+      setGroupId(null);
+      setShowForm(false);
+      await resource.reload();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Impossible de créer le compte.");
+    }
   };
 
   const sections = useMemo(() => {
@@ -63,10 +90,10 @@ export default function AccountsScreen() {
       { key: string; title: string; data: Account[] }
     >();
     for (const account of visible) {
-      const key = String(account.categoryId);
+      const key = account.groupId != null ? String(account.groupId) : "none";
       const section = groups.get(key) ?? {
         key,
-        title: account.categoryName,
+        title: account.groupName ?? "Sans groupe",
         data: [],
       };
       section.data.push(account);
@@ -95,29 +122,33 @@ export default function AccountsScreen() {
         options={{
           headerRight: () => (
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
-              <Pressable
+              <IconButton
                 onPress={() => router.push("/goals")}
-                hitSlop={8}
-                accessibilityLabel="Ouvrir les objectifs"
-              >
-                <Target size={21} strokeWidth={2.2} color={theme.accent} />
-              </Pressable>
-              <Pressable
-                onPress={() => setShowForm((v) => !v)}
-                hitSlop={8}
-                accessibilityLabel="Ajouter un compte"
-              >
-                {showForm ? (
+                label="Ouvrir les objectifs"
+                icon={<Target size={21} strokeWidth={2.2} color={theme.accent} />}
+              />
+              <IconButton
+                onPress={() => (showForm ? setShowForm(false) : openForm())}
+                label={showForm ? "Fermer le formulaire de compte" : "Ajouter un compte"}
+                icon={showForm ? (
                   <X size={22} strokeWidth={2.2} color={theme.accent} />
                 ) : (
                   <Plus size={22} strokeWidth={2.2} color={theme.accent} />
                 )}
-              </Pressable>
+              />
             </View>
           ),
         }}
       />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <SectionList
+      ref={listRef}
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
@@ -319,6 +350,7 @@ export default function AccountsScreen() {
               }}
             >
               <Text style={[styles.name, { color: theme.label }]}>Nouveau compte</Text>
+              {formError ? <InlineError message={formError} onRetry={() => setFormError(null)} /> : null}
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -334,12 +366,12 @@ export default function AccountsScreen() {
                 autoFocus
               />
               <SelectField
-                label="Type de compte"
+                label="Groupe de comptes"
                 value={
-                  accountCategories.find((c) => c.id === categoryId)?.name ?? null
+                  accountGroups.find((g) => g.id === groupId)?.name ?? null
                 }
-                options={accountCategories.map((c) => ({ id: c.id, label: c.name }))}
-                onChange={setCategoryId}
+                options={accountGroups.map((g) => ({ id: g.id, label: g.name }))}
+                onChange={setGroupId}
               />
               <View style={{ flexDirection: "row", gap: spacing.sm }}>
                 <Pressable
@@ -365,7 +397,7 @@ export default function AccountsScreen() {
             title="Aucun compte"
             message="Créez votre premier compte pour commencer à suivre vos transactions."
             actionLabel="Créer un compte"
-            onAction={() => setShowForm(true)}
+            onAction={openForm}
           />
         ) : (
           <View style={{ padding: spacing.xl }}>
@@ -376,6 +408,7 @@ export default function AccountsScreen() {
         )
       }
     />
+      )}
     </>
   );
 }

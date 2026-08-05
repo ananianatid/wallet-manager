@@ -1,5 +1,5 @@
 import { router, Stack, useFocusEffect } from "expo-router";
-import { Plus } from "lucide-react-native";
+import { Plus, Trash } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -10,12 +10,15 @@ import {
   View,
 } from "react-native";
 import { getDatabase } from "@/db/database";
+import { CategoryIcon } from "@/components/category-icons";
+import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import {
   applyDueRecurring,
   deleteRecurring,
   listRecurring,
 } from "@/db/recurring";
 import { radius, spacing, useTheme } from "@/theme";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import type { RecurringTransaction } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 
@@ -37,18 +40,22 @@ const errorMessage = (e: unknown): string =>
 
 export default function RecurringScreen() {
   const theme = useTheme();
-  const [items, setItems] = useState<RecurringTransaction[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    setItems(await listRecurring(db));
+    return listRecurring(db);
   }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const items = resource.data ?? [];
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const confirmDelete = (item: RecurringTransaction) => {
@@ -68,20 +75,13 @@ export default function RecurringScreen() {
 
   const generateNow = async () => {
     setGenerating(true);
+    setActionError(null);
     try {
       const db = await getDatabase();
-      const generated = await applyDueRecurring(db);
-      if (generated > 0) {
-        Alert.alert(
-          "Récurrentes générées",
-          `${generated} transaction${generated > 1 ? "s" : ""} créée${generated > 1 ? "s" : ""}.`,
-        );
-      } else {
-        Alert.alert("Aucune échéance", "Aucune transaction récurrente n'est due.");
-      }
-      await load();
+      await applyDueRecurring(db);
+      await resource.reload();
     } catch (e) {
-      Alert.alert("Génération impossible", errorMessage(e));
+      setActionError(errorMessage(e));
     } finally {
       setGenerating(false);
     }
@@ -93,16 +93,21 @@ export default function RecurringScreen() {
         options={{
           title: "Transactions récurrentes",
           headerRight: () => (
-            <Pressable
+            <IconButton
               onPress={() => router.push("/recurring/form")}
-              hitSlop={8}
-              accessibilityLabel="Ajouter une récurrence"
-            >
-              <Plus size={22} strokeWidth={2.2} color={theme.accent} />
-            </Pressable>
+              label="Ajouter une récurrence"
+              icon={<Plus size={22} strokeWidth={2.2} color={theme.accent} />}
+            />
           ),
         }}
       />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <FlatList
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -120,20 +125,26 @@ export default function RecurringScreen() {
               pressed && { opacity: 0.6 },
             ]}
           >
-            <View
-              style={[
-                styles.dot,
-                {
-                  backgroundColor: item.isActive
-                    ? item.type === "income"
-                      ? theme.income
-                      : item.type === "expense"
-                        ? theme.expense
-                        : theme.accent
-                    : theme.separator,
-                },
-              ]}
-            />
+            {item.categoryIcon ? (
+              <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
+                <CategoryIcon name={item.categoryIcon} size={18} color={theme.accent} />
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: item.isActive
+                      ? item.type === "income"
+                        ? theme.income
+                        : item.type === "expense"
+                          ? theme.expense
+                          : theme.accent
+                      : theme.separator,
+                  },
+                ]}
+              />
+            )}
             <View style={styles.body}>
               <Text style={[styles.title, { color: theme.label }]} numberOfLines={1}>
                 {TYPE_LABELS[item.type]} · {formatAmount(item.amount)}
@@ -162,13 +173,11 @@ export default function RecurringScreen() {
                 · prochaine : {formatDate(item.nextDate)}
               </Text>
             </View>
-            <Pressable
+            <IconButton
+              label="Supprimer cette récurrence"
               onPress={() => confirmDelete(item)}
-              hitSlop={8}
-              accessibilityLabel={`Supprimer ${item.id}`}
-            >
-              <Text style={{ color: theme.expense, fontSize: 13 }}>Supprimer</Text>
-            </Pressable>
+              icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
+            />
           </Pressable>
         )}
         ItemSeparatorComponent={() => (
@@ -183,6 +192,7 @@ export default function RecurringScreen() {
         ListHeaderComponent={
           items.length > 0 ? (
             <View style={{ padding: spacing.lg }}>
+              {actionError ? <InlineError message={actionError} onRetry={() => setActionError(null)} /> : null}
               <Pressable
                 onPress={generateNow}
                 disabled={generating}
@@ -219,6 +229,7 @@ export default function RecurringScreen() {
           </View>
         }
       />
+      )}
     </>
   );
 }
@@ -235,6 +246,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  categoryIcon: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
   },
   body: {
     flex: 1,

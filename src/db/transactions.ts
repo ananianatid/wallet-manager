@@ -1,5 +1,11 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-import type { Transaction, TransactionInput, TransactionType } from "../types";
+import { normalizeCategoryIcon } from "@/constants/category-icons";
+import type {
+  Transaction,
+  TransactionInput,
+  TransactionSearchCriteria,
+  TransactionType,
+} from "../types";
 
 interface TransactionRow {
   id: number;
@@ -7,6 +13,7 @@ interface TransactionRow {
   amount: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: string | null;
   accountId: number;
   accountName: string;
   destinationAccountId: number | null;
@@ -21,6 +28,7 @@ const SELECT_FIELDS = `
   t.id, t.type, t.amount,
   t.category_id AS categoryId,
   c.name AS categoryName,
+  c.icon AS categoryIcon,
   t.account_id AS accountId,
   a.name AS accountName,
   t.destination_account_id AS destinationAccountId,
@@ -32,8 +40,8 @@ const SELECT_FIELDS = `
 
 const FROM_JOINS = `
   FROM transactions t
-  JOIN accounts a ON a.id = t.account_id
-  LEFT JOIN accounts da ON da.id = t.destination_account_id
+  JOIN accounts a ON a.id = t.account_id AND a.deleted_at IS NULL
+  LEFT JOIN accounts da ON da.id = t.destination_account_id AND da.deleted_at IS NULL
   LEFT JOIN categories c ON c.id = t.category_id
 `;
 
@@ -44,6 +52,7 @@ function mapTransaction(row: TransactionRow): Transaction {
     amount: row.amount,
     categoryId: row.categoryId,
     categoryName: row.categoryName,
+    categoryIcon: row.categoryName ? normalizeCategoryIcon(row.categoryIcon) : null,
     accountId: row.accountId,
     accountName: row.accountName,
     destinationAccountId: row.destinationAccountId,
@@ -179,12 +188,18 @@ export function listTransactionYears(db: SQLiteDatabase): Promise<number[]> {
          strftime('%Y', transaction_date / 1000, 'unixepoch', 'localtime') AS INTEGER
        ) AS year
        FROM transactions
+       WHERE NOT EXISTS (
+         SELECT 1 FROM accounts a1 WHERE a1.id = transactions.account_id AND a1.deleted_at IS NOT NULL
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM accounts a2 WHERE a2.id = transactions.destination_account_id AND a2.deleted_at IS NOT NULL
+       )
        ORDER BY year DESC`,
     )
     .then((rows) => rows.map((r) => r.year));
 }
 
-export function searchTransactions(
+export function searchTransactionsByText(
   db: SQLiteDatabase,
   query: string,
   limit = 200,
@@ -203,6 +218,101 @@ export function searchTransactions(
        LIMIT ?`,
       [pattern, pattern, pattern, pattern, pattern, limit],
     )
+    .then((rows) => rows.map(mapTransaction));
+}
+
+export function searchTransactions(
+  db: SQLiteDatabase,
+  criteria: TransactionSearchCriteria,
+  limit = 200,
+): Promise<Transaction[]> {
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  const query = criteria.query.trim();
+
+  if (query) {
+    const pattern =
+      "%" +
+      query
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_") +
+      "%";
+    conditions.push(
+      "(t.note LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\' OR " +
+        "a.name LIKE ? ESCAPE '\\' OR da.name LIKE ? ESCAPE '\\' OR " +
+        "CAST(t.amount AS TEXT) LIKE ? ESCAPE '\\')",
+    );
+    params.push(pattern, pattern, pattern, pattern, pattern);
+  }
+
+  if (criteria.startDate != null) {
+    conditions.push("t.transaction_date >= ?");
+    params.push(criteria.startDate);
+  }
+  if (criteria.endDate != null) {
+    const end = new Date(criteria.endDate);
+    const exclusiveEnd = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      end.getDate() + 1,
+    ).getTime();
+    conditions.push("t.transaction_date < ?");
+    params.push(exclusiveEnd);
+  }
+  if (criteria.minAmount != null) {
+    conditions.push("t.amount >= ?");
+    params.push(criteria.minAmount);
+  }
+  if (criteria.maxAmount != null) {
+    conditions.push("t.amount <= ?");
+    params.push(criteria.maxAmount);
+  }
+  if (criteria.accountIds != null) {
+    if (criteria.accountIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = criteria.accountIds.map(() => "?").join(", ");
+      conditions.push(
+        "(t.account_id IN (" +
+          placeholders +
+          ") OR t.destination_account_id IN (" +
+          placeholders +
+          "))",
+      );
+      params.push(...criteria.accountIds, ...criteria.accountIds);
+    }
+  }
+  if (criteria.types.length === 0) {
+    conditions.push("0 = 1");
+  } else if (criteria.types.length < 3) {
+    const placeholders = criteria.types.map(() => "?").join(", ");
+    conditions.push("t.type IN (" + placeholders + ")");
+    params.push(...criteria.types);
+  }
+  if (criteria.categoryIds != null) {
+    if (criteria.categoryIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = criteria.categoryIds.map(() => "?").join(", ");
+      conditions.push("t.category_id IN (" + placeholders + ")");
+      params.push(...criteria.categoryIds);
+    }
+  }
+
+  const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const sql =
+    "SELECT " +
+    SELECT_FIELDS +
+    "\n" +
+    FROM_JOINS +
+    "\n" +
+    where +
+    "\nORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC\nLIMIT ?";
+
+  return db
+    .getAllAsync<TransactionRow>(sql, [...params, safeLimit])
     .then((rows) => rows.map(mapTransaction));
 }
 

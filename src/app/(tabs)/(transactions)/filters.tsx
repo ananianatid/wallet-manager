@@ -3,6 +3,8 @@ import {
   ArrowLeftRight,
   ArrowUpRight,
   Check,
+  ChevronDown,
+  ChevronRight,
   RotateCcw,
 } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -18,9 +20,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import { MonthNavigator } from "@/components/month-navigator";
+import { CategoryIcon } from "@/components/category-icons";
+import { ScreenState } from "@/components/ui";
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import {
   countActiveTransactionFilters,
   resetTransactionFilters,
@@ -29,7 +34,8 @@ import {
   type TransactionFilters,
 } from "@/state/transaction-filters";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Account, Category, TransactionType } from "@/types";
+import type { CategoryIconName } from "@/constants/category-icons";
+import type { TransactionType } from "@/types";
 import { formatMonthLabel } from "@/utils/format";
 
 const ALL_TYPES: TransactionType[] = ["income", "expense", "transfer"];
@@ -65,9 +71,10 @@ interface CheckRowProps {
   selected: boolean;
   onPress: () => void;
   icon?: typeof ArrowDownLeft;
+  categoryIcon?: CategoryIconName | null;
 }
 
-function CheckRow({ label, detail, selected, onPress, icon: Icon }: CheckRowProps) {
+function CheckRow({ label, detail, selected, onPress, icon: Icon, categoryIcon }: CheckRowProps) {
   const theme = useTheme();
   return (
     <Pressable
@@ -83,6 +90,11 @@ function CheckRow({ label, detail, selected, onPress, icon: Icon }: CheckRowProp
       {Icon ? (
         <View style={[styles.optionIcon, { backgroundColor: theme.surfaceElevated }]}>
           <Icon size={17} strokeWidth={2.2} color={theme.accent} />
+        </View>
+      ) : null}
+      {categoryIcon ? (
+        <View style={[styles.optionIcon, { backgroundColor: theme.surfaceElevated }]}>
+          <CategoryIcon name={categoryIcon} size={17} strokeWidth={2.2} color={theme.accent} />
         </View>
       ) : null}
       <View style={styles.rowText}>
@@ -108,8 +120,10 @@ export default function TransactionFiltersScreen() {
   const theme = useTheme();
   const savedFilters = useTransactionFilters();
   const [draft, setDraft] = useState<TransactionFilters>(savedFilters);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [expanded, setExpanded] = useState({
+    accounts: false,
+    categories: false,
+  });
 
   const loadOptions = useCallback(async () => {
     const db = await getDatabase();
@@ -117,14 +131,24 @@ export default function TransactionFiltersScreen() {
       listAccounts(db),
       listCategories(db),
     ]);
-    setAccounts(accountRows.filter((account) => !account.hidden));
-    setCategories(categoryRows.filter((category) => category.type !== "account"));
+    return {
+      accounts: accountRows.filter((account) => !account.hidden),
+      categories: categoryRows.filter((category) => category.type !== "account"),
+    };
   }, []);
+
+  const resource = useAsyncResource(loadOptions);
+  const reload = resource.reload;
+  const accounts = useMemo(() => resource.data?.accounts ?? [], [resource.data?.accounts]);
+  const categories = useMemo(
+    () => resource.data?.categories ?? [],
+    [resource.data?.categories],
+  );
 
   useFocusEffect(
     useCallback(() => {
-      loadOptions().catch(() => {});
-    }, [loadOptions]),
+      void reload();
+    }, [reload]),
   );
 
   const accountIds = useMemo(() => accounts.map((account) => account.id), [accounts]);
@@ -166,6 +190,13 @@ export default function TransactionFiltersScreen() {
           ),
         }}
       />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
         <View style={[styles.intro, { backgroundColor: theme.surfaceElevated }]}>
           <Text style={[styles.eyebrow, { color: theme.accent }]}>VUE TRANSACTIONS</Text>
@@ -238,60 +269,116 @@ export default function TransactionFiltersScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.label }]}>Comptes</Text>
-          <View style={styles.rows}>
-            <CheckRow
-              label="Tous les comptes"
-              detail="Inclure chaque compte visible"
-              selected={draft.accountIds == null}
-              onPress={() => setDraft((current) => ({ ...current, accountIds: null }))}
-            />
-            {accounts.map((account) => (
+          <Pressable
+            onPress={() => setExpanded((current) => ({ ...current, accounts: !current.accounts }))}
+            accessibilityRole="button"
+            accessibilityLabel={`${expanded.accounts ? "Replier" : "Déplier"} la liste des comptes`}
+            style={({ pressed }) => [
+              styles.toggleRow,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.label }]}>Comptes</Text>
+            <View style={styles.toggleMeta}>
+              {draft.accountIds != null ? (
+                <Text style={{ color: theme.accent, fontSize: 13, fontWeight: "700" }}>
+                  {draft.accountIds.length} sélectionné{draft.accountIds.length > 1 ? "s" : ""}
+                </Text>
+              ) : null}
+              {expanded.accounts ? (
+                <ChevronDown size={18} color={theme.secondaryLabel} strokeWidth={2} />
+              ) : (
+                <ChevronRight size={18} color={theme.secondaryLabel} strokeWidth={2} />
+              )}
+            </View>
+          </Pressable>
+          {expanded.accounts ? (
+            <View style={styles.rows}>
               <CheckRow
-                key={account.id}
-                label={account.name}
-                detail={account.categoryName}
-                selected={isSelected(draft.accountIds, account.id, accountIds)}
-                onPress={() =>
-                  setDraft((current) => ({
-                    ...current,
-                    accountIds: selectionAfterToggle(current.accountIds, account.id, accountIds),
-                  }))
-                }
+                label="Tous les comptes"
+                detail="Inclure chaque compte visible"
+                selected={draft.accountIds == null}
+                onPress={() => setDraft((current) => ({ ...current, accountIds: null }))}
               />
-            ))}
-          </View>
+              {accounts.map((account) => (
+                <CheckRow
+                  key={account.id}
+                  label={account.name}
+                  detail={account.groupName ?? undefined}
+                  selected={isSelected(draft.accountIds, account.id, accountIds)}
+                  onPress={() =>
+                    setDraft((current) => ({
+                      ...current,
+                      accountIds: selectionAfterToggle(current.accountIds, account.id, accountIds),
+                    }))
+                  }
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
 
-        {categoryGroups.map((group) => {
-          const groupCategories = categories.filter((category) => category.type === group.type);
-          if (groupCategories.length === 0) return null;
-          return (
-            <View key={group.type} style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.label }]}>{group.label}</Text>
-              <View style={styles.rows}>
-                <CheckRow
-                  label="Toutes les catégories"
-                  selected={draft.categoryIds == null}
-                  onPress={() => setDraft((current) => ({ ...current, categoryIds: null }))}
-                />
-                {groupCategories.map((category) => (
-                  <CheckRow
-                    key={category.id}
-                    label={category.name}
-                    selected={isSelected(draft.categoryIds, category.id, categoryIds)}
-                    onPress={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        categoryIds: selectionAfterToggle(current.categoryIds, category.id, categoryIds),
-                      }))
-                    }
-                  />
-                ))}
-              </View>
+        <View style={styles.section}>
+          <Pressable
+            onPress={() => setExpanded((current) => ({ ...current, categories: !current.categories }))}
+            accessibilityRole="button"
+            accessibilityLabel={`${expanded.categories ? "Replier" : "Déplier"} la liste des catégories`}
+            style={({ pressed }) => [
+              styles.toggleRow,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.label }]}>Catégories</Text>
+            <View style={styles.toggleMeta}>
+              {draft.categoryIds != null ? (
+                <Text style={{ color: theme.accent, fontSize: 13, fontWeight: "700" }}>
+                  {draft.categoryIds.length} sélectionnée{draft.categoryIds.length > 1 ? "s" : ""}
+                </Text>
+              ) : null}
+              {expanded.categories ? (
+                <ChevronDown size={18} color={theme.secondaryLabel} strokeWidth={2} />
+              ) : (
+                <ChevronRight size={18} color={theme.secondaryLabel} strokeWidth={2} />
+              )}
             </View>
-          );
-        })}
+          </Pressable>
+          {expanded.categories
+            ? categoryGroups.map((group) => {
+                const groupCategories = categories.filter(
+                  (category) => category.type === group.type,
+                );
+                if (groupCategories.length === 0) return null;
+                return (
+                  <View key={group.type} style={styles.rows}>
+                    <CheckRow
+                      label="Toutes les catégories"
+                      detail={group.label}
+                      selected={draft.categoryIds == null}
+                      onPress={() => setDraft((current) => ({ ...current, categoryIds: null }))}
+                    />
+                    {groupCategories.map((category) => (
+                      <CheckRow
+                        key={category.id}
+                        label={category.name}
+                        categoryIcon={category.icon}
+                        selected={isSelected(draft.categoryIds, category.id, categoryIds)}
+                        onPress={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            categoryIds: selectionAfterToggle(
+                              current.categoryIds,
+                              category.id,
+                              categoryIds,
+                            ),
+                          }))
+                        }
+                      />
+                    ))}
+                  </View>
+                );
+              })
+            : null}
+        </View>
 
         <View style={[styles.preview, { borderColor: theme.separator }]}>
           <Text style={[styles.previewLabel, { color: theme.secondaryLabel }]}>RÉSUMÉ</Text>
@@ -314,6 +401,7 @@ export default function TransactionFiltersScreen() {
           <Text style={styles.applyButtonText}>Appliquer les filtres</Text>
         </Pressable>
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -329,6 +417,8 @@ interface FilterStyles {
   activeBadgeText: TextStyle;
   section: ViewStyle;
   sectionTitle: TextStyle;
+  toggleRow: ViewStyle;
+  toggleMeta: ViewStyle;
   segmentedControl: ViewStyle;
   segment: ViewStyle;
   monthCard: ViewStyle;
@@ -357,6 +447,17 @@ const styles = StyleSheet.create<FilterStyles>({
   activeBadgeText: { fontSize: 13, fontWeight: "700" },
   section: { gap: spacing.md },
   sectionTitle: { fontSize: 19, fontWeight: "800", letterSpacing: -0.2 },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 40,
+  },
+  toggleMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
   segmentedControl: { flexDirection: "row", gap: spacing.sm },
   segment: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, paddingHorizontal: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
   monthCard: { paddingVertical: spacing.sm, borderRadius: radius.lg },

@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { CategoryIcon } from "@/components/category-icons";
 import { spacing, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
@@ -32,9 +33,19 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   return (
     <Pressable
       onPress={onPress}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${details.join(". ")}. ${formatAmount(transaction.amount)}`}
+      accessibilityHint="Ouvre la transaction pour la modifier."
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
     >
-      <View style={[styles.dot, { backgroundColor: color }]} />
+      {isTransfer ? (
+        <View style={[styles.dot, { backgroundColor: color }]} />
+      ) : (
+        <View style={[styles.categoryIcon, { backgroundColor: `${color}22` }]}>
+          <CategoryIcon name={transaction.categoryIcon} size={17} color={color} />
+        </View>
+      )}
       <View style={styles.body}>
         <Text
           style={[styles.title, { color: theme.label }]}
@@ -69,12 +80,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
+    minHeight: 64,
     borderCurve: "continuous",
   },
   dot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  categoryIcon: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
   },
   body: {
     flex: 1,

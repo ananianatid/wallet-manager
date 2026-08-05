@@ -1,11 +1,13 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { Check, Plus, Target } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { EmptyState } from "@/components/empty-state";
+import { IconButton, ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listGoals } from "@/db/goals";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Goal } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
@@ -83,17 +85,19 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
 
 export default function GoalsScreen() {
   const theme = useTheme();
-  const [goals, setGoals] = useState<Goal[] | null>(null);
-
   const load = useCallback(async () => {
     const db = await getDatabase();
-    setGoals(await listGoals(db));
+    return listGoals(db);
   }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const goals = resource.data;
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   return (
@@ -102,16 +106,21 @@ export default function GoalsScreen() {
         options={{
           title: "Objectifs",
           headerRight: () => (
-            <Pressable
+            <IconButton
               onPress={() => router.push("/goals/new")}
-              hitSlop={8}
-              accessibilityLabel="Créer un objectif"
-            >
-              <Plus size={22} strokeWidth={2.2} color={theme.accent} />
-            </Pressable>
+              label="Créer un objectif"
+              icon={<Plus size={22} strokeWidth={2.2} color={theme.accent} />}
+            />
           ),
         }}
       />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -143,6 +152,7 @@ export default function GoalsScreen() {
           />
         ))}
       </ScrollView>
+      )}
     </>
   );
 }

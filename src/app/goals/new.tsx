@@ -5,12 +5,12 @@ import { useState } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { ActionButton, FormField, KeyboardAwareScreen } from "@/components/ui";
 import { createGoal } from "@/db/goals";
 import { getDatabase } from "@/db/database";
 import { radius, spacing, useTheme } from "@/theme";
@@ -64,24 +64,23 @@ export default function NewGoalScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Nouvel objectif" }} />
-      <ScrollView
-        style={{ flex: 1 }}
+      <KeyboardAwareScreen
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
-        keyboardShouldPersistTaps="handled"
       >
-        <View style={{ gap: spacing.xs }}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Nom de l&apos;objectif</Text>
+        <FormField label="Nom de l'objectif">
           <TextInput
             value={name}
             onChangeText={setName}
             placeholder="Ex. : PS5"
             placeholderTextColor={theme.secondaryLabel}
+            accessibilityLabel="Nom de l'objectif"
             style={[styles.input, { backgroundColor: theme.surface, color: theme.label }]}
             autoFocus
           />
-        </View>
+        </FormField>
 
+        <FormField label="Montant à réserver">
         <View style={styles.amountCard}>
           <TextInput
             value={targetAmount}
@@ -90,6 +89,7 @@ export default function NewGoalScreen() {
             placeholderTextColor={theme.secondaryLabel}
             keyboardType="number-pad"
             inputMode="numeric"
+            accessibilityLabel="Montant cible en FCFA"
             style={[styles.amountInput, { color: theme.label }]}
           />
           <Text style={{ color: theme.secondaryLabel }}>FCFA à réserver</Text>
@@ -99,11 +99,13 @@ export default function NewGoalScreen() {
             </Text>
           ) : null}
         </View>
+        </FormField>
 
-        <View style={{ gap: spacing.xs }}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Date cible</Text>
+        <FormField label="Date cible">
           <Pressable
             onPress={() => setShowDatePicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Date cible ${formatDate(targetDate.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
               { backgroundColor: theme.surface, borderColor: theme.separator },
@@ -114,7 +116,7 @@ export default function NewGoalScreen() {
               {formatDate(targetDate.getTime())}
             </Text>
           </Pressable>
-        </View>
+        </FormField>
 
         {showDatePicker ? (
           <DateTimePicker
@@ -136,18 +138,12 @@ export default function NewGoalScreen() {
           </Text>
         </View>
 
-        <Pressable
+        <ActionButton
           onPress={save}
           disabled={saving}
-          style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: theme.accent },
-            (pressed || saving) && { opacity: 0.7 },
-          ]}
-        >
-          <Text style={styles.saveLabel}>{saving ? "Création…" : "Créer l'objectif"}</Text>
-        </Pressable>
-      </ScrollView>
+          label={saving ? "Création…" : "Créer l'objectif"}
+        />
+      </KeyboardAwareScreen>
     </>
   );
 }

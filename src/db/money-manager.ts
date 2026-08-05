@@ -75,6 +75,8 @@ const FEE_NOTE = "Frais";
 const FEE_MATCH_MS = 60_000;
 const FALLBACK_CATEGORY = "Autres";
 
+export const IMPORT_ACCOUNT_CATEGORY = "Espèces";
+
 const normalize = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim() ?? "";
   return trimmed || null;
@@ -307,9 +309,7 @@ export function buildImportPlan(data: MoneyManagerData): ImportPlan {
     }
   };
 
-  for (const name of accountNames) {
-    pushCategory("account", name);
-  }
+  pushCategory("account", IMPORT_ACCOUNT_CATEGORY);
   for (const name of [...incomeCategoryNames].sort()) {
     pushCategory("income", name);
   }

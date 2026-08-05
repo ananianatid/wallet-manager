@@ -1,13 +1,16 @@
 import type { SQLiteDatabase } from "expo-sqlite";
+import { ensureCategory } from "./categories";
+import { createTransaction } from "./transactions";
 import type { Account, AccountInput } from "../types";
 
 interface AccountRow {
   id: number;
   name: string;
-  categoryId: number;
-  categoryName: string;
+  groupId: number | null;
+  groupName: string | null;
   hidden: number;
   excludeFromTotal: number;
+  description: string | null;
   createdAt: number;
   balance: number;
   reservedAmount: number;
@@ -32,10 +35,11 @@ function mapAccount(row: AccountRow): Account {
   return {
     id: row.id,
     name: row.name,
-    categoryId: row.categoryId,
-    categoryName: row.categoryName,
+    groupId: row.groupId,
+    groupName: row.groupName,
     hidden: row.hidden !== 0,
     excludeFromTotal: row.excludeFromTotal !== 0,
+    description: row.description,
     createdAt: row.createdAt,
     balance: row.balance,
     reservedAmount: row.reservedAmount,
@@ -52,28 +56,49 @@ const reservedSum = (accountRef: string): string => `
   ), 0)
 `;
 
+const txAccountsActive = `
+  AND (SELECT a2.deleted_at FROM accounts a2 WHERE a2.id = t.account_id) IS NULL
+  AND (SELECT a2.deleted_at FROM accounts a2 WHERE a2.id = t.destination_account_id) IS NULL
+`;
+
+const accountSelect = (where: string): string => `
+  SELECT a.id, a.name,
+         a.group_id AS groupId,
+         g.name AS groupName,
+         a.created_at AS createdAt,
+         a.hidden AS hidden,
+         a.exclude_from_total AS excludeFromTotal,
+         a.description AS description,
+         ${reservedSum("a.id")} AS reservedAmount,
+         COALESCE((
+           SELECT ${balanceSum("a.id")}
+           FROM transactions t
+           WHERE (t.account_id = a.id OR t.destination_account_id = a.id)
+           ${txAccountsActive}
+         ), 0) AS balance,
+         COALESCE((
+           SELECT ${balanceSum("a.id")}
+           FROM transactions t
+           WHERE (t.account_id = a.id OR t.destination_account_id = a.id)
+           ${txAccountsActive}
+         ), 0) - ${reservedSum("a.id")} AS availableBalance
+  FROM accounts a
+  LEFT JOIN account_groups g ON g.id = a.group_id
+  ${where}
+`;
+
 export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
   const rows = await db.getAllAsync<AccountRow>(
-    `SELECT a.id, a.name,
-            a.category_id AS categoryId,
-            c.name AS categoryName,
-            a.created_at AS createdAt,
-            a.hidden AS hidden,
-            a.exclude_from_total AS excludeFromTotal,
-            ${reservedSum("a.id")} AS reservedAmount,
-            COALESCE((
-              SELECT ${balanceSum("a.id")}
-              FROM transactions t
-              WHERE t.account_id = a.id OR t.destination_account_id = a.id
-            ), 0) AS balance,
-            COALESCE((
-              SELECT ${balanceSum("a.id")}
-              FROM transactions t
-              WHERE t.account_id = a.id OR t.destination_account_id = a.id
-            ), 0) - ${reservedSum("a.id")} AS availableBalance
-     FROM accounts a
-     JOIN categories c ON c.id = a.category_id
-     ORDER BY a.name`,
+    `${accountSelect("WHERE a.deleted_at IS NULL")} ORDER BY a.name`,
+  );
+  return rows.map(mapAccount);
+}
+
+export async function listDeletedAccounts(
+  db: SQLiteDatabase,
+): Promise<Account[]> {
+  const rows = await db.getAllAsync<AccountRow>(
+    `${accountSelect("WHERE a.deleted_at IS NOT NULL")} ORDER BY a.name`,
   );
   return rows.map(mapAccount);
 }
@@ -83,26 +108,7 @@ export async function getAccount(
   id: number,
 ): Promise<Account | null> {
   const row = await db.getFirstAsync<AccountRow>(
-    `SELECT a.id, a.name,
-            a.category_id AS categoryId,
-            c.name AS categoryName,
-            a.created_at AS createdAt,
-            a.hidden AS hidden,
-            a.exclude_from_total AS excludeFromTotal,
-            ${reservedSum("a.id")} AS reservedAmount,
-            COALESCE((
-              SELECT ${balanceSum("a.id")}
-              FROM transactions t
-              WHERE t.account_id = a.id OR t.destination_account_id = a.id
-            ), 0) AS balance,
-            COALESCE((
-              SELECT ${balanceSum("a.id")}
-              FROM transactions t
-              WHERE t.account_id = a.id OR t.destination_account_id = a.id
-            ), 0) - ${reservedSum("a.id")} AS availableBalance
-     FROM accounts a
-     JOIN categories c ON c.id = a.category_id
-     WHERE a.id = ?`,
+    `${accountSelect("WHERE a.id = ? AND a.deleted_at IS NULL")}`,
     [id],
   );
   return row ? mapAccount(row) : null;
@@ -114,8 +120,9 @@ export async function getAccountBalance(
 ): Promise<number> {
   const row = await db.getFirstAsync<{ balance: number }>(
     `SELECT COALESCE(${balanceSum("?")}, 0) AS balance
-     FROM transactions
-     WHERE account_id = ? OR destination_account_id = ?`,
+     FROM transactions t
+     WHERE (t.account_id = ? OR t.destination_account_id = ?)
+     ${txAccountsActive}`,
     [id, id, id],
   );
   return row?.balance ?? 0;
@@ -129,14 +136,15 @@ export async function getAccountAvailableBalance(
     `SELECT COALESCE((
        SELECT ${balanceSum("a.id")}
        FROM transactions t
-       WHERE t.account_id = a.id OR t.destination_account_id = a.id
+       WHERE (t.account_id = a.id OR t.destination_account_id = a.id)
+       ${txAccountsActive}
      ), 0) - COALESCE((
        SELECT SUM(gr.amount)
        FROM goal_reservations gr
        WHERE gr.source_account_id = a.id AND gr.released_at IS NULL
      ), 0) AS availableBalance
      FROM accounts a
-     WHERE a.id = ?`,
+     WHERE a.id = ? AND a.deleted_at IS NULL`,
     id,
   );
   return row?.availableBalance ?? 0;
@@ -150,25 +158,15 @@ export async function createAccount(
   if (!name) {
     throw new Error("Le nom du compte ne peut pas être vide.");
   }
+  const categoryId = await ensureCategory(db, "account", "Compte courant");
   const result = await db.runAsync(
-    "INSERT INTO accounts (name, category_id, created_at) VALUES (?, ?, ?)",
+    "INSERT INTO accounts (name, category_id, group_id, created_at) VALUES (?, ?, ?, ?)",
     name,
-    input.categoryId,
+    categoryId,
+    input.groupId,
     Date.now(),
   );
   return Number(result.lastInsertRowId);
-}
-
-export async function renameAccount(
-  db: SQLiteDatabase,
-  id: number,
-  name: string,
-): Promise<void> {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    throw new Error("Le nom du compte ne peut pas être vide.");
-  }
-  await db.runAsync("UPDATE accounts SET name = ? WHERE id = ?", trimmed, id);
 }
 
 export async function updateAccountFlags(
@@ -187,28 +185,80 @@ export async function updateAccountFlags(
   );
 }
 
+export async function updateAccountDetails(
+  db: SQLiteDatabase,
+  id: number,
+  details: { name: string; groupId: number | null; description: string | null },
+): Promise<void> {
+  const trimmed = details.name.trim();
+  if (!trimmed) {
+    throw new Error("Le nom du compte ne peut pas être vide.");
+  }
+  await db.runAsync(
+    "UPDATE accounts SET name = ?, group_id = ?, description = ? WHERE id = ?",
+    trimmed,
+    details.groupId,
+    details.description?.trim() ? details.description.trim() : null,
+    id,
+  );
+}
+
+export function planBalanceAdjustment(
+  current: number,
+  target: number,
+): { type: "income" | "expense"; amount: number } | null {
+  const delta = target - current;
+  if (delta === 0) {
+    return null;
+  }
+  return { type: delta > 0 ? "income" : "expense", amount: Math.abs(delta) };
+}
+
+export async function setAccountBalance(
+  db: SQLiteDatabase,
+  accountId: number,
+  target: number,
+  now: number = Date.now(),
+): Promise<{ type: "income" | "expense"; amount: number; categoryId: number } | null> {
+  const account = await getAccount(db, accountId);
+  if (!account) {
+    throw new Error("Compte introuvable.");
+  }
+  const adjustment = planBalanceAdjustment(account.balance, target);
+  if (!adjustment) {
+    return null;
+  }
+  const categoryId = await ensureCategory(db, adjustment.type, "Autre");
+  await createTransaction(db, {
+    type: adjustment.type,
+    amount: adjustment.amount,
+    categoryId,
+    accountId,
+    destinationAccountId: null,
+    fee: null,
+    note: "Équilibre",
+    transactionDate: now,
+  });
+  return { ...adjustment, categoryId };
+}
+
 export async function deleteAccount(
   db: SQLiteDatabase,
   id: number,
 ): Promise<void> {
-  const used = await db.getFirstAsync<{ used: number }>(
-    "SELECT EXISTS(SELECT 1 FROM transactions WHERE account_id = ? OR destination_account_id = ?) AS used",
-    id,
-    id,
-  );
-  if (used?.used) {
-    throw new Error(
-      "Ce compte contient des transactions. Supprimez-les d'abord.",
-    );
-  }
-  const reserved = await db.getFirstAsync<{ reserved: number }>(
-    "SELECT EXISTS(SELECT 1 FROM goal_reservations WHERE source_account_id = ?) AS reserved",
+  await db.runAsync(
+    "UPDATE accounts SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+    Date.now(),
     id,
   );
-  if (reserved?.reserved) {
-    throw new Error(
-      "Ce compte contient des sommes réservées à des objectifs. Libérez-les d'abord.",
-    );
-  }
-  await db.runAsync("DELETE FROM accounts WHERE id = ?", id);
+}
+
+export async function restoreAccount(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<void> {
+  await db.runAsync(
+    "UPDATE accounts SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+    id,
+  );
 }

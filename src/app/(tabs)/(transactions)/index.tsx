@@ -1,14 +1,12 @@
-import { ListFilter, Plus, Search, X } from "lucide-react-native";
+import { ListFilter, Plus, Search } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  Alert,
   Pressable,
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
@@ -20,10 +18,13 @@ import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
 import { applyDueRecurring } from "@/db/recurring";
 import { getSetting, setSetting } from "@/db/settings";
-import { listTransactions, searchTransactions } from "@/db/transactions";
+import { listTransactions } from "@/db/transactions";
 import { filterTransactions, setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Account, SafeToSpend, Transaction } from "@/types";
+import type { Transaction } from "@/types";
+import { IconButton, InlineError, ScreenState } from "@/components/ui";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   formatAmount,
   formatDayLabel,
@@ -46,15 +47,9 @@ interface MonthSection {
 
 export default function TransactionsScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const filters = useTransactionFilters();
-  const [transactions, setTransactions] = useState<Transaction[] | null>(null);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [safeToSpend, setSafeToSpend] = useState<SafeToSpend | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [query, setQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Transaction[] | null>(
-    null,
-  );
+  const [recurringError, setRecurringError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -69,14 +64,22 @@ export default function TransactionsScreen() {
           filters.mode === "month"
             ? new Date(filters.year, filters.month + 1, 1).getTime()
             : null,
-        order: filters.mode === "month" ? "asc" : "desc",
+        order: "desc",
       }),
       listAccounts(db),
     ]);
-    setTransactions(filterTransactions(rows, filters));
-    setAccounts(accs);
-    setSafeToSpend(forecast);
+    return {
+      transactions: filterTransactions(rows, filters),
+      accounts: accs,
+      safeToSpend: forecast,
+    };
   }, [filters]);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const transactions = resource.data?.transactions ?? null;
+  const accounts = resource.data?.accounts ?? [];
+  const safeToSpend = resource.data?.safeToSpend ?? null;
 
   const checkRecurring = useCallback(async () => {
     const db = await getDatabase();
@@ -93,24 +96,27 @@ export default function TransactionsScreen() {
     const generated = await applyDueRecurring(db, Date.now());
     await setSetting(db, "recurring_last_check", String(todayKey));
     if (generated > 0) {
-      Alert.alert(
-        "Transactions récurrentes",
-        `${generated} transaction${generated > 1 ? "s" : ""} générée${generated > 1 ? "s" : ""} automatiquement.`,
-      );
+      return generated;
     }
+    return 0;
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       const refresh = async () => {
-        await checkRecurring();
-        await load();
+        setRecurringError(null);
+        try {
+          await checkRecurring();
+        } catch (error) {
+          setRecurringError(
+            error instanceof Error ? error.message : "Les récurrences n'ont pas pu être vérifiées.",
+          );
+        }
+        await reload();
       };
-      refresh();
-    }, [load, checkRecurring]),
+      void refresh();
+    }, [reload, checkRecurring]),
   );
-
-  const activeSearch = searching && query.trim().length > 0;
 
   const years = useMemo(() => {
     const set = new Set<number>([new Date().getFullYear()]);
@@ -123,34 +129,10 @@ export default function TransactionsScreen() {
   const setMonth = (year: number, month: number) =>
     setTransactionFilters({ ...filters, year, month });
 
-  useEffect(() => {
-    if (!activeSearch) {
-      return;
-    }
-    let cancelled = false;
-    getDatabase()
-      .then((db) => searchTransactions(db, query.trim()))
-      .then((rows) => {
-        if (!cancelled) {
-          setSearchResults(rows);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSearchResults([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSearch, query]);
-
   const sections = useMemo<DaySection[] | MonthSection[]>(() => {
-    const rows = activeSearch
-      ? filterTransactions(searchResults ?? [], filters)
-      : (transactions ?? []);
+    const rows = transactions ?? [];
 
-    if (!activeSearch && filters.mode === "all") {
+    if (filters.mode === "all") {
       const groups = new Map<string, MonthSection>();
       for (const t of rows) {
         const date = new Date(t.transactionDate);
@@ -209,22 +191,9 @@ export default function TransactionsScreen() {
               : 0;
     }
     return [...groups.values()];
-  }, [activeSearch, searchResults, transactions, filters]);
+  }, [transactions, filters]);
 
   const monthRows = transactions ?? [];
-  const income = monthRows.reduce(
-    (sum, t) => (t.type === "income" ? sum + t.amount : sum),
-    0,
-  );
-  const expense = monthRows.reduce(
-    (sum, t) => (t.type === "expense" ? sum + t.amount : sum),
-    0,
-  );
-  const fees = monthRows.reduce(
-    (sum, t) => (t.type === "transfer" && t.fee ? sum + t.fee : sum),
-    0,
-  );
-  const net = income - expense - fees;
 
   const openNew = () => router.push("/new-transaction");
   const openEdit = (id: number) =>
@@ -233,10 +202,7 @@ export default function TransactionsScreen() {
   const hasTransactions = monthRows.length > 0;
   const openFilters = () => router.push("/filters");
 
-  const toggleSearch = () => {
-    setQuery("");
-    setSearching((v) => !v);
-  };
+  const openSearch = () => router.push("/search");
 
   return (
     <View style={{ flex: 1 }}>
@@ -257,55 +223,42 @@ export default function TransactionsScreen() {
               : undefined,
           headerRight: () => (
             <View style={styles.headerActions}>
-              <Pressable
+              <IconButton
                 onPress={openFilters}
-                hitSlop={8}
-                accessibilityLabel="Personnaliser les filtres"
-              >
-                <ListFilter size={21} strokeWidth={2.2} color={theme.accent} />
-              </Pressable>
-              <Pressable
-                onPress={toggleSearch}
-                hitSlop={8}
-                accessibilityLabel={searching ? "Fermer la recherche" : "Rechercher"}
-              >
-                {searching ? (
-                  <X size={22} strokeWidth={2.2} color={theme.accent} />
-                ) : (
-                  <Search size={22} strokeWidth={2.2} color={theme.accent} />
-                )}
-              </Pressable>
+                label="Personnaliser les filtres"
+                icon={<ListFilter size={21} strokeWidth={2.2} color={theme.accent} />}
+              />
+              <IconButton
+                onPress={openSearch}
+                label="Rechercher"
+                icon={<Search size={22} strokeWidth={2.2} color={theme.accent} />}
+              />
             </View>
           ),
         }}
       />
-      {searching ? (
-        <View
-          style={{
-            paddingHorizontal: spacing.lg,
-            paddingTop: spacing.sm,
-            paddingBottom: spacing.xs,
-          }}
-        >
-          <View
-            style={[
-              styles.searchBar,
-              { backgroundColor: theme.surfaceElevated },
-            ]}
-          >
-            <Search size={17} strokeWidth={2.2} color={theme.secondaryLabel} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Rechercher une transaction…"
-              placeholderTextColor={theme.secondaryLabel}
-              autoFocus
-              accessibilityLabel="Recherche de transaction"
-              style={[styles.searchInput, { color: theme.label }]}
-            />
-          </View>
+      {recurringError ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+          <InlineError message={recurringError} onRetry={() => void resource.reload()} />
         </View>
       ) : null}
+      {resource.status === "error" && resource.data ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+          <InlineError
+            message={resource.error?.message ?? "Les données n'ont pas pu être actualisées."}
+            onRetry={() => void reload()}
+          />
+        </View>
+      ) : null}
+      {!resource.data && resource.status === "loading" ? (
+        <ScreenState status="loading" />
+      ) : !resource.data && resource.status === "error" ? (
+        <ScreenState
+          status="error"
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <SectionList
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -365,60 +318,13 @@ export default function TransactionsScreen() {
         )}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
-          activeSearch ? null : (
-            <View style={{ gap: spacing.lg, paddingTop: spacing.lg }}>
+          <View style={{ gap: spacing.lg, paddingTop: spacing.lg }}>
               {safeToSpend && accounts.length > 0 ? (
                 <SafeToSpendCard
                   data={safeToSpend}
                   onPress={() => router.push("/cashflow")}
                 />
               ) : null}
-              <View style={{ paddingHorizontal: spacing.lg, gap: spacing.xs }}>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                  {filters.mode === "month"
-                    ? `Solde du mois · ${formatMonthLabel(filters.year, filters.month)}`
-                    : "Solde toutes périodes"}
-                </Text>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryItem}>
-                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                      Revenus
-                    </Text>
-                    <Text
-                      selectable
-                      style={{ color: theme.income, fontWeight: "700", fontVariant: ["tabular-nums"] }}
-                    >
-                      + {formatAmount(income)}
-                    </Text>
-                  </View>
-                  <View style={[styles.summaryItem, styles.summaryItemCenter]}>
-                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                      Dépenses
-                    </Text>
-                    <Text
-                      selectable
-                      style={{ color: theme.expense, fontWeight: "700", fontVariant: ["tabular-nums"] }}
-                    >
-                      −{formatAmount(expense + fees)}
-                    </Text>
-                  </View>
-                  <View style={[styles.summaryItem, styles.summaryItemRight]}>
-                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                      Solde
-                    </Text>
-                    <Text
-                      selectable
-                      style={{
-                        color: net >= 0 ? theme.label : theme.expense,
-                        fontWeight: "800",
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {formatAmount(net)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
               {accounts.length === 0 || !hasTransactions ? (
                 <EmptyState
                   title={
@@ -437,29 +343,22 @@ export default function TransactionsScreen() {
                   onAction={accounts.length === 0 ? () => router.push("/(tabs)/(accounts)") : openNew}
                 />
               ) : null}
-            </View>
-          )
-        }
-        ListEmptyComponent={
-          activeSearch && searchResults ? (
-            <EmptyState
-              title="Aucune transaction trouvée"
-              message="Essayez une note, une catégorie, un compte ou un montant."
-            />
-          ) : null
+          </View>
         }
       />
+      )}
       {hasTransactions ? (
         <Pressable
           onPress={openNew}
           accessibilityLabel="Ajouter une transaction"
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.fab,
-            { backgroundColor: theme.accent },
+            { backgroundColor: theme.accent, bottom: insets.bottom + spacing.lg },
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Plus size={30} strokeWidth={2.5} color="#0A0A0B" />
+          <Plus size={30} strokeWidth={2.5} color={theme.onAccent} />
         </Pressable>
       ) : null}
     </View>
@@ -471,36 +370,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.lg,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-  },
-  summaryItem: {
-    flex: 1,
-    gap: spacing.xs,
-    alignItems: "flex-start",
-  },
-  summaryItemCenter: {
-    alignItems: "center",
-  },
-  summaryItemRight: {
-    alignItems: "flex-end",
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
   },
   dayHeader: {
     flexDirection: "row",

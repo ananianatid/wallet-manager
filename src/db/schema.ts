@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 5;
+export const DATABASE_VERSION = 10;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -8,17 +8,34 @@ CREATE TABLE categories (
   type    TEXT NOT NULL CHECK (type IN ('account','income','expense')),
   name    TEXT NOT NULL,
   is_seed INTEGER NOT NULL DEFAULT 0,
+  icon    TEXT,
   UNIQUE (type, name)
 );
+
+CREATE TABLE account_groups (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  deleted_at INTEGER
+);
+
+CREATE UNIQUE INDEX ux_account_groups_active_name
+  ON account_groups (name) WHERE deleted_at IS NULL;
 
 CREATE TABLE accounts (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   name               TEXT NOT NULL,
   category_id        INTEGER NOT NULL REFERENCES categories(id),
+  group_id           INTEGER REFERENCES account_groups(id),
   hidden             INTEGER NOT NULL DEFAULT 0,
   exclude_from_total INTEGER NOT NULL DEFAULT 0,
-  created_at         INTEGER NOT NULL
+  description        TEXT,
+  created_at         INTEGER NOT NULL,
+  deleted_at         INTEGER
 );
+
+CREATE INDEX idx_accounts_group ON accounts (group_id);
 
 CREATE TABLE transactions (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +85,8 @@ CREATE TABLE savings_rules (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
   percent     INTEGER NOT NULL CHECK (percent > 0 AND percent <= 100),
-  created_at  INTEGER NOT NULL
+  created_at  INTEGER NOT NULL,
+  start_date  INTEGER
 );
 
 CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHERE category_id IS NOT NULL;
@@ -129,11 +147,37 @@ export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
       await db.runAsync(
-        "INSERT INTO categories (type, name, is_seed) VALUES (?, ?, 1)",
+        "INSERT INTO categories (type, name, is_seed, icon) VALUES (?, ?, 1, ?)",
         type,
         name,
+        type === "account" ? null : "tag",
       );
     }
+  }
+}
+
+export const SEED_ACCOUNT_GROUPS = [
+  "Espèces",
+  "Banque",
+  "Carte de crédit",
+  "Carte de débit",
+  "Épargne",
+  "Investissement",
+  "Découvert",
+  "Prêt",
+  "Assurance",
+  "Autres",
+];
+
+export async function seedAccountGroups(db: SQLiteDatabase): Promise<void> {
+  const now = Date.now();
+  for (let i = 0; i < SEED_ACCOUNT_GROUPS.length; i++) {
+    await db.runAsync(
+      "INSERT INTO account_groups (name, sort_order, created_at) VALUES (?, ?, ?)",
+      SEED_ACCOUNT_GROUPS[i],
+      i,
+      now,
+    );
   }
 }
 
@@ -150,6 +194,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   if (currentDbVersion === 0) {
     await db.execAsync(SCHEMA_VERSION_1);
     await seedCategories(db);
+    await seedAccountGroups(db);
   } else {
     if (currentDbVersion <= 1) {
       await db.execAsync(`
@@ -223,6 +268,60 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
 
         CREATE INDEX idx_goal_reservations_goal ON goal_reservations (goal_id);
         CREATE INDEX idx_goal_reservations_source ON goal_reservations (source_account_id);
+      `);
+    }
+    if (currentDbVersion <= 5) {
+      await db.execAsync(`
+        ALTER TABLE categories ADD COLUMN icon TEXT;
+        UPDATE categories SET icon = 'tag' WHERE type IN ('income', 'expense');
+      `);
+    }
+    if (currentDbVersion <= 6) {
+      await db.execAsync(`
+        ALTER TABLE accounts ADD COLUMN description TEXT;
+      `);
+    }
+    if (currentDbVersion <= 7) {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS account_groups (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          name       TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          deleted_at INTEGER
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_account_groups_active_name
+          ON account_groups (name) WHERE deleted_at IS NULL;
+
+        ALTER TABLE accounts ADD COLUMN group_id INTEGER REFERENCES account_groups(id);
+        CREATE INDEX IF NOT EXISTS idx_accounts_group ON accounts (group_id);
+
+        INSERT INTO account_groups (name, sort_order, created_at)
+        SELECT c.name,
+               ROW_NUMBER() OVER (ORDER BY MIN(a.id)) AS sort_order,
+               MIN(a.created_at) AS created_at
+        FROM accounts a
+        JOIN categories c ON c.id = a.category_id
+        GROUP BY c.name;
+
+        UPDATE accounts
+        SET group_id = (
+          SELECT g.id FROM account_groups g
+          JOIN categories c ON c.id = accounts.category_id
+          WHERE g.name = c.name AND g.deleted_at IS NULL
+        )
+        WHERE group_id IS NULL;
+      `);
+    }
+    if (currentDbVersion <= 8) {
+      await db.execAsync(`
+        ALTER TABLE accounts ADD COLUMN deleted_at INTEGER;
+      `);
+    }
+    if (currentDbVersion <= 9) {
+      await db.execAsync(`
+        ALTER TABLE savings_rules ADD COLUMN start_date INTEGER;
       `);
     }
   }

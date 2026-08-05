@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { ArrowUpRight, Calendar, Check, RotateCcw, Target, Trash2 } from "lucide-react-native";
+import { ArrowUpRight, Calendar, Check, RotateCcw, Target, Trash2, Undo2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 import { getDatabase } from "@/db/database";
+import { IconButton, InlineError, ScreenState } from "@/components/ui";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import {
   closeGoal,
   deleteGoal,
@@ -19,15 +21,14 @@ import {
   releaseGoalReservation,
 } from "@/db/goals";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Goal, GoalReservation } from "@/types";
+import type { GoalReservation } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 
 export default function GoalDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const goalId = Number(id);
-  const [goal, setGoal] = useState<Goal | null>(null);
-  const [reservations, setReservations] = useState<GoalReservation[]>([]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -35,14 +36,18 @@ export default function GoalDetailScreen() {
       getGoal(db, goalId),
       listGoalReservations(db, goalId),
     ]);
-    setGoal(nextGoal);
-    setReservations(rows);
+    return { goal: nextGoal, reservations: rows };
   }, [goalId]);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const goal = resource.data?.goal ?? null;
+  const reservations = resource.data?.reservations ?? [];
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const release = (reservation: GoalReservation) => {
@@ -54,9 +59,13 @@ export default function GoalDetailScreen() {
         {
           text: "Libérer",
           onPress: async () => {
-            const db = await getDatabase();
-            await releaseGoalReservation(db, reservation.id);
-            await load();
+            try {
+              const db = await getDatabase();
+              await releaseGoalReservation(db, reservation.id);
+              await resource.reload();
+            } catch (error) {
+              setActionError(error instanceof Error ? error.message : "Impossible de libérer la réservation.");
+            }
           },
         },
       ],
@@ -70,9 +79,13 @@ export default function GoalDetailScreen() {
       {
         text: "Clôturer",
         onPress: async () => {
-          const db = await getDatabase();
-          await closeGoal(db, goal.id);
-          await load();
+          try {
+            const db = await getDatabase();
+            await closeGoal(db, goal.id);
+            await resource.reload();
+          } catch (error) {
+            setActionError(error instanceof Error ? error.message : "Impossible de clôturer l'objectif.");
+          }
         },
       },
     ]);
@@ -111,6 +124,15 @@ export default function GoalDetailScreen() {
             ) : null,
         }}
       />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : !goal ? (
+        <ScreenState status="error" message="Cet objectif est introuvable." />
+      ) : (
       <FlatList
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -139,9 +161,11 @@ export default function GoalDetailScreen() {
                 {formatAmount(item.amount)}
               </Text>
               {!item.releasedAt ? (
-                <Pressable onPress={() => release(item)} hitSlop={8}>
-                  <Text style={{ color: theme.expense, fontSize: 12, fontWeight: "600" }}>Libérer</Text>
-                </Pressable>
+                <IconButton
+                  label="Libérer cette réservation"
+                  onPress={() => release(item)}
+                  icon={<Undo2 size={16} color={theme.expense} strokeWidth={2.2} />}
+                />
               ) : null}
             </View>
           </View>
@@ -150,6 +174,7 @@ export default function GoalDetailScreen() {
         ListHeaderComponent={
           goal ? (
             <View style={{ gap: spacing.md }}>
+              {actionError ? <InlineError message={actionError} onRetry={() => setActionError(null)} /> : null}
               <View style={[styles.hero, { backgroundColor: theme.surface }]}>
                 <View style={styles.heroTitle}>
                   <View style={[styles.heroIcon, { backgroundColor: theme.surfaceElevated }]}>
@@ -218,6 +243,7 @@ export default function GoalDetailScreen() {
           ) : null
         }
       />
+      )}
     </>
   );
 }

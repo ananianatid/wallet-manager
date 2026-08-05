@@ -127,7 +127,18 @@ console.log("\n=== Vérifications ===");
 expect("transactions insérées", report1.transactionsInserted, 1083);
 expect("doublons au 2e import", report2.transactionsSkipped, 1083);
 expect("réinsérées au 2e import", report2.transactionsInserted, 0);
-expect("catégories finales", counts.categories, 34);
+expect("catégories finales", counts.categories, 18);
 expect("comptes finaux", counts.accounts, 17);
 expect("transactions finales", counts.transactions, 1083);
 expect("écarts de solde", mismatches, 0);
+
+const iconIntegrity = wallet.db
+  .prepare(
+    `SELECT
+       SUM(CASE WHEN type IN ('income', 'expense') AND (icon IS NULL OR icon = '') THEN 1 ELSE 0 END) AS missing,
+       SUM(CASE WHEN type = 'account' AND icon IS NOT NULL THEN 1 ELSE 0 END) AS accountIcons
+     FROM categories`,
+  )
+  .get();
+expect("catégories métier avec une icône", Number(iconIntegrity.missing), 0);
+expect("catégories de comptes sans icône", Number(iconIntegrity.accountIcons), 0);

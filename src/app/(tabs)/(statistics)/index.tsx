@@ -10,12 +10,14 @@ import {
 } from "react-native";
 import { PeriodSheet } from "@/components/period-sheet";
 import { PieChart } from "@/components/pie-chart";
+import { CategoryIcon } from "@/components/category-icons";
+import { IconButton, ScreenState } from "@/components/ui";
 import { listBudgets } from "@/db/budgets";
 import { getDatabase } from "@/db/database";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactionsByRange, listTransactionYears } from "@/db/transactions";
 import { chartColors, radius, spacing, useTheme } from "@/theme";
-import type { Budget, SavingsRule, Transaction } from "@/types";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
 import {
   enumerateMonths,
@@ -41,38 +43,50 @@ export default function StatisticsScreen() {
     year: now.getFullYear(),
     month: now.getMonth(),
   });
-  const [transactions, setTransactions] = useState<Transaction[] | null>(null);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [savingsRules, setSavingsRules] = useState<SavingsRule[]>([]);
-  const [years, setYears] = useState<number[]>([]);
   const [periodOpen, setPeriodOpen] = useState(false);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const startMs = new Date(start.year, start.month, 1).getTime();
+    const periodStartMs = new Date(start.year, start.month, 1).getTime();
     const endMs = new Date(end.year, end.month + 1, 1).getTime();
-    const [rows, b, s, ys] = await Promise.all([
-      listTransactionsByRange(db, startMs, endMs),
+    const [b, s, ys] = await Promise.all([
       listBudgets(db),
       listSavingsRules(db),
       listTransactionYears(db),
     ]);
-    setTransactions(rows);
-    setBudgets(b);
-    setSavingsRules(s);
-    setYears((prev) => {
-      const set = new Set<number>([new Date().getFullYear(), ...ys]);
-      const next = [...set].sort((a, b) => b - a);
-      return prev.length === next.length && prev.every((v, i) => v === next[i])
-        ? prev
-        : next;
-    });
+    const ruleStarts = s
+      .map((rule) => rule.startDate)
+      .filter((d): d is number => d != null);
+    const earliestStartMs =
+      ruleStarts.length > 0
+        ? Math.min(periodStartMs, ...ruleStarts)
+        : periodStartMs;
+    const rows = await listTransactionsByRange(db, earliestStartMs, endMs);
+    const yearSet = new Set<number>([new Date().getFullYear(), ...ys]);
+    return {
+      transactions: rows,
+      budgets: b,
+      savingsRules: s,
+      years: [...yearSet].sort((a, b) => b - a),
+      periodStartMs,
+      earliestStartMs,
+    };
   }, [start, end]);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const transactions = resource.data?.transactions ?? null;
+  const budgets = useMemo(() => resource.data?.budgets ?? [], [resource.data?.budgets]);
+  const savingsRules = useMemo(
+    () => resource.data?.savingsRules ?? [],
+    [resource.data?.savingsRules],
+  );
+  const years = resource.data?.years ?? [];
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const months = useMemo(
@@ -85,19 +99,30 @@ export default function StatisticsScreen() {
   );
 
   const rows = useMemo(() => transactions ?? [], [transactions]);
-  const t = useMemo(() => totals(rows), [rows]);
-  const slices = useMemo(() => expenseByCategory(rows), [rows]);
-  const series = useMemo(() => monthlySeries(rows, months), [rows, months]);
+  const periodStartMs = useMemo(
+    () => new Date(start.year, start.month, 1).getTime(),
+    [start],
+  );
+  const periodRows = useMemo(
+    () => rows.filter((t) => t.transactionDate >= periodStartMs),
+    [rows, periodStartMs],
+  );
+  const t = useMemo(() => totals(periodRows), [periodRows]);
+  const slices = useMemo(() => expenseByCategory(periodRows), [periodRows]);
+  const series = useMemo(
+    () => monthlySeries(periodRows, months),
+    [periodRows, months],
+  );
 
   const spentByCategory = useMemo(() => {
     const map = new Map<number, number>();
-    for (const tx of rows) {
+    for (const tx of periodRows) {
       if (tx.type === "expense" && tx.categoryId != null) {
         map.set(tx.categoryId, (map.get(tx.categoryId) ?? 0) + tx.amount);
       }
     }
     return map;
-  }, [rows]);
+  }, [periodRows]);
 
   const budgetRows = useMemo(
     () =>
@@ -112,8 +137,8 @@ export default function StatisticsScreen() {
   );
 
   const savings = useMemo(
-    () => savingsByRule(rows, savingsRules),
-    [rows, savingsRules],
+    () => savingsByRule(rows, savingsRules, periodStartMs),
+    [rows, savingsRules, periodStartMs],
   );
   const savingsTotal = useMemo(
     () => savings.reduce((sum, s) => sum + s.amount, 0),
@@ -126,12 +151,8 @@ export default function StatisticsScreen() {
   };
 
   const maxBar = Math.max(t.income, t.expense + t.fees, 1);
-  const maxAbsSolde = Math.max(
-    ...series.map((m) => Math.abs(m.net)),
-    1,
-  );
 
-  const hasActivity = rows.length > 0;
+  const hasActivity = periodRows.length > 0;
   const periodLabel =
     months.length === 1
       ? formatMonthLabel(start.year, start.month)
@@ -139,22 +160,36 @@ export default function StatisticsScreen() {
           end.year,
           end.month,
         )}`;
+  const earliestStartMs = resource.data?.earliestStartMs ?? periodStartMs;
+  const savingsLabel =
+    earliestStartMs < periodStartMs
+      ? `depuis ${formatMonthLabel(
+          new Date(earliestStartMs).getFullYear(),
+          new Date(earliestStartMs).getMonth(),
+        )}`
+      : periodLabel;
 
   return (
     <>
       <Stack.Screen
         options={{
+          title: periodLabel,
           headerRight: () => (
-            <Pressable
+            <IconButton
               onPress={() => setPeriodOpen(true)}
-              hitSlop={8}
-              accessibilityLabel="Choisir la période"
-            >
-              <CalendarDays size={21} strokeWidth={2.2} color={theme.accent} />
-            </Pressable>
+              label="Choisir la période"
+              icon={<CalendarDays size={21} strokeWidth={2.2} color={theme.accent} />}
+            />
           ),
         }}
       />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -164,44 +199,7 @@ export default function StatisticsScreen() {
           gap: spacing.lg,
         }}
       >
-        <View style={[styles.card, { backgroundColor: theme.surface, gap: 2 }]}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-            Revenus vs dépenses · {periodLabel}
-          </Text>
-        <Text
-          selectable
-          style={{
-            color: theme.label,
-            fontSize: 36,
-            fontWeight: "800",
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {formatAmount(t.net)}
-        </Text>
-        <View style={{ flexDirection: "row", gap: spacing.lg, marginTop: spacing.xs }}>
-          <Text
-            style={{
-              color: theme.income,
-              fontWeight: "600",
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            + {formatAmount(t.income)}
-          </Text>
-          <Text
-            style={{
-              color: theme.expense,
-              fontWeight: "600",
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            −{formatAmount(t.expense + t.fees)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
+        <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
         <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
           Dépenses par catégorie
         </Text>
@@ -214,25 +212,41 @@ export default function StatisticsScreen() {
         ) : (
           <>
             <View style={{ alignItems: "center" }}>
-              <PieChart
-                slices={slices.map((s, i) => ({
-                  value: s.total,
-                  color: chartColors[i % chartColors.length],
-                }))}
-              />
+              <View
+                accessible
+                accessibilityRole="image"
+                accessibilityLabel={`Dépenses par catégorie : ${slices
+                  .map((slice) => `${slice.categoryName}, ${Math.round(slice.pct)} pour cent, ${formatAmount(slice.total)}`)
+                  .join(". ")}`}
+              >
+                <PieChart
+                  slices={slices.map((s, i) => ({
+                    value: s.total,
+                    color: chartColors[i % chartColors.length],
+                  }))}
+                />
+              </View>
             </View>
             <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
               {slices.map((slice, index) => (
                 <View key={slice.categoryName} style={styles.legendRow}>
-                  <View
-                    style={[
-                      styles.dot,
-                      {
-                        backgroundColor:
-                          chartColors[index % chartColors.length],
-                      },
-                    ]}
-                  />
+                  {slice.categoryIcon ? (
+                    <CategoryIcon
+                      name={slice.categoryIcon}
+                      size={17}
+                      color={chartColors[index % chartColors.length]}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.dot,
+                        {
+                          backgroundColor:
+                            chartColors[index % chartColors.length],
+                        },
+                      ]}
+                    />
+                  )}
                   <Text
                     style={[styles.legendName, { color: theme.label }]}
                     numberOfLines={1}
@@ -278,6 +292,9 @@ export default function StatisticsScreen() {
             return (
               <View key={budget.id} style={{ gap: spacing.xs }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  {budget.categoryIcon ? (
+                    <CategoryIcon name={budget.categoryIcon} size={17} color={theme.accent} />
+                  ) : null}
                   <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
                     {budget.categoryName ?? "Toutes les dépenses"}
                   </Text>
@@ -313,7 +330,7 @@ export default function StatisticsScreen() {
 
       <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
         <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-          Épargne · {periodLabel}
+          Épargne · {savingsLabel}
         </Text>
         {savings.length === 0 ? (
           <View style={{ alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm }}>
@@ -343,6 +360,9 @@ export default function StatisticsScreen() {
             <View style={{ gap: spacing.sm }}>
               {savings.map(({ rule, amount }) => (
                 <View key={rule.id} style={styles.legendRow}>
+                  {rule.categoryIcon ? (
+                    <CategoryIcon name={rule.categoryIcon} size={17} color={theme.accent} />
+                  ) : null}
                   <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
                     {rule.categoryName ?? "Tous les revenus"}
                   </Text>
@@ -384,20 +404,21 @@ export default function StatisticsScreen() {
         )}
       </View>
 
-      <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-          Évolution · {periodLabel}
-        </Text>
-        {!hasActivity ? (
-          <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.lg }}>
-            Aucune activité sur la période.
+      {months.length > 1 ? (
+        <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+            Évolution · {periodLabel}
           </Text>
-        ) : (
-          <>
+          {!hasActivity ? (
+            <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.lg }}>
+              Aucune activité sur la période.
+            </Text>
+          ) : (
             <View style={{ gap: spacing.sm }}>
               <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
                 Revenus vs dépenses
               </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.barsRow}>
                 {series.map((m) => (
                   <View key={`${m.year}-${m.month}`} style={styles.barGroup}>
@@ -433,90 +454,13 @@ export default function StatisticsScreen() {
                   </View>
                 ))}
               </View>
+              </ScrollView>
             </View>
-
-            <View style={{ gap: spacing.sm }}>
-              <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                Solde mensuel
-              </Text>
-              <View style={styles.barsRow}>
-                {series.map((m) => {
-                  const h = (Math.abs(m.net) / maxAbsSolde) * (BAR_HEIGHT / 2);
-                  const positive = m.net >= 0;
-                  return (
-                    <View key={`${m.year}-${m.month}`} style={styles.barGroup}>
-                      <View
-                        style={[
-                          styles.soldeCell,
-                          { borderColor: theme.separator },
-                        ]}
-                      >
-                        {m.net === 0 ? null : (
-                          <View
-                            style={{
-                              width: BAR_WIDTH,
-                              height: Math.max(h, 2),
-                              backgroundColor: positive
-                                ? theme.income
-                                : theme.expense,
-                              borderRadius: 3,
-                            }}
-                          />
-                        )}
-                      </View>
-                      <Text
-                        style={[
-                          styles.monthLabel,
-                          { color: theme.secondaryLabel },
-                        ]}
-                      >
-                        {new Date(m.year, m.month, 1)
-                          .toLocaleDateString("fr-FR", { month: "short" })
-                          .replace(".", "")}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View
-              style={{
-                marginTop: spacing.sm,
-                gap: spacing.sm,
-                borderTopWidth: StyleSheet.hairlineWidth,
-                borderTopColor: theme.separator,
-                paddingTop: spacing.md,
-              }}
-            >
-              {series.map((m) => (
-                <View key={`${m.year}-${m.month}`} style={styles.monthRow}>
-                  <Text style={[styles.monthName, { color: theme.label }]}>
-                    {formatMonthLabel(m.year, m.month)}
-                  </Text>
-                  <Text style={{ color: theme.income, fontVariant: ["tabular-nums"], fontSize: 13 }}>
-                    + {formatAmount(m.income)}
-                  </Text>
-                  <Text style={{ color: theme.expense, fontVariant: ["tabular-nums"], fontSize: 13 }}>
-                    −{formatAmount(m.expense + m.fees)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.monthSolde,
-                      {
-                        color: m.net >= 0 ? theme.income : theme.expense,
-                      },
-                    ]}
-                  >
-                    {formatAmount(m.net)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-      </View>
+          )}
+        </View>
+      ) : null}
       </ScrollView>
+      )}
       <PeriodSheet
         visible={periodOpen}
         start={start}
@@ -571,31 +515,5 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     fontSize: 11,
-  },
-  soldeCell: {
-    height: BAR_HEIGHT,
-    justifyContent: "center",
-    alignItems: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    width: BAR_WIDTH + 4,
-  },
-  monthRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  monthName: {
-    flex: 1,
-    fontWeight: "600",
-    fontSize: 13,
-    textTransform: "capitalize",
-  },
-  monthSolde: {
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-    fontSize: 13,
-    minWidth: 70,
-    textAlign: "right",
   },
 });

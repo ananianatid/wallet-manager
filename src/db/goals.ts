@@ -173,7 +173,7 @@ export async function listGoalReservations(
             r.created_at AS createdAt,
             r.released_at AS releasedAt
      FROM goal_reservations r
-     JOIN accounts a ON a.id = r.source_account_id
+     JOIN accounts a ON a.id = r.source_account_id AND a.deleted_at IS NULL
      WHERE r.goal_id = ?
      ORDER BY r.reservation_date DESC, r.created_at DESC`,
     goalId,

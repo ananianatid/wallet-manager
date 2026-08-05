@@ -18,7 +18,12 @@ export function MonthNavigator({ year, month, onChange }: Props) {
 
   return (
     <View style={styles.row}>
-      <Pressable onPress={() => shift(-1)} hitSlop={12} style={styles.arrow}>
+      <Pressable
+        onPress={() => shift(-1)}
+        accessibilityRole="button"
+        accessibilityLabel="Mois précédent"
+        style={styles.arrow}
+      >
         <ChevronLeft size={26} strokeWidth={2.4} color={theme.accent} />
       </Pressable>
       <Text
@@ -30,7 +35,12 @@ export function MonthNavigator({ year, month, onChange }: Props) {
       >
         {formatMonthLabel(year, month)}
       </Text>
-      <Pressable onPress={() => shift(1)} hitSlop={12} style={styles.arrow}>
+      <Pressable
+        onPress={() => shift(1)}
+        accessibilityRole="button"
+        accessibilityLabel="Mois suivant"
+        style={styles.arrow}
+      >
         <ChevronRight size={26} strokeWidth={2.4} color={theme.accent} />
       </Pressable>
     </View>

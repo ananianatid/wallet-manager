@@ -26,15 +26,16 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
       <View style={styles.row}>
         <Pressable
           onPress={() => shift(-1)}
-          hitSlop={12}
           style={styles.arrow}
+          accessibilityRole="button"
           accessibilityLabel="Mois précédent"
         >
           <ChevronLeft size={24} strokeWidth={2.4} color={theme.accent} />
         </Pressable>
         <Pressable
           onPress={() => setPickerOpen(true)}
-          hitSlop={8}
+          style={styles.monthButton}
+          accessibilityRole="button"
           accessibilityLabel="Choisir un mois"
         >
           <Text style={[styles.label, { color: theme.label }]}>
@@ -43,8 +44,8 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
         </Pressable>
         <Pressable
           onPress={() => shift(1)}
-          hitSlop={12}
           style={styles.arrow}
+          accessibilityRole="button"
           accessibilityLabel="Mois suivant"
         >
           <ChevronRight size={24} strokeWidth={2.4} color={theme.accent} />
@@ -71,7 +72,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   arrow: {
-    paddingHorizontal: spacing.sm + 2,
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
   },
   label: {
     fontSize: 17,

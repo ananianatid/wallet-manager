@@ -20,6 +20,8 @@ export function EmptyState({ title, message, actionLabel, onAction }: Props) {
       {actionLabel && onAction ? (
         <Pressable
           onPress={onAction}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
           style={({ pressed }) => [
             styles.button,
             { backgroundColor: theme.accent },
@@ -56,8 +58,10 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: spacing.sm,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
     borderRadius: radius.xl,
   },
   buttonLabel: {

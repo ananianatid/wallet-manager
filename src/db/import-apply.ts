@@ -57,12 +57,27 @@ export async function applyImportPlan(
         continue;
       }
       const result = await db.runAsync(
-        "INSERT INTO categories (type, name, is_seed) VALUES (?, ?, 0)",
+        "INSERT INTO categories (type, name, is_seed, icon) VALUES (?, ?, 0, ?)",
         category.type,
         category.name,
+        category.type === "account" ? null : "tag",
       );
       categoryIds.set(key, Number(result.lastInsertRowId));
       report.categoriesAdded += 1;
+    }
+
+    const accountCategory = plan.categories.find(
+      (category) => category.type === "account",
+    );
+    const accountCategoryId = accountCategory
+      ? categoryIds.get(`account|${accountCategory.name}`) ?? null
+      : null;
+
+    if (accountCategoryId != null) {
+      await db.runAsync(
+        "UPDATE accounts SET category_id = ?",
+        accountCategoryId,
+      );
     }
 
     const plannedIds = [...categoryIds.values()];
@@ -89,11 +104,10 @@ export async function applyImportPlan(
       if (accountIdsByName.has(account.name)) {
         continue;
       }
-      const classCategoryId = categoryIds.get(`account|${account.name}`);
       const result = await db.runAsync(
         "INSERT INTO accounts (name, category_id, created_at) VALUES (?, ?, ?)",
         account.name,
-        classCategoryId ?? null,
+        accountCategoryId ?? null,
         now,
       );
       accountIdsByName.set(account.name, Number(result.lastInsertRowId));

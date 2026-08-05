@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from "expo-sqlite";
+import { normalizeCategoryIcon } from "@/constants/category-icons";
 import type {
   Frequency,
   RecurringTransaction,
@@ -12,6 +13,7 @@ interface RecurringRow {
   amount: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: string | null;
   accountId: number;
   accountName: string;
   destinationAccountId: number | null;
@@ -31,6 +33,7 @@ const SELECT_FIELDS = `
   r.id, r.type, r.amount,
   r.category_id AS categoryId,
   c.name AS categoryName,
+  c.icon AS categoryIcon,
   r.account_id AS accountId,
   a.name AS accountName,
   r.destination_account_id AS destinationAccountId,
@@ -46,8 +49,8 @@ const SELECT_FIELDS = `
 
 const FROM_JOINS = `
   FROM recurring_transactions r
-  JOIN accounts a ON a.id = r.account_id
-  LEFT JOIN accounts da ON da.id = r.destination_account_id
+  JOIN accounts a ON a.id = r.account_id AND a.deleted_at IS NULL
+  LEFT JOIN accounts da ON da.id = r.destination_account_id AND da.deleted_at IS NULL
   LEFT JOIN categories c ON c.id = r.category_id
 `;
 
@@ -58,6 +61,7 @@ function mapRecurring(row: RecurringRow): RecurringTransaction {
     amount: row.amount,
     categoryId: row.categoryId,
     categoryName: row.categoryName,
+    categoryIcon: row.categoryName ? normalizeCategoryIcon(row.categoryIcon) : null,
     accountId: row.accountId,
     accountName: row.accountName,
     destinationAccountId: row.destinationAccountId,

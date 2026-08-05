@@ -1,6 +1,19 @@
 export type CategoryType = "account" | "income" | "expense";
 
+export type { CategoryIconName } from "@/constants/category-icons";
+
 export type TransactionType = "income" | "expense" | "transfer";
+
+export interface TransactionSearchCriteria {
+  query: string;
+  startDate: number | null;
+  endDate: number | null;
+  minAmount: number | null;
+  maxAmount: number | null;
+  accountIds: number[] | null;
+  types: TransactionType[];
+  categoryIds: number[] | null;
+}
 
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -9,19 +22,30 @@ export interface Category {
   type: CategoryType;
   name: string;
   isSeed: boolean;
+  icon: import("@/constants/category-icons").CategoryIconName | null;
 }
 
 export interface Account {
   id: number;
   name: string;
-  categoryId: number;
-  categoryName: string;
+  groupId: number | null;
+  groupName: string | null;
   hidden: boolean;
   excludeFromTotal: boolean;
+  description: string | null;
   createdAt: number;
   balance: number;
   reservedAmount: number;
   availableBalance: number;
+}
+
+export interface AccountGroup {
+  id: number;
+  name: string;
+  sortOrder: number;
+  createdAt: number;
+  deletedAt: number | null;
+  accountCount: number;
 }
 
 export interface Transaction {
@@ -30,6 +54,7 @@ export interface Transaction {
   amount: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   accountId: number;
   accountName: string;
   destinationAccountId: number | null;
@@ -43,13 +68,20 @@ export interface Transaction {
 export interface CategoryInput {
   type: CategoryType;
   name: string;
+  icon?: import("@/constants/category-icons").CategoryIconName | null;
+}
+
+export interface CategoryUpdateInput {
+  name: string;
+  icon?: import("@/constants/category-icons").CategoryIconName | null;
 }
 
 export interface AccountInput {
   name: string;
-  categoryId: number;
+  groupId: number | null;
   hidden?: boolean;
   excludeFromTotal?: boolean;
+  description?: string | null;
 }
 
 export interface TransactionInput {
@@ -67,6 +99,7 @@ export interface Budget {
   id: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   amount: number;
   createdAt: number;
 }
@@ -77,6 +110,7 @@ export interface RecurringTransaction {
   amount: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   accountId: number;
   accountName: string;
   destinationAccountId: number | null;
@@ -112,13 +146,16 @@ export interface SavingsRule {
   id: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   percent: number;
   createdAt: number;
+  startDate: number | null;
 }
 
 export interface SavingsRuleInput {
   categoryId: number | null;
   percent: number;
+  startDate: number | null;
 }
 
 export type GoalStatus = "active" | "closed";

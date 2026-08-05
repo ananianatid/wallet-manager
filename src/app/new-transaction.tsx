@@ -4,14 +4,15 @@ import { Stack } from "expo-router/stack";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { SelectField } from "@/components/select-field";
+import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
@@ -47,6 +48,7 @@ export default function NewTransactionScreen() {
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState<number | null>(null);
   const [destinationId, setDestinationId] = useState<number | null>(null);
+  const [goalReservationId, setGoalReservationId] = useState<number | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [fee, setFee] = useState("");
   const [note, setNote] = useState("");
@@ -54,6 +56,9 @@ export default function NewTransactionScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -71,6 +76,7 @@ export default function NewTransactionScreen() {
       setAmount(String(existing.amount));
       setAccountId(existing.accountId);
       setDestinationId(existing.destinationAccountId);
+      setGoalReservationId(null);
       setCategoryId(existing.categoryId);
       setFee(existing.fee ? String(existing.fee) : "");
       setNote(existing.note ?? "");
@@ -79,14 +85,25 @@ export default function NewTransactionScreen() {
       const parsedGoalId = Number(goalParam);
       if (Number.isInteger(parsedGoalId) && parsedGoalId > 0) {
         setType("transfer");
-        setDestinationId(-parsedGoalId);
+        setGoalReservationId(parsedGoalId);
       }
     }
   }, [goalParam, transactionId]);
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      const refresh = async () => {
+        setLoadingOptions(true);
+        setLoadError(null);
+        try {
+          await load();
+        } catch (error) {
+          setLoadError(error instanceof Error ? error.message : "Impossible de charger les comptes.");
+        } finally {
+          setLoadingOptions(false);
+        }
+      };
+      void refresh();
     }, [load]),
   );
 
@@ -98,20 +115,18 @@ export default function NewTransactionScreen() {
       .filter((a) => !a.hidden || selectedIds.has(a.id))
       .map((a) => ({ id: a.id, label: a.name }));
   }, [accounts, accountId, destinationId]);
-  const destinationOptions = useMemo(
-    () => [
-      ...accountOptions,
-      ...goals
+  const goalOptions = useMemo(
+    () =>
+      goals
         .filter((goal) => goal.status === "active")
-        .map((goal) => ({ id: -goal.id, label: `${goal.name} · Objectif` })),
-    ],
-    [accountOptions, goals],
+        .map((goal) => ({ id: goal.id, label: goal.name })),
+    [goals],
   );
   const categoryOptions = useMemo(
     () =>
       categories
         .filter((c) => c.type === type)
-        .map((c) => ({ id: c.id, label: c.name })),
+        .map((c) => ({ id: c.id, label: c.name, icon: c.icon })),
     [categories, type],
   );
 
@@ -121,39 +136,41 @@ export default function NewTransactionScreen() {
       setCategoryId(null);
     } else {
       setDestinationId(null);
+      setGoalReservationId(null);
       setFee("");
     }
   };
 
   const save = async () => {
+    setErrors({});
     const parsedAmount = Number(amount);
     const parsedFee = fee.trim() ? Number(fee) : null;
     if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert("Montant invalide", "Saisissez un montant entier en FCFA.");
+      setErrors({ amount: "Saisissez un montant entier en FCFA." });
       return;
     }
     if (accountId == null) {
-      Alert.alert("Compte manquant", "Choisissez un compte.");
+      setErrors({ account: "Choisissez un compte." });
       return;
     }
     if (type !== "transfer" && categoryId == null) {
-      Alert.alert("Catégorie manquante", "Choisissez une catégorie.");
+      setErrors({ category: "Choisissez une catégorie." });
       return;
     }
-    if (type === "transfer" && destinationId == null) {
-      Alert.alert("Destination manquante", "Choisissez le compte de destination.");
+    if (type === "transfer" && destinationId == null && goalReservationId == null) {
+      setErrors({
+        destination: "Choisissez un compte de destination ou un objectif.",
+      });
       return;
     }
     if (parsedFee != null && (!Number.isInteger(parsedFee) || parsedFee <= 0)) {
-      Alert.alert("Frais invalide", "Les frais doivent être un entier positif.");
+      setErrors({ fee: "Les frais doivent être un entier positif." });
       return;
     }
 
-    const isGoalReservation = type === "transfer" && destinationId != null && destinationId < 0;
+    const isGoalReservation = type === "transfer" && goalReservationId != null;
     const destinationAccountId =
-      type === "transfer" && destinationId != null && destinationId > 0
-        ? destinationId
-        : null;
+      type === "transfer" && destinationId != null ? destinationId : null;
     const input = {
       type,
       amount: parsedAmount,
@@ -173,7 +190,7 @@ export default function NewTransactionScreen() {
           throw new Error("Une réservation d'objectif ne se modifie pas comme une transaction.");
         }
         await createGoalReservation(db, {
-          goalId: -destinationId!,
+          goalId: goalReservationId!,
           sourceAccountId: accountId!,
           amount: parsedAmount,
           note: note.trim() || null,
@@ -228,12 +245,12 @@ export default function NewTransactionScreen() {
             : undefined,
         }}
       />
-      <ScrollView
-        style={{ flex: 1 }}
+      <KeyboardAwareScreen
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
-        keyboardShouldPersistTaps="handled"
       >
+        {loadError ? <InlineError message={loadError} onRetry={() => setLoadError(null)} /> : null}
+        {loadingOptions ? <ActivityIndicator color={theme.accent} accessibilityLabel="Chargement des comptes" /> : null}
         <View style={styles.typeRow}>
           {TYPES.map((t) => {
             const active = type === t.value;
@@ -249,6 +266,9 @@ export default function NewTransactionScreen() {
                   },
                   pressed && { opacity: 0.7 },
                 ]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={t.label}
               >
                 <Text
                   style={{
@@ -263,6 +283,7 @@ export default function NewTransactionScreen() {
           })}
         </View>
 
+        <FormField label="Montant" error={errors.amount}>
         <View
           style={{
             backgroundColor: theme.surface,
@@ -273,11 +294,15 @@ export default function NewTransactionScreen() {
         >
           <TextInput
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={(value) => {
+              setAmount(value);
+              setErrors((current) => ({ ...current, amount: "" }));
+            }}
             placeholder="0"
             placeholderTextColor={theme.secondaryLabel}
             keyboardType="number-pad"
             inputMode="numeric"
+            accessibilityLabel="Montant en FCFA"
             style={{
               color: theme.label,
               fontSize: 40,
@@ -289,51 +314,90 @@ export default function NewTransactionScreen() {
           />
           <Text style={{ color: theme.secondaryLabel }}>FCFA</Text>
         </View>
+        </FormField>
 
-        <SelectField
-          label="Compte"
-          value={accountOptions.find((o) => o.id === accountId)?.label ?? null}
-          options={accountOptions}
-          onChange={setAccountId}
-        />
+        <FormField label="Compte" error={errors.account}>
+          <SelectField
+            label="Compte"
+            hideLabel
+            value={accountOptions.find((o) => o.id === accountId)?.label ?? null}
+            options={accountOptions}
+            onChange={(value) => {
+              setAccountId(value);
+              setErrors((current) => ({ ...current, account: "" }));
+            }}
+          />
+        </FormField>
 
         {type === "transfer" ? (
-          <SelectField
-            label="Destination"
-            value={destinationOptions.find((o) => o.id === destinationId)?.label ?? null}
-            options={destinationOptions}
-            onChange={(id) => setDestinationId(id)}
-          />
+          <>
+            <FormField label="Compte de destination" error={errors.destination}>
+              <SelectField
+                label="Compte de destination"
+                hideLabel
+                value={accountOptions.find((o) => o.id === destinationId)?.label ?? null}
+                options={accountOptions}
+                onChange={(id) => {
+                  setDestinationId(id);
+                  setGoalReservationId(null);
+                  setErrors((current) => ({ ...current, destination: "" }));
+                }}
+              />
+            </FormField>
+            <FormField label="Réserver vers un objectif (optionnel)">
+              <SelectField
+                label="Objectif à réserver"
+                hideLabel
+                value={
+                  goalOptions.find((o) => o.id === goalReservationId)?.label ??
+                  (goalOptions.length === 0 ? "Aucun objectif actif" : null)
+                }
+                options={goalOptions}
+                onChange={(id) => {
+                  setGoalReservationId(id);
+                  setDestinationId(null);
+                  setErrors((current) => ({ ...current, destination: "" }));
+                }}
+              />
+            </FormField>
+          </>
         ) : (
-          <SelectField
-            label="Catégorie"
-            value={categoryOptions.find((o) => o.id === categoryId)?.label ?? null}
-            options={categoryOptions}
-            onChange={setCategoryId}
-          />
+          <FormField label="Catégorie" error={errors.category}>
+            <SelectField
+              label="Catégorie"
+              hideLabel
+              value={categoryOptions.find((o) => o.id === categoryId)?.label ?? null}
+              options={categoryOptions}
+              onChange={(value) => {
+                setCategoryId(value);
+                setErrors((current) => ({ ...current, category: "" }));
+              }}
+            />
+          </FormField>
         )}
 
-        {type === "transfer" && !(destinationId != null && destinationId < 0) ? (
-          <View style={{ gap: spacing.xs + 2 }}>
-            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-              Frais (optionnel)
-            </Text>
+        {type === "transfer" && goalReservationId == null ? (
+          <FormField label="Frais (optionnel)" error={errors.fee}>
             <TextInput
               value={fee}
-              onChangeText={setFee}
+              onChangeText={(value) => {
+                setFee(value);
+                setErrors((current) => ({ ...current, fee: "" }));
+              }}
               placeholder="0"
               placeholderTextColor={theme.secondaryLabel}
               keyboardType="number-pad"
               inputMode="numeric"
+              accessibilityLabel="Frais en FCFA, optionnels"
               style={[
                 styles.input,
                 { backgroundColor: theme.surface, color: theme.label },
               ]}
             />
-          </View>
+          </FormField>
         ) : null}
 
-        {type === "transfer" && destinationId != null && destinationId < 0 ? (
+        {type === "transfer" && goalReservationId != null ? (
           <View
             style={{
               backgroundColor: theme.surfaceElevated,
@@ -354,6 +418,8 @@ export default function NewTransactionScreen() {
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <Pressable
             onPress={() => setShowDatePicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Date ${formatDate(date.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
               { backgroundColor: theme.surface },
@@ -367,6 +433,8 @@ export default function NewTransactionScreen() {
           </Pressable>
           <Pressable
             onPress={() => setShowTimePicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Heure ${formatTime(date.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
               { backgroundColor: theme.surface },
@@ -403,41 +471,33 @@ export default function NewTransactionScreen() {
           />
         ) : null}
 
-        <View style={{ gap: spacing.xs + 2 }}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-            Note (optionnel)
-          </Text>
+        <FormField label="Note (optionnel)">
           <TextInput
             value={note}
             onChangeText={setNote}
             placeholder="Ex. : courses du marché"
             placeholderTextColor={theme.secondaryLabel}
             multiline
+            accessibilityLabel="Note optionnelle"
             style={[
               styles.input,
               { backgroundColor: theme.surface, color: theme.label, minHeight: 80 },
             ]}
           />
-        </View>
+        </FormField>
 
-        <Pressable
+        <ActionButton
           onPress={save}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: theme.accent },
-            (pressed || saving) && { opacity: 0.7 },
-          ]}
-        >
-          <Text style={styles.saveLabel}>
-            {saving
+          disabled={saving || loadingOptions}
+          label={
+            saving
               ? "Enregistrement…"
               : type === "transfer" && destinationId != null && destinationId < 0
                 ? "Réserver pour l'objectif"
-                : "Enregistrer"}
-          </Text>
-        </Pressable>
-      </ScrollView>
+                : "Enregistrer"
+          }
+        />
+      </KeyboardAwareScreen>
     </>
   );
 }

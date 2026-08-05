@@ -1,1 +1,45 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 @AGENTS.md
+
+## Project
+
+Personal, offline, single-user expense tracker for Android. Expo SDK 57, Expo Router (file-based routing), TypeScript strict. **UI in French**, currency **XOF (FCFA)**, amounts stored as **integer FCFA (no decimals)**. No cloud, no accounts, no sync — everything lives in a local SQLite DB.
+
+## Commands
+
+```bash
+npm start              # expo start
+npm run ios|android    # expo run:ios|android (native build)
+npm run web            # expo start --web
+npm run lint           # expo lint (eslint-config-expo flat config)
+npm test               # jest --runInBand (jest-expo preset)
+npx tsc --noEmit       # typecheck
+npm run build:apk      # prebuild + gradle assembleRelease → dist/app-release.apk
+node scripts/verify-import.mjs <file.mmbak>   # validate Money Manager import plan
+node scripts/verify-e2e.mjs <file.mmbak>      # apply import to in-memory DB + balance checks
+```
+
+- Tests are co-located `*.test.ts` / `*.test.tsx` next to the code they cover. Run a single test with `npx jest src/db/accounts.test.ts`.
+- `scripts/verify-*.mjs` use Node's built-in `node:sqlite` (Node ≥ 22), not jest. They run a real `.mmbak` backup (a Money Manager Android export) through the import pipeline and assert exact counts.
+- Lint and test are fast; typecheck catches most errors — run `tsc --noEmit` before assuming a change compiles.
+
+## Architecture
+
+- **Routing** — `src/app/` is the Expo Router tree. `(tabs)` holds the four bottom tabs (Transactions / Statistiques / Comptes / Paramètres), each an expo-router group directory with its own `_layout.tsx`. Stack screens live alongside: `new-transaction`, `accounts/[id]`, `goals/[id]`, `cashflow`, etc. `_layout.tsx` at root wires SafeArea + theme + Stack options.
+- **Database** — `src/db/database.ts` exports a single shared `getDatabase()` promise (module-level cache, WAL mode, FK on). Every `src/db/*.ts` module is a thin CRUD layer whose functions take `db: SQLiteDatabase` as the first argument. Schema + versioned migrations live in `src/db/schema.ts` (`DATABASE_VERSION = 7`), gated by `PRAGMA user_version`. Fresh installs run the full v1 schema + seed categories. Never change an existing migration — append a new `if (currentDbVersion <= N)` block and bump the version.
+- **Money model** — balances are **derived, never stored**. A transaction is one row: `income`/`expense` have a `category_id`, `transfer` has `account_id` (source) + `destination_account_id` (+ optional `fee` deducted from source). A transfer shows in both accounts' lists (`WHERE account_id = ? OR destination_account_id = ?`). Accounts start at 0; adding money = an income transaction. `transaction_date` is the user-chosen date (future allowed) and differs from `created_at` (real insert time). All dates are ms epoch in local time.
+- **Data flow in screens** — screens call `useAsyncResource(load)` (`src/hooks/use-async-resource.ts`) where `load` opens the DB and runs queries; the hook gives `{ data, status, error, reload }`. `ScreenState` / `InlineError` (`src/components/ui.tsx`) render loading/error. Filters that must persist across screens live in `src/state/*.ts` as tiny module-level stores consumed via `useSyncExternalStore` — no Redux/Zustand.
+- **Theme** — `src/theme.tsx` exports `ThemeProvider`, `useTheme()` (colors), plus `spacing` and `radius` tokens. Mode (`system`/`light`/`dark`) is persisted in the `settings` DB table. Components style from these tokens, never hardcoded hex.
+- **Shared UI** — `src/components/ui.tsx` is the small design system (ActionButton, IconButton, FormField, ScreenState, InlineError, KeyboardAwareScreen). Reuse it before writing bespoke controls. Icons are `lucide-react-native`; the tab bar uses `NativeTabs` from `expo-router/unstable-native-tabs`.
+- **Money Manager import** — a one-way migration from the Android "Money Manager" app's `.mmbak` SQLite backup. `src/db/import.ts` opens the foreign DB and dumps its tables; `src/db/money-manager.ts` (`buildImportPlan`) normalizes rows into a plan (merges fee rows into transfers, maps categories, flips sign-flipped types); `src/db/import-apply.ts` (`applyImportPlan`) applies it idempotently inside a transaction, deduping on a content key.
+
+## Conventions
+
+- Path alias `@/*` → `src/*` (also `@/assets/*`). All imports use it.
+- SQL columns are `snake_case`; row interfaces and mapped objects are `camelCase`. `src/db/*.ts` always map rows through explicit `AS` aliases to the camelCase shape before returning.
+- New user-facing strings are **French**. Money formatting goes through `formatAmount` in `src/utils/format.ts` (`"1 234 F"`, U+2212 minus).
+- `app.json` enables `typedRoutes` (typed route hrefs) and `reactCompiler` — don't disable either.
+- Install Expo-compatible versions with `npx expo install <pkg>` so it resolves the SDK-57-pinned version.

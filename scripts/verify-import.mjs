@@ -56,6 +56,14 @@ console.log(plan.categories.map((c) => `[${c.type}] ${c.name}`).join("\n"));
 const total = plan.stats.income + plan.stats.expense + plan.stats.transfer;
 console.log(`\nTotal transactions planifiées : ${total}`);
 
+const accountCategories = plan.categories.filter((c) => c.type === "account");
+console.log("\n=== Catégories de comptes ===");
+console.log(
+  accountCategories.length === 0
+    ? "(aucune)"
+    : accountCategories.map((c) => c.name).join(", "),
+);
+
 const expect = (label, actual, wanted) => {
   const ok = actual === wanted;
   console.log(`${ok ? "OK" : "ÉCHEC"}  ${label}: ${actual} (attendu ${wanted})`);
@@ -63,6 +71,12 @@ const expect = (label, actual, wanted) => {
 };
 
 console.log("\n=== Vérifications ===");
+expect(
+  "catégories de comptes",
+  accountCategories.length,
+  1,
+);
+expect("catégorie de comptes", accountCategories[0]?.name ?? "", "Espèces");
 expect("comptes", plan.stats.accounts, 17);
 expect("revenus", plan.stats.income, 127);
 expect("dépenses", plan.stats.expense, 719);

@@ -1,10 +1,12 @@
 import type { SQLiteDatabase } from "expo-sqlite";
+import { normalizeCategoryIcon } from "@/constants/category-icons";
 import type { Budget } from "../types";
 
 interface BudgetRow {
   id: number;
   categoryId: number | null;
   categoryName: string | null;
+  categoryIcon: string | null;
   amount: number;
   createdAt: number;
 }
@@ -14,6 +16,7 @@ function mapBudget(row: BudgetRow): Budget {
     id: row.id,
     categoryId: row.categoryId,
     categoryName: row.categoryName,
+    categoryIcon: row.categoryName ? normalizeCategoryIcon(row.categoryIcon) : null,
     amount: row.amount,
     createdAt: row.createdAt,
   };
@@ -24,6 +27,7 @@ export async function listBudgets(db: SQLiteDatabase): Promise<Budget[]> {
     `SELECT b.id,
             b.category_id AS categoryId,
             c.name AS categoryName,
+            c.icon AS categoryIcon,
             b.amount,
             b.created_at AS createdAt
      FROM budgets b

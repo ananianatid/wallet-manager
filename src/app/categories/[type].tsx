@@ -1,21 +1,29 @@
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Pencil, Trash } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
+import { CategoryIconPicker } from "@/components/category-icon-picker";
+import { CategoryIcon } from "@/components/category-icons";
+import {
+  DEFAULT_CATEGORY_ICON,
+  type CategoryIconName,
+} from "@/constants/category-icons";
 import {
   createCategory,
   deleteCategory,
   listCategories,
-  renameCategory,
+  updateCategory,
 } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Category, CategoryType } from "@/types";
 
@@ -33,21 +41,27 @@ export default function CategoriesByTypeScreen() {
       ? type
       : "expense";
 
-  const [categories, setCategories] = useState<Category[]>([]);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newIcon, setNewIcon] = useState<CategoryIconName>(DEFAULT_CATEGORY_ICON);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const [editIcon, setEditIcon] = useState<CategoryIconName>(DEFAULT_CATEGORY_ICON);
+  const [pickerTarget, setPickerTarget] = useState<"new" | "edit" | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    setCategories(await listCategories(db, categoryType));
+    return listCategories(db, categoryType);
   }, [categoryType]);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const categories = resource.data ?? [];
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      void reload();
+    }, [reload]),
   );
 
   const add = async () => {
@@ -56,10 +70,15 @@ export default function CategoriesByTypeScreen() {
     }
     try {
       const db = await getDatabase();
-      await createCategory(db, { type: categoryType, name: newName });
+      await createCategory(db, {
+        type: categoryType,
+        name: newName,
+        icon: categoryType === "account" ? null : newIcon,
+      });
       setNewName("");
+      setNewIcon(DEFAULT_CATEGORY_ICON);
       setAdding(false);
-      await load();
+      await reload();
     } catch (e) {
       Alert.alert(
         "Impossible d'ajouter",
@@ -71,14 +90,18 @@ export default function CategoriesByTypeScreen() {
   const startRename = (category: Category) => {
     setEditingId(category.id);
     setEditName(category.name);
+    setEditIcon(category.icon ?? DEFAULT_CATEGORY_ICON);
   };
 
   const saveRename = async (id: number) => {
     try {
       const db = await getDatabase();
-      await renameCategory(db, id, editName);
+      await updateCategory(db, id, {
+        name: editName,
+        icon: categoryType === "account" ? null : editIcon,
+      });
       setEditingId(null);
-      await load();
+      await reload();
     } catch (e) {
       Alert.alert(
         "Impossible de renommer",
@@ -100,7 +123,7 @@ export default function CategoriesByTypeScreen() {
             try {
               const db = await getDatabase();
               await deleteCategory(db, category.id);
-              await load();
+              await reload();
             } catch (e) {
               Alert.alert(
                 "Suppression impossible",
@@ -116,15 +139,20 @@ export default function CategoriesByTypeScreen() {
   return (
     <>
       <Stack.Screen options={{ title: TITLES[categoryType] }} />
-      <ScrollView
-        style={{ flex: 1 }}
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
+      <KeyboardAwareScreen
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           padding: spacing.lg,
           paddingBottom: spacing.xxl,
           gap: spacing.sm,
         }}
-        keyboardShouldPersistTaps="handled"
       >
         <View
           style={{
@@ -140,6 +168,7 @@ export default function CategoriesByTypeScreen() {
                 onChangeText={setNewName}
                 placeholder="Nouvelle catégorie"
                 placeholderTextColor={theme.secondaryLabel}
+                accessibilityLabel="Nom de la nouvelle catégorie"
                 style={[
                   styles.input,
                   { backgroundColor: theme.surfaceElevated, color: theme.label },
@@ -148,6 +177,20 @@ export default function CategoriesByTypeScreen() {
                 onSubmitEditing={add}
                 returnKeyType="done"
               />
+              {categoryType !== "account" ? (
+                <Pressable
+                  onPress={() => setPickerTarget("new")}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    { backgroundColor: theme.surfaceElevated, borderColor: theme.separator },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choisir l’icône de la nouvelle catégorie"
+                >
+                  <CategoryIcon name={newIcon} size={21} color={theme.accent} />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={add}
                 style={({ pressed }) => [
@@ -181,10 +224,25 @@ export default function CategoriesByTypeScreen() {
                       styles.input,
                       { backgroundColor: theme.surfaceElevated, color: theme.label },
                     ]}
+                    accessibilityLabel={`Nom de la catégorie ${category.name}`}
                     autoFocus
                     onSubmitEditing={() => saveRename(category.id)}
                     returnKeyType="done"
                   />
+                  {categoryType !== "account" ? (
+                    <Pressable
+                      onPress={() => setPickerTarget("edit")}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        { backgroundColor: theme.surfaceElevated, borderColor: theme.separator },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Modifier l’icône de ${category.name}`}
+                    >
+                      <CategoryIcon name={editIcon} size={21} color={theme.accent} />
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     onPress={() => saveRename(category.id)}
                     style={({ pressed }) => [
@@ -198,27 +256,24 @@ export default function CategoriesByTypeScreen() {
                 </View>
               ) : (
                 <View style={styles.row}>
+                  {categoryType !== "account" ? (
+                    <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
+                      <CategoryIcon name={category.icon} size={19} color={theme.accent} />
+                    </View>
+                  ) : null}
                   <Text style={[styles.name, { color: theme.label }]}>
                     {category.name}
                   </Text>
-                  <Pressable
+                  <IconButton
+                    label={`Renommer ${category.name}`}
                     onPress={() => startRename(category)}
-                    hitSlop={8}
-                    accessibilityLabel={`Renommer ${category.name}`}
-                  >
-                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                      Modifier
-                    </Text>
-                  </Pressable>
-                  <Pressable
+                    icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
+                  />
+                  <IconButton
+                    label={`Supprimer ${category.name}`}
                     onPress={() => confirmDelete(category)}
-                    hitSlop={8}
-                    accessibilityLabel={`Supprimer ${category.name}`}
-                  >
-                    <Text style={{ color: theme.expense, fontSize: 13 }}>
-                      Supprimer
-                    </Text>
-                  </Pressable>
+                    icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
+                  />
                 </View>
               )}
             </View>
@@ -241,6 +296,7 @@ export default function CategoriesByTypeScreen() {
           onPress={() => {
             setAdding((v) => !v);
             setNewName("");
+            setNewIcon(DEFAULT_CATEGORY_ICON);
           }}
           style={({ pressed }) => [
             styles.addButton,
@@ -252,7 +308,22 @@ export default function CategoriesByTypeScreen() {
             {adding ? "Annuler" : "+ Ajouter une catégorie"}
           </Text>
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScreen>
+      )}
+      {categoryType !== "account" ? (
+        <CategoryIconPicker
+          visible={pickerTarget !== null}
+          value={pickerTarget === "edit" ? editIcon : newIcon}
+          onSelect={(icon) => {
+            if (pickerTarget === "edit") {
+              setEditIcon(icon);
+            } else {
+              setNewIcon(icon);
+            }
+          }}
+          onClose={() => setPickerTarget(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -276,8 +347,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   addButton: {
+    minHeight: 48,
+    justifyContent: "center",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,
+  },
+  iconButton: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+  },
+  categoryIcon: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
   },
 });

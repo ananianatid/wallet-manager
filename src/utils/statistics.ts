@@ -1,4 +1,5 @@
 import type { SavingsRule, Transaction } from "../types";
+import type { CategoryIconName } from "@/constants/category-icons";
 
 export interface MonthRef {
   year: number;
@@ -24,7 +25,9 @@ export function enumerateMonths(start: MonthRef, end: MonthRef): MonthRef[] {
 }
 
 export interface CategorySlice {
+  categoryId: number | null;
   categoryName: string;
+  categoryIcon: CategoryIconName | null;
   total: number;
   count: number;
   pct: number;
@@ -33,22 +36,29 @@ export interface CategorySlice {
 export function expenseByCategory(
   transactions: Transaction[],
 ): CategorySlice[] {
-  const byName = new Map<string, { total: number; count: number }>();
+  const byName = new Map<string, { categoryId: number | null; categoryIcon: CategoryIconName | null; total: number; count: number }>();
   let grandTotal = 0;
   for (const t of transactions) {
     if (t.type !== "expense") {
       continue;
     }
     const name = t.categoryName ?? "Sans catégorie";
-    const entry = byName.get(name) ?? { total: 0, count: 0 };
+    const entry = byName.get(name) ?? {
+      categoryId: t.categoryId,
+      categoryIcon: t.categoryIcon,
+      total: 0,
+      count: 0,
+    };
     entry.total += t.amount;
     entry.count += 1;
     byName.set(name, entry);
     grandTotal += t.amount;
   }
   return [...byName.entries()]
-    .map(([categoryName, { total, count }]) => ({
+    .map(([categoryName, { categoryId, categoryIcon, total, count }]) => ({
+      categoryId,
       categoryName,
+      categoryIcon,
       total,
       count,
       pct: grandTotal === 0 ? 0 : (total / grandTotal) * 100,
@@ -111,6 +121,7 @@ export interface SavingsContribution {
 export function savingsByRule(
   transactions: Transaction[],
   rules: SavingsRule[],
+  periodStartMs: number,
 ): SavingsContribution[] {
   const specific = new Map<number, SavingsRule>();
   let global: SavingsRule | null = null;
@@ -138,6 +149,10 @@ export function savingsByRule(
       rule = global;
     }
     if (!rule) {
+      continue;
+    }
+    const windowStart = rule.startDate ?? periodStartMs;
+    if (t.transactionDate < windowStart) {
       continue;
     }
     contributions.set(

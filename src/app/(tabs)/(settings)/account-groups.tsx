@@ -1,0 +1,581 @@
+import { useFocusEffect } from "expo-router";
+import { Stack } from "expo-router/stack";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Trash,
+} from "lucide-react-native";
+import { useCallback, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { EmptyState } from "@/components/empty-state";
+import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
+import {
+  assignAccountGroup,
+  createAccountGroup,
+  listAccountGroups,
+  listDeletedAccountGroups,
+  renameAccountGroup,
+  reorderAccountGroups,
+  restoreAccountGroup,
+  softDeleteAccountGroup,
+} from "@/db/account-groups";
+import { listAccounts } from "@/db/accounts";
+import { getDatabase } from "@/db/database";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { radius, spacing, useTheme } from "@/theme";
+import type { Account, AccountGroup } from "@/types";
+
+const countLabel = (count: number): string =>
+  count === 0 ? "Aucun compte" : `${count} compte${count > 1 ? "s" : ""}`;
+
+export default function AccountGroupsScreen() {
+  const theme = useTheme();
+
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [reorderMode, setReorderMode] = useState(false);
+  const [order, setOrder] = useState<number[]>([]);
+  const [membershipGroup, setMembershipGroup] = useState<AccountGroup | null>(null);
+
+  const load = useCallback(async () => {
+    const db = await getDatabase();
+    const [groups, deletedGroups, accounts] = await Promise.all([
+      listAccountGroups(db),
+      listDeletedAccountGroups(db),
+      listAccounts(db),
+    ]);
+    return { groups, deletedGroups, accounts };
+  }, []);
+
+  const resource = useAsyncResource(load);
+  const reload = resource.reload;
+  const groups = resource.data?.groups ?? [];
+  const deletedGroups = resource.data?.deletedGroups ?? [];
+  const accounts = resource.data?.accounts ?? [];
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
+  );
+
+  const orderedGroups = reorderMode
+    ? order
+        .map((id) => groups.find((g) => g.id === id))
+        .filter((g): g is AccountGroup => g != null)
+    : groups;
+
+  const toggleReorder = () => {
+    const next = !reorderMode;
+    setReorderMode(next);
+    if (next) {
+      setOrder(groups.map((g) => g.id));
+    }
+  };
+
+  const add = async () => {
+    if (!newName.trim()) {
+      return;
+    }
+    try {
+      const db = await getDatabase();
+      await createAccountGroup(db, newName);
+      setNewName("");
+      setAdding(false);
+      await reload();
+    } catch (e) {
+      Alert.alert(
+        "Impossible d'ajouter",
+        e instanceof Error ? e.message : "Une erreur est survenue.",
+      );
+    }
+  };
+
+  const startRename = (group: AccountGroup) => {
+    setEditingId(group.id);
+    setEditName(group.name);
+  };
+
+  const saveRename = async (id: number) => {
+    try {
+      const db = await getDatabase();
+      await renameAccountGroup(db, id, editName);
+      setEditingId(null);
+      await reload();
+    } catch (e) {
+      Alert.alert(
+        "Impossible de renommer",
+        e instanceof Error ? e.message : "Une erreur est survenue.",
+      );
+    }
+  };
+
+  const confirmDelete = (group: AccountGroup) => {
+    Alert.alert(
+      `Supprimer « ${group.name} » ?`,
+      group.accountCount > 0
+        ? `Les ${group.accountCount} compte${
+            group.accountCount > 1 ? "s" : ""
+          } seront conservés mais deviendront sans groupe.`
+        : "Ce groupe sera déplacé vers les groupes supprimés.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const db = await getDatabase();
+              await softDeleteAccountGroup(db, group.id);
+              await reload();
+            } catch (e) {
+              Alert.alert(
+                "Suppression impossible",
+                e instanceof Error ? e.message : "Une erreur est survenue.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const move = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= orderedGroups.length) {
+      return;
+    }
+    const next = [...orderedGroups];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    setOrder(next.map((g) => g.id));
+    try {
+      const db = await getDatabase();
+      await reorderAccountGroups(db, next.map((g) => g.id));
+    } catch (e) {
+      Alert.alert(
+        "Réorganisation impossible",
+        e instanceof Error ? e.message : "Une erreur est survenue.",
+      );
+      await reload();
+    }
+  };
+
+  const restore = async (group: AccountGroup) => {
+    try {
+      const db = await getDatabase();
+      await restoreAccountGroup(db, group.id);
+      await reload();
+    } catch (e) {
+      Alert.alert(
+        "Restauration impossible",
+        e instanceof Error ? e.message : "Une erreur est survenue.",
+      );
+    }
+  };
+
+  const toggleMember = async (account: Account) => {
+    if (!membershipGroup) {
+      return;
+    }
+    const groupId = account.groupId === membershipGroup.id ? null : membershipGroup.id;
+    try {
+      const db = await getDatabase();
+      await assignAccountGroup(db, account.id, groupId);
+      await reload();
+    } catch (e) {
+      Alert.alert(
+        "Impossible d'affecter",
+        e instanceof Error ? e.message : "Une erreur est survenue.",
+      );
+    }
+  };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: "Groupes de comptes",
+          headerRight: () => (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <IconButton
+                label="Ajouter un groupe de comptes"
+                onPress={() => {
+                  setAdding((v) => !v);
+                  setNewName("");
+                }}
+                icon={<Plus size={22} color={theme.accent} strokeWidth={2.2} />}
+              />
+              <IconButton
+                label="Réorganiser les groupes"
+                onPress={toggleReorder}
+                selected={reorderMode}
+                icon={
+                  <ArrowUpDown
+                    size={22}
+                    color={reorderMode ? theme.accent : theme.secondaryLabel}
+                    strokeWidth={2.2}
+                  />
+                }
+              />
+            </View>
+          ),
+        }}
+      />
+      {!resource.data ? (
+        <ScreenState
+          status={resource.status === "error" ? "error" : "loading"}
+          message={resource.error?.message}
+          onRetry={() => void resource.reload()}
+        />
+      ) : (
+        <KeyboardAwareScreen
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            padding: spacing.lg,
+            paddingBottom: spacing.xxl,
+            gap: spacing.sm,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.surface,
+              borderRadius: radius.lg,
+              borderCurve: "continuous",
+            }}
+          >
+            {adding ? (
+              <View style={[styles.row, { gap: spacing.sm }]}>
+                <TextInput
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder="Nouveau groupe"
+                  placeholderTextColor={theme.secondaryLabel}
+                  accessibilityLabel="Nom du nouveau groupe de comptes"
+                  style={[
+                    styles.input,
+                    { backgroundColor: theme.surfaceElevated, color: theme.label },
+                  ]}
+                  autoFocus
+                  onSubmitEditing={add}
+                  returnKeyType="done"
+                />
+                <Pressable
+                  onPress={add}
+                  style={({ pressed }) => [
+                    styles.addButton,
+                    { backgroundColor: theme.accent },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Ajouter</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {orderedGroups.map((group, index) => (
+              <View key={group.id}>
+                {index > 0 || adding ? (
+                  <View
+                    style={{
+                      height: StyleSheet.hairlineWidth,
+                      backgroundColor: theme.separator,
+                      marginLeft: spacing.lg,
+                    }}
+                  />
+                ) : null}
+
+                {reorderMode ? (
+                  <View style={styles.row}>
+                    <Text style={[styles.name, { color: theme.label }]}>
+                      {group.name}
+                    </Text>
+                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                      {countLabel(group.accountCount)}
+                    </Text>
+                    <IconButton
+                      label="Monter le groupe"
+                      disabled={index === 0}
+                      onPress={() => move(index, -1)}
+                      icon={<ArrowUp size={20} color={theme.secondaryLabel} strokeWidth={2.2} />}
+                    />
+                    <IconButton
+                      label="Descendre le groupe"
+                      disabled={index === orderedGroups.length - 1}
+                      onPress={() => move(index, 1)}
+                      icon={<ArrowDown size={20} color={theme.secondaryLabel} strokeWidth={2.2} />}
+                    />
+                  </View>
+                ) : editingId === group.id ? (
+                  <View style={[styles.row, { gap: spacing.sm }]}>
+                    <TextInput
+                      value={editName}
+                      onChangeText={setEditName}
+                      style={[
+                        styles.input,
+                        { backgroundColor: theme.surfaceElevated, color: theme.label },
+                      ]}
+                      accessibilityLabel={`Nom du groupe ${group.name}`}
+                      autoFocus
+                      onSubmitEditing={() => saveRename(group.id)}
+                      returnKeyType="done"
+                    />
+                    <Pressable
+                      onPress={() => saveRename(group.id)}
+                      style={({ pressed }) => [
+                        styles.addButton,
+                        { backgroundColor: theme.accent },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>OK</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.row}>
+                    <Pressable
+                      onPress={() => setMembershipGroup(group)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Gérer les comptes du groupe ${group.name}`}
+                      style={({ pressed }) => [
+                        styles.groupBody,
+                        pressed && { opacity: 0.6 },
+                      ]}
+                    >
+                      <Text style={[styles.name, { color: theme.label }]}>
+                        {group.name}
+                      </Text>
+                      <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                        {countLabel(group.accountCount)}
+                      </Text>
+                      <ChevronRight size={18} color={theme.secondaryLabel} strokeWidth={2} />
+                    </Pressable>
+                    <View style={styles.rowActions}>
+                      <IconButton
+                        label={`Renommer ${group.name}`}
+                        onPress={() => startRename(group)}
+                        icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
+                      />
+                      <IconButton
+                        label={`Supprimer ${group.name}`}
+                        onPress={() => confirmDelete(group)}
+                        icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
+                      />
+                    </View>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            {groups.length === 0 && !adding ? (
+              <EmptyState
+                title="Aucun groupe"
+                message="Créez un groupe pour organiser vos comptes."
+                actionLabel="Créer un groupe"
+                onAction={() => {
+                  setAdding(true);
+                  setNewName("");
+                }}
+              />
+            ) : null}
+          </View>
+
+          {deletedGroups.length > 0 ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text style={[styles.eyebrow, { color: theme.secondaryLabel }]}>SUPPRIMÉS</Text>
+              <View
+                style={{
+                  backgroundColor: theme.surface,
+                  borderRadius: radius.lg,
+                  borderCurve: "continuous",
+                  opacity: 0.6,
+                }}
+              >
+                {deletedGroups.map((group, index) => (
+                  <View key={group.id}>
+                    {index > 0 ? (
+                      <View
+                        style={{
+                          height: StyleSheet.hairlineWidth,
+                          backgroundColor: theme.separator,
+                          marginLeft: spacing.lg,
+                        }}
+                      />
+                    ) : null}
+                    <View style={styles.row}>
+                      <Text style={[styles.name, { color: theme.label }]}>{group.name}</Text>
+                      <Pressable
+                        onPress={() => restore(group)}
+                        hitSlop={8}
+                        accessibilityLabel={`Restaurer ${group.name}`}
+                      >
+                        <Text style={{ color: theme.accent, fontSize: 13, fontWeight: "600" }}>
+                          Restaurer
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </KeyboardAwareScreen>
+      )}
+
+      <Modal
+        visible={membershipGroup != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMembershipGroup(null)}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setMembershipGroup(null)}
+          accessibilityLabel="Fermer"
+        >
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.sheetTitle, { color: theme.label }]}>
+              {membershipGroup?.name}
+            </Text>
+            <FlatList
+              data={accounts}
+              keyExtractor={(account) => String(account.id)}
+              style={{ maxHeight: 360 }}
+              renderItem={({ item }) => {
+                const isMember = item.groupId === membershipGroup?.id;
+                return (
+                  <Pressable
+                    onPress={() => toggleMember(item)}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={item.name}
+                    accessibilityState={{ checked: isMember }}
+                    style={({ pressed }) => [
+                      styles.option,
+                      { backgroundColor: pressed ? theme.surface : "transparent" },
+                      item.hidden && { opacity: 0.5 },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.optionName, { color: theme.label }]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <View
+                      style={[
+                        styles.checkBox,
+                        {
+                          borderColor: isMember ? theme.accent : theme.outline,
+                          backgroundColor: isMember ? theme.accent : "transparent",
+                        },
+                      ]}
+                    >
+                      {isMember ? (
+                        <Check size={14} strokeWidth={3} color={theme.onAccent} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  eyebrow: { fontSize: 13, fontWeight: "700", letterSpacing: 0.8 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
+  },
+  groupBody: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    minHeight: 24,
+  },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+    marginRight: -spacing.md,
+  },
+  name: {
+    flex: 1,
+    fontWeight: "600",
+  },
+  input: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+  },
+  addButton: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.xl,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.sm,
+  },
+  sheetTitle: {
+    fontWeight: "700",
+    fontSize: 16,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  optionName: {
+    flex: 1,
+  },
+  checkBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+});

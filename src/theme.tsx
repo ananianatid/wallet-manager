@@ -13,11 +13,15 @@ import { getSetting, setSetting } from "@/db/settings";
 export interface ThemeColors {
   background: string;
   surface: string;
+  surfaceMuted: string;
   surfaceElevated: string;
   label: string;
   secondaryLabel: string;
   separator: string;
+  outline: string;
   accent: string;
+  onAccent: string;
+  warning: string;
   income: string;
   expense: string;
 }
@@ -28,26 +32,38 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
   dark: {
     background: "#0A0A0B",
     surface: "#141417",
+    surfaceMuted: "#101013",
     surfaceElevated: "#1D1D22",
     label: "#F5F5F7",
     secondaryLabel: "#9B9BA3",
     separator: "#2A2A2E",
+    outline: "#4A4A52",
     accent: "#34D399",
+    onAccent: "#0A0A0B",
+    warning: "#F59E0B",
     income: "#4ADE80",
     expense: "#F87171",
   },
   light: {
     background: "#FFFFFF",
     surface: "#F5F5F7",
+    surfaceMuted: "#FAFAFB",
     surfaceElevated: "#FFFFFF",
     label: "#1C1C1E",
     secondaryLabel: "#6E6E73",
     separator: "#E5E5EA",
+    outline: "#B8B8C0",
     accent: "#059669",
+    onAccent: "#FFFFFF",
+    warning: "#B45309",
     income: "#16A34A",
     expense: "#DC2626",
   },
 };
+
+export function withAlpha(color: string, alpha: string): string {
+  return `${color}${alpha}`;
+}
 
 export const chartColors = [
   "#34D399",
