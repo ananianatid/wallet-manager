@@ -10,7 +10,10 @@ if (!path) {
 const db = new DatabaseSync(path);
 
 const accounts = db
-  .prepare("SELECT uid, NIC_NAME AS name FROM ASSETS")
+  .prepare("SELECT uid, NIC_NAME AS name, groupUid FROM ASSETS")
+  .all();
+const groups = db
+  .prepare("SELECT uid, ACC_GROUP_NAME AS name FROM ASSETGROUP")
   .all();
 const categories = db
   .prepare("SELECT uid, NAME AS name, TYPE AS type FROM ZCATEGORY")
@@ -32,7 +35,7 @@ const transactions = db
 console.log(`Fichier : ${path}`);
 console.log(`Lignes brutes (INOUTCOME, IS_DEL=0) : ${transactions.length}`);
 
-const plan = buildImportPlan({ accounts, categories, transactions });
+const plan = buildImportPlan({ accounts, categories, transactions, groups });
 
 console.log("\n=== Plan d'import ===");
 console.log(`Comptes          : ${plan.stats.accounts}`);

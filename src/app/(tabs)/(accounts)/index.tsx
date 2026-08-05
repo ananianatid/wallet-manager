@@ -3,6 +3,8 @@ import { Stack } from "expo-router/stack";
 import { Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  Alert,
+  Modal,
   Pressable,
   SectionList,
   StyleSheet,
@@ -14,7 +16,12 @@ import { EmptyState } from "@/components/empty-state";
 import { SelectField } from "@/components/select-field";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import { listAccountGroups } from "@/db/account-groups";
-import { listAccounts, createAccount } from "@/db/accounts";
+import {
+  createAccount,
+  deleteAccount,
+  listAccounts,
+  updateAccountFlags,
+} from "@/db/accounts";
 import { getDatabase } from "@/db/database";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
@@ -29,6 +36,9 @@ export default function AccountsScreen() {
   const [showHidden, setShowHidden] = useState(false);
   const [name, setName] = useState("");
   const [groupId, setGroupId] = useState<number | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const longPressTriggered = useRef(false);
+  const longPressResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openForm = () => {
     setShowForm(true);
@@ -81,6 +91,94 @@ export default function AccountsScreen() {
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Impossible de créer le compte.");
     }
+  };
+
+  const closeAccountActions = () => setSelectedAccount(null);
+
+  const updateFlags = async (
+    accountId: number,
+    flags: { hidden?: boolean; excludeFromTotal?: boolean },
+  ) => {
+    try {
+      const db = await getDatabase();
+      await updateAccountFlags(db, accountId, flags);
+      await resource.reload();
+    } catch (error) {
+      Alert.alert(
+        "Modification impossible",
+        error instanceof Error ? error.message : "Une erreur est survenue.",
+      );
+    }
+  };
+
+  const confirmHide = (account: Account) => {
+    const nextHidden = !account.hidden;
+    closeAccountActions();
+    Alert.alert(
+      nextHidden ? `Masquer « ${account.name} » ?` : `Afficher « ${account.name} » ?`,
+      nextHidden
+        ? "Le compte ne sera plus visible dans la liste principale ni dans les sélecteurs de transaction."
+        : "Le compte redeviendra visible dans la liste principale et les sélecteurs de transaction.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: nextHidden ? "Masquer" : "Afficher",
+          onPress: () => void updateFlags(account.id, { hidden: nextHidden }),
+        },
+      ],
+    );
+  };
+
+  const confirmExcludeFromTotal = (account: Account) => {
+    const nextExcluded = !account.excludeFromTotal;
+    closeAccountActions();
+    Alert.alert(
+      nextExcluded
+        ? `Exclure « ${account.name} » du total ?`
+        : `Inclure « ${account.name} » dans le total ?`,
+      nextExcluded
+        ? "Le solde de ce compte ne sera plus compté dans le patrimoine ni dans les prévisions."
+        : "Le solde de ce compte sera de nouveau compté dans le patrimoine et les prévisions.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: nextExcluded ? "Exclure" : "Inclure",
+          onPress: () =>
+            void updateFlags(account.id, { excludeFromTotal: nextExcluded }),
+        },
+      ],
+    );
+  };
+
+  const confirmDelete = (account: Account) => {
+    closeAccountActions();
+    Alert.alert(
+      `Supprimer « ${account.name} » ?`,
+      "Le compte sera déplacé vers les comptes supprimés et pourra être restauré. Ses transactions seront masquées des listes.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const db = await getDatabase();
+              await deleteAccount(db, account.id);
+              await resource.reload();
+            } catch (error) {
+              Alert.alert(
+                "Suppression impossible",
+                error instanceof Error ? error.message : "Une erreur est survenue.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const openAccountActions = (account: Account) => {
+    setSelectedAccount(account);
   };
 
   const sections = useMemo(() => {
@@ -167,7 +265,29 @@ export default function AccountsScreen() {
         return (
           <>
             <Pressable
-              onPress={() => router.push({ pathname: "/accounts/[id]", params: { id: String(item.id) } })}
+              onPress={() => {
+                if (longPressTriggered.current) {
+                  longPressTriggered.current = false;
+                  if (longPressResetTimer.current != null) {
+                    clearTimeout(longPressResetTimer.current);
+                    longPressResetTimer.current = null;
+                  }
+                  return;
+                }
+                router.push({ pathname: "/accounts/[id]", params: { id: String(item.id) } });
+              }}
+              onLongPress={() => {
+                longPressTriggered.current = true;
+                if (longPressResetTimer.current != null) {
+                  clearTimeout(longPressResetTimer.current);
+                }
+                longPressResetTimer.current = setTimeout(() => {
+                  longPressTriggered.current = false;
+                  longPressResetTimer.current = null;
+                }, 1500);
+                openAccountActions(item);
+              }}
+              accessibilityHint="Appuyez longuement pour gérer ce compte."
               style={({ pressed }) => [
                 styles.row,
                 { backgroundColor: theme.surface, marginHorizontal: spacing.lg },
@@ -407,8 +527,101 @@ export default function AccountsScreen() {
           </View>
         )
       }
-    />
+      />
       )}
+
+      <Modal
+        visible={selectedAccount != null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAccountActions}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={closeAccountActions}
+          accessibilityLabel="Fermer"
+        >
+          <Pressable style={[styles.actionSheet, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.actionSheetTitle, { color: theme.label }]}>
+              {selectedAccount?.name}
+            </Text>
+            <Text style={[styles.actionSheetSubtitle, { color: theme.secondaryLabel }]}>
+              Gérer ce compte
+            </Text>
+
+            <View style={[styles.actionDivider, { backgroundColor: theme.separator }]} />
+
+            <Pressable
+              onPress={() => {
+                const account = selectedAccount;
+                closeAccountActions();
+                if (account) {
+                  router.push({ pathname: "/accounts/[id]", params: { id: String(account.id) } });
+                }
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={[styles.actionText, { color: theme.label }]}>Ouvrir le compte</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                const account = selectedAccount;
+                if (account) {
+                  confirmHide(account);
+                }
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={[styles.actionText, { color: theme.label }]}>
+                {selectedAccount?.hidden ? "Afficher le compte" : "Masquer le compte"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                const account = selectedAccount;
+                if (account) {
+                  confirmExcludeFromTotal(account);
+                }
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={[styles.actionText, { color: theme.label }]}>
+                {selectedAccount?.excludeFromTotal
+                  ? "Inclure dans le total"
+                  : "Exclure du total"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                const account = selectedAccount;
+                if (account) {
+                  confirmDelete(account);
+                }
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={[styles.actionText, { color: theme.expense }]}>Supprimer le compte</Text>
+            </Pressable>
+
+            <View style={[styles.actionDivider, { backgroundColor: theme.separator }]} />
+
+            <Pressable
+              onPress={closeAccountActions}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={[styles.actionText, { color: theme.accent, fontWeight: "700" }]}>Annuler</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
@@ -519,5 +732,36 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  actionSheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  actionSheetTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  actionSheetSubtitle: {
+    fontSize: 13,
+    marginTop: spacing.xs,
+  },
+  actionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: spacing.sm,
+  },
+  actionRow: {
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  actionText: {
+    fontSize: 16,
   },
 });

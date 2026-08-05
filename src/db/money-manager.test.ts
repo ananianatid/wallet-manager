@@ -50,6 +50,23 @@ function data(overrides: Partial<MoneyManagerData> = {}): MoneyManagerData {
 }
 
 describe("buildImportPlan", () => {
+  it("maps accounts to their Money Manager group", () => {
+    const plan = buildImportPlan(
+      data({
+        groups: [{ uid: "g1", name: "Banque" }],
+        accounts: [
+          { uid: "a1", name: "Banque A", groupUid: "g1" },
+          { uid: "a2", name: "Banque B" },
+        ],
+      }),
+    );
+
+    expect(plan.accounts).toEqual([
+      { name: "Banque A", groupName: "Banque" },
+      { name: "Banque B", groupName: null },
+    ]);
+  });
+
   it("puts every account into a single generic account category", () => {
     const plan = buildImportPlan(data());
 

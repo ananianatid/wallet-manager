@@ -18,8 +18,13 @@ const errorMessage = (e: unknown): string =>
 async function dumpMoneyManager(
   db: SQLite.SQLiteDatabase,
 ): Promise<MoneyManagerData> {
-  const accounts = await db.getAllAsync<{ uid: string; name: string | null }>(
-    "SELECT uid, NIC_NAME AS name FROM ASSETS",
+  const accounts = await db.getAllAsync<{
+    uid: string;
+    name: string | null;
+    groupUid: string | null;
+  }>("SELECT uid, NIC_NAME AS name, groupUid FROM ASSETS");
+  const groups = await db.getAllAsync<{ uid: string; name: string | null }>(
+    "SELECT uid, ACC_GROUP_NAME AS name FROM ASSETGROUP",
   );
   const categories = await db.getAllAsync<{
     uid: string;
@@ -45,7 +50,7 @@ async function dumpMoneyManager(
      FROM INOUTCOME
      WHERE IS_DEL = 0`,
   );
-  return { accounts, categories, transactions };
+  return { accounts, categories, transactions, groups };
 }
 
 export async function readMoneyManagerBackup(

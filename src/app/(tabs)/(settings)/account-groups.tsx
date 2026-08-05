@@ -1,20 +1,21 @@
 import { useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpDown,
   Check,
   ChevronRight,
+  GripVertical,
   Pencil,
   Plus,
   Trash,
 } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  Animated,
   FlatList,
   Modal,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -41,6 +42,76 @@ import type { Account, AccountGroup } from "@/types";
 
 const countLabel = (count: number): string =>
   count === 0 ? "Aucun compte" : `${count} compte${count > 1 ? "s" : ""}`;
+
+const REORDER_ROW_HEIGHT = 56;
+
+function ReorderRow({
+  item,
+  index,
+  count,
+  onReorder,
+}: {
+  item: AccountGroup;
+  index: number;
+  count: number;
+  onReorder: (from: number, to: number) => void;
+}) {
+  const theme = useTheme();
+  const [translateY] = useState(() => new Animated.Value(0));
+  const [dragging, setDragging] = useState(false);
+
+  const reset = useCallback(() => {
+    Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+    setDragging(false);
+  }, [translateY]);
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dy) > 5 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => setDragging(true),
+        onPanResponderMove: (_, gesture) => translateY.setValue(gesture.dy),
+        onPanResponderRelease: (_, gesture) => {
+          const target = Math.max(
+            0,
+            Math.min(
+              count - 1,
+              index + Math.round(gesture.dy / REORDER_ROW_HEIGHT),
+            ),
+          );
+          reset();
+          if (target !== index) {
+            onReorder(index, target);
+          }
+        },
+        onPanResponderTerminate: reset,
+      }),
+    [index, count, onReorder, translateY, reset],
+  );
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY }],
+        zIndex: dragging ? 1 : 0,
+        elevation: dragging ? 2 : 0,
+      }}
+    >
+      <View
+        style={[styles.row, { height: REORDER_ROW_HEIGHT, backgroundColor: theme.surface }]}
+        {...pan.panHandlers}
+      >
+        <GripVertical size={20} color={theme.secondaryLabel} strokeWidth={2} />
+        <Text style={[styles.name, { color: theme.label }]}>{item.name}</Text>
+        <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+          {countLabel(item.accountCount)}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
 
 export default function AccountGroupsScreen() {
   const theme = useTheme();
@@ -156,18 +227,15 @@ export default function AccountGroupsScreen() {
     );
   };
 
-  const move = async (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= orderedGroups.length) {
-      return;
-    }
+  const handleReorder = async (from: number, to: number) => {
     const next = [...orderedGroups];
-    const [moved] = next.splice(index, 1);
-    next.splice(target, 0, moved);
-    setOrder(next.map((g) => g.id));
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    const ids = next.map((g) => g.id);
+    setOrder(ids);
     try {
       const db = await getDatabase();
-      await reorderAccountGroups(db, next.map((g) => g.id));
+      await reorderAccountGroups(db, ids);
     } catch (e) {
       Alert.alert(
         "Réorganisation impossible",
@@ -244,6 +312,37 @@ export default function AccountGroupsScreen() {
           message={resource.error?.message}
           onRetry={() => void resource.reload()}
         />
+      ) : reorderMode ? (
+        <View style={{ flex: 1, padding: spacing.lg, gap: spacing.sm }}>
+          <View
+            style={{
+              backgroundColor: theme.surface,
+              borderRadius: radius.lg,
+              borderCurve: "continuous",
+              overflow: "hidden",
+            }}
+          >
+            {orderedGroups.map((group, index) => (
+              <View key={group.id}>
+                <ReorderRow
+                  item={group}
+                  index={index}
+                  count={orderedGroups.length}
+                  onReorder={handleReorder}
+                />
+                {index < orderedGroups.length - 1 ? (
+                  <View
+                    style={{
+                      height: StyleSheet.hairlineWidth,
+                      backgroundColor: theme.separator,
+                      marginLeft: spacing.lg,
+                    }}
+                  />
+                ) : null}
+              </View>
+            ))}
+          </View>
+        </View>
       ) : (
         <KeyboardAwareScreen
           contentInsetAdjustmentBehavior="automatic"
@@ -301,28 +400,7 @@ export default function AccountGroupsScreen() {
                   />
                 ) : null}
 
-                {reorderMode ? (
-                  <View style={styles.row}>
-                    <Text style={[styles.name, { color: theme.label }]}>
-                      {group.name}
-                    </Text>
-                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                      {countLabel(group.accountCount)}
-                    </Text>
-                    <IconButton
-                      label="Monter le groupe"
-                      disabled={index === 0}
-                      onPress={() => move(index, -1)}
-                      icon={<ArrowUp size={20} color={theme.secondaryLabel} strokeWidth={2.2} />}
-                    />
-                    <IconButton
-                      label="Descendre le groupe"
-                      disabled={index === orderedGroups.length - 1}
-                      onPress={() => move(index, 1)}
-                      icon={<ArrowDown size={20} color={theme.secondaryLabel} strokeWidth={2.2} />}
-                    />
-                  </View>
-                ) : editingId === group.id ? (
+                {editingId === group.id ? (
                   <View style={[styles.row, { gap: spacing.sm }]}>
                     <TextInput
                       value={editName}

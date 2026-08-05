@@ -3,6 +3,12 @@ import type { CategoryType, TransactionType } from "../types";
 export interface MmAccountRow {
   uid: string;
   name: string | null;
+  groupUid?: string | null;
+}
+
+export interface MmGroupRow {
+  uid: string;
+  name: string | null;
 }
 
 export interface MmCategoryRow {
@@ -25,6 +31,7 @@ export interface MoneyManagerData {
   accounts: MmAccountRow[];
   categories: MmCategoryRow[];
   transactions: MmTransactionRow[];
+  groups?: MmGroupRow[];
 }
 
 export interface PlannedCategory {
@@ -34,6 +41,7 @@ export interface PlannedCategory {
 
 export interface PlannedAccount {
   name: string;
+  groupName: string | null;
 }
 
 export interface PlannedTransaction {
@@ -108,8 +116,17 @@ export function buildImportPlan(data: MoneyManagerData): ImportPlan {
     }
   }
 
+  const groupNameByUid = new Map<string, string | null>();
+  for (const group of data.groups ?? []) {
+    const name = normalize(group.name);
+    if (name) {
+      groupNameByUid.set(group.uid, name);
+    }
+  }
+
   const accountNames: string[] = [];
   const accountNameByUid = new Map<string, string>();
+  const groupNameByAccountName = new Map<string, string | null>();
   const seenAccounts = new Set<string>();
   for (const account of data.accounts) {
     const name = normalize(account.name);
@@ -119,6 +136,10 @@ export function buildImportPlan(data: MoneyManagerData): ImportPlan {
     if (!seenAccounts.has(name)) {
       seenAccounts.add(name);
       accountNames.push(name);
+      groupNameByAccountName.set(
+        name,
+        groupNameByUid.get(account.groupUid ?? "") ?? null,
+      );
     }
     if (!accountNameByUid.has(account.uid)) {
       accountNameByUid.set(account.uid, name);
@@ -329,7 +350,10 @@ export function buildImportPlan(data: MoneyManagerData): ImportPlan {
     planned.length > 0 ? planned.reduce((max, tx) => Math.max(max, tx.date), planned[0].date) : null;
 
   return {
-    accounts: accountNames.map((name) => ({ name })),
+    accounts: accountNames.map((name) => ({
+      name,
+      groupName: groupNameByAccountName.get(name) ?? null,
+    })),
     categories,
     transactions: planned,
     stats: {

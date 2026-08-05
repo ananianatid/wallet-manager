@@ -100,14 +100,40 @@ export async function applyImportPlan(
     const accountIdsByName = new Map(
       existingAccounts.map((account) => [account.name.trim(), account.id]),
     );
+    const groupIdsByName = new Map<string, number>();
     for (const account of plan.accounts) {
       if (accountIdsByName.has(account.name)) {
         continue;
       }
+      let groupId: number | null = null;
+      if (account.groupName != null) {
+        if (!groupIdsByName.has(account.groupName)) {
+          const existing = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM account_groups WHERE name = ? AND deleted_at IS NULL",
+            account.groupName,
+          );
+          if (existing) {
+            groupIdsByName.set(account.groupName, existing.id);
+          } else {
+            const created = await db.runAsync(
+              `INSERT INTO account_groups (name, sort_order, created_at)
+               VALUES (?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM account_groups WHERE deleted_at IS NULL), ?)`,
+              account.groupName,
+              now,
+            );
+            groupIdsByName.set(
+              account.groupName,
+              Number(created.lastInsertRowId),
+            );
+          }
+        }
+        groupId = groupIdsByName.get(account.groupName)!;
+      }
       const result = await db.runAsync(
-        "INSERT INTO accounts (name, category_id, created_at) VALUES (?, ?, ?)",
+        "INSERT INTO accounts (name, category_id, group_id, created_at) VALUES (?, ?, ?, ?)",
         account.name,
         accountCategoryId ?? null,
+        groupId,
         now,
       );
       accountIdsByName.set(account.name, Number(result.lastInsertRowId));
