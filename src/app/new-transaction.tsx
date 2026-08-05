@@ -289,7 +289,7 @@ export default function NewTransactionScreen() {
             backgroundColor: theme.surface,
             borderRadius: radius.lg,
             alignItems: "center",
-            paddingVertical: spacing.lg,
+            paddingVertical: spacing.sm,
           }}
         >
           <TextInput
@@ -305,7 +305,7 @@ export default function NewTransactionScreen() {
             accessibilityLabel="Montant en FCFA"
             style={{
               color: theme.label,
-              fontSize: 40,
+              fontSize: 28,
               fontWeight: "800",
               fontVariant: ["tabular-nums"],
               textAlign: "center",

@@ -14,8 +14,8 @@ Le formulaire repose déjà sur `KeyboardAwareScreen` (`KeyboardAvoidingView beh
 
 ## Scope and assumptions
 
-- **Périmètre** : uniquement le champ « Montant (solde) » de `src/app/accounts/[id]/edit.tsx`. Aucune autre surface modifiée.
-- **Hypothèse** : le « formulaire » visé est l'édition de compte (contexte gestion des comptes). Le même motif `fontSize: 40` existe sur 3 autres formulaires (`new-transaction.tsx:308`, `goals/new.tsx:164`, `recurring/form.tsx:268`) — non touchés ici (hors demande), voir limitations.
+- **Périmètre** : champ montant de `src/app/accounts/[id]/edit.tsx` et de `src/app/new-transaction.tsx`.
+- **Hypothèse** : le « formulaire » visé est l'édition de compte (contexte gestion des comptes), étendu à la nouvelle transaction à la demande. Le même motif `fontSize: 40` reste sur 2 formulaires (`goals/new.tsx:164`, `recurring/form.tsx:268`) — non touchés, voir limitations.
 - **Non testé au runtime** : la hauteur effective au-dessus du clavier dépend du modèle Android et de la taille d'écran ; validation code uniquement.
 
 ## Route and surface map
@@ -38,11 +38,12 @@ Le champ reste conforme au système (token `theme.surface`, `radius.lg`, `tabula
 
 | ID | Severity | Category | Evidence | Resolution |
 |---|---|---|---|---|
-| ACC-M-001 | P3 | design_language | `new-transaction.tsx:308`, `goals/new.tsx:164`, `recurring/form.tsx:268` | open (même motif 40 px sur 3 autres formulaires ; à unifier si souhaité) |
+| ACC-M-001 | P3 | design_language | `goals/new.tsx:164`, `recurring/form.tsx:268` | open (même motif 40 px restant sur 2 formulaires ; à unifier si souhaité) |
 
 ## Changes and commits
 
 - `src/app/accounts/[id]/edit.tsx` : `fontSize: 40 → 28`, `paddingVertical: spacing.lg → spacing.sm` sur la boîte du champ montant.
+- `src/app/new-transaction.tsx` : même réduction sur le champ « Montant ».
 
 ## Tests and static validation
 
@@ -60,4 +61,4 @@ Le champ reste conforme au système (token `theme.surface`, `radius.lg`, `tabula
 ## Remaining limitations and follow-ups
 
 - Si le formulaire déborde encore au-dessus du clavier sur petit écran, les leviers restants sont : hauteur de la description (`minHeight: 80`), gaps entre champs, ou regroupement des switches.
-- Décision à confirmer : appliquer la même réduction aux 3 autres formulaires (nouvelle transaction, objectif, récurrente) pour l'homogénéité.
+- Décision à confirmer : appliquer la même réduction aux 2 formulaires restants (objectif, récurrente) pour l'homogénéité.
