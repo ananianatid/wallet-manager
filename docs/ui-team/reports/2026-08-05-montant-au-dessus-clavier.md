@@ -42,8 +42,8 @@ Le champ reste conforme au système (token `theme.surface`, `radius.lg`, `tabula
 
 ## Changes and commits
 
-- `src/app/accounts/[id]/edit.tsx` : `fontSize: 40 → 28`, `paddingVertical: spacing.lg → spacing.sm` sur la boîte du champ montant.
-- `src/app/new-transaction.tsx` : même réduction sur le champ « Montant ».
+- `src/app/accounts/[id]/edit.tsx` : `fontSize: 40 → 36` (aligné sur le solde du détail compte), boîte `paddingVertical: spacing.lg → spacing.sm`.
+- `src/app/new-transaction.tsx` : `fontSize: 40 → 36`, boîte compactée.
 
 ## Tests and static validation
 

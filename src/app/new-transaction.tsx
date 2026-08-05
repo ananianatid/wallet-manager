@@ -305,7 +305,7 @@ export default function NewTransactionScreen() {
             accessibilityLabel="Montant en FCFA"
             style={{
               color: theme.label,
-              fontSize: 28,
+              fontSize: 36,
               fontWeight: "800",
               fontVariant: ["tabular-nums"],
               textAlign: "center",

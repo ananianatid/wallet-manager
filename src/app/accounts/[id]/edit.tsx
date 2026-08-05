@@ -200,7 +200,7 @@ export default function EditAccountScreen() {
                   accessibilityLabel="Solde du compte en FCFA"
                   style={{
                     color: theme.label,
-                    fontSize: 28,
+                    fontSize: 36,
                     fontWeight: "800",
                     fontVariant: ["tabular-nums"],
                     textAlign: "center",
