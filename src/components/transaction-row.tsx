@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ArrowLeftRight } from "lucide-react-native";
 import { CategoryIcon } from "@/components/category-icons";
 import { spacing, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
@@ -33,7 +34,9 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   const content = (
     <>
       {isTransfer ? (
-        <View style={[styles.dot, { backgroundColor: color }]} />
+        <View style={[styles.categoryIcon, { backgroundColor: `${color}22` }]}>
+          <ArrowLeftRight size={17} color={color} />
+        </View>
       ) : (
         <View style={[styles.categoryIcon, { backgroundColor: `${color}22` }]}>
           <CategoryIcon name={transaction.categoryIcon} size={17} color={color} />
@@ -98,11 +101,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     minHeight: 64,
     borderCurve: "continuous",
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
   },
   categoryIcon: {
     width: 32,
