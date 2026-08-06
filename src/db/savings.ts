@@ -8,6 +8,7 @@ interface SavingsRuleRow {
   categoryName: string | null;
   categoryIcon: string | null;
   percent: number;
+  subtractFromAvailable: number | boolean;
   createdAt: number;
   startDate: number | null;
 }
@@ -19,6 +20,8 @@ function mapSavingsRule(row: SavingsRuleRow): SavingsRule {
     categoryName: row.categoryName,
     categoryIcon: row.categoryName ? normalizeCategoryIcon(row.categoryIcon) : null,
     percent: row.percent,
+    subtractFromAvailable:
+      row.subtractFromAvailable === 1 || row.subtractFromAvailable === true,
     createdAt: row.createdAt,
     startDate: row.startDate,
   };
@@ -33,6 +36,7 @@ export async function listSavingsRules(
             c.name AS categoryName,
             c.icon AS categoryIcon,
             s.percent,
+            s.subtract_from_available AS subtractFromAvailable,
             s.created_at AS createdAt,
             s.start_date AS startDate
      FROM savings_rules s
@@ -58,7 +62,7 @@ export async function setSavingsRule(
   db: SQLiteDatabase,
   input: SavingsRuleInput,
 ): Promise<void> {
-  const { categoryId, percent, startDate } = input;
+  const { categoryId, percent, subtractFromAvailable, startDate } = input;
   if (!Number.isInteger(percent) || percent <= 0 || percent > 100) {
     throw new Error("Le pourcentage doit être un entier entre 1 et 100.");
   }
@@ -68,16 +72,18 @@ export async function setSavingsRule(
     );
     if (existing) {
       await db.runAsync(
-        "UPDATE savings_rules SET percent = ?, start_date = ? WHERE id = ?",
+        "UPDATE savings_rules SET percent = ?, subtract_from_available = ?, start_date = ? WHERE id = ?",
         percent,
+        subtractFromAvailable ? 1 : 0,
         startDate,
         existing.id,
       );
       return;
     }
     await db.runAsync(
-      "INSERT INTO savings_rules (category_id, percent, created_at, start_date) VALUES (NULL, ?, ?, ?)",
+      "INSERT INTO savings_rules (category_id, percent, subtract_from_available, created_at, start_date) VALUES (NULL, ?, ?, ?, ?)",
       percent,
+      subtractFromAvailable ? 1 : 0,
       Date.now(),
       startDate,
     );
@@ -89,17 +95,19 @@ export async function setSavingsRule(
   );
   if (existing) {
     await db.runAsync(
-      "UPDATE savings_rules SET percent = ?, start_date = ? WHERE id = ?",
+      "UPDATE savings_rules SET percent = ?, subtract_from_available = ?, start_date = ? WHERE id = ?",
       percent,
+      subtractFromAvailable ? 1 : 0,
       startDate,
       existing.id,
     );
     return;
   }
   await db.runAsync(
-    "INSERT INTO savings_rules (category_id, percent, created_at, start_date) VALUES (?, ?, ?, ?)",
+    "INSERT INTO savings_rules (category_id, percent, subtract_from_available, created_at, start_date) VALUES (?, ?, ?, ?, ?)",
     categoryId,
     percent,
+    subtractFromAvailable ? 1 : 0,
     Date.now(),
     startDate,
   );

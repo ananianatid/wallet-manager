@@ -2,7 +2,9 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import { listAccounts } from "./accounts";
 import { listGoals } from "./goals";
 import { listRecurring, applyDueRecurring } from "./recurring";
+import { listSavingsRules } from "./savings";
 import { listTransactions } from "./transactions";
+import { savingsByRule } from "../utils/statistics";
 import type {
   Account,
   Frequency,
@@ -152,11 +154,12 @@ export async function calculateSafeToSpend(
 ): Promise<SafeToSpend> {
   // Due recurring rows become real transactions first, so the forecast cannot double-count them.
   await applyDueRecurring(db, now);
-  const [accountsRows, transactions, recurring, goals] = await Promise.all([
+  const [accountsRows, transactions, recurring, goals, savingsRules] = await Promise.all([
     listAccounts(db),
     listTransactions(db),
     listRecurring(db),
     listGoals(db),
+    listSavingsRules(db),
   ]);
   const accounts = new Map(accountsRows.map((account) => [account.id, account]));
   const nextIncomeDate = findNextIncome(transactions, recurring, accounts, now);
@@ -189,7 +192,31 @@ export async function calculateSafeToSpend(
   const plannedOutflows = events
     .filter((event) => event.impact < 0)
     .reduce((sum, event) => sum - event.impact, 0);
-  const amount = currentAvailable + plannedIncome - plannedOutflows;
+
+  const current = new Date(now);
+  const currentMonthStart = new Date(current.getFullYear(), current.getMonth(), 1);
+  const nextMonthStart = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+  const ruleStarts = savingsRules
+    .map((rule) => rule.startDate)
+    .filter((date): date is number => date != null);
+  const earliestStartMs =
+    ruleStarts.length > 0
+      ? Math.min(currentMonthStart.getTime(), ...ruleStarts)
+      : currentMonthStart.getTime();
+  const savingsWindow = transactions.filter(
+    (transaction) =>
+      transaction.transactionDate >= earliestStartMs &&
+      transaction.transactionDate < nextMonthStart.getTime(),
+  );
+  const savings = savingsByRule(
+    savingsWindow,
+    savingsRules,
+    currentMonthStart.getTime(),
+  )
+    .filter(({ rule }) => rule.subtractFromAvailable)
+    .reduce((sum, contribution) => sum + contribution.amount, 0);
+
+  const amount = currentAvailable + plannedIncome - plannedOutflows - savings;
   const largestGoal = goals
     .filter((goal) => goal.status === "active" && goal.reservedAmount > 0)
     .sort((a, b) => b.reservedAmount - a.reservedAmount)[0];
@@ -203,6 +230,7 @@ export async function calculateSafeToSpend(
     usesFallbackHorizon,
     plannedIncome,
     plannedOutflows,
+    savings,
     eventCount: events.length,
     recurringEventCount: futureRecurringEvents.length,
     futureTransactionCount: manualEvents.length,

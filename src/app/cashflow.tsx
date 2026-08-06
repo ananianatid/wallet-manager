@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronRight } from "lucide-react-native";
+import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronRight, PiggyBank } from "lucide-react-native";
 import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
@@ -84,6 +84,19 @@ export default function CashflowScreen() {
                   +{formatAmount(data.plannedIncome)}
                 </Text>
               </View>
+              {data.savings > 0 ? (
+                <View style={[styles.row, { borderBottomColor: theme.separator }]}>
+                  <View style={styles.rowLabel}>
+                    <View style={[styles.rowIcon, { backgroundColor: theme.surfaceElevated }]}>
+                      <PiggyBank size={16} color={theme.accent} />
+                    </View>
+                    <Text style={{ color: theme.label }}>Épargne</Text>
+                  </View>
+                  <Text style={{ color: theme.accent, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
+                    −{formatAmount(data.savings)}
+                  </Text>
+                </View>
+              ) : null}
               <View style={styles.horizon}>
                 <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                   Horizon du calcul
@@ -118,7 +131,10 @@ export default function CashflowScreen() {
             ) : null}
 
             <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18, paddingHorizontal: spacing.lg }}>
-              Les objectifs sont déjà retirés du solde disponible. Les budgets restent des plafonds et ne sont pas comptés comme des dépenses certaines.
+              Les objectifs sont déjà retirés du solde disponible.{" "}
+              {data.savings > 0
+                ? "La cible d'épargne est retirée du disponible estimé."
+                : "Les budgets restent des plafonds et ne sont pas comptés comme des dépenses certaines."}
             </Text>
           </>
         ) : null}

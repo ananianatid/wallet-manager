@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 10;
+export const DATABASE_VERSION = 11;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -86,7 +86,8 @@ CREATE TABLE savings_rules (
   category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
   percent     INTEGER NOT NULL CHECK (percent > 0 AND percent <= 100),
   created_at  INTEGER NOT NULL,
-  start_date  INTEGER
+  start_date  INTEGER,
+  subtract_from_available INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHERE category_id IS NOT NULL;
@@ -323,6 +324,25 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
       await db.execAsync(`
         ALTER TABLE savings_rules ADD COLUMN start_date INTEGER;
       `);
+    }
+    if (currentDbVersion <= 10) {
+      await db.execAsync(`
+        ALTER TABLE savings_rules
+          ADD COLUMN subtract_from_available INTEGER NOT NULL DEFAULT 0;
+      `);
+      const settingsTable = await db.getFirstAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
+      );
+      if (settingsTable) {
+        const legacySetting = await db.getFirstAsync<{ value: string }>(
+          "SELECT value FROM settings WHERE key = 'savings_subtract_from_available'",
+        );
+        if (legacySetting?.value === "1") {
+          await db.runAsync(
+            "UPDATE savings_rules SET subtract_from_available = 1",
+          );
+        }
+      }
     }
   }
 

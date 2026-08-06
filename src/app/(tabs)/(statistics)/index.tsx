@@ -1,5 +1,5 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
-import { useFocusEffect, Stack } from "expo-router";
+import { useFocusEffect, Stack, router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   Modal,
@@ -13,6 +13,7 @@ import { CategoryIcon } from "@/components/category-icons";
 import { LabeledDonutChart } from "@/components/labeled-donut-chart";
 import { ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
+import { listSavingsRules } from "@/db/savings";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listTransactions, listTransactionsByRange } from "@/db/transactions";
 import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
@@ -23,6 +24,7 @@ import {
   monthFromIndex,
   monthIndex,
   monthlySeries,
+  savingsByRule,
   totals,
   type MonthRef,
 } from "@/utils/statistics";
@@ -94,25 +96,41 @@ export default function StatisticsScreen() {
 
   const load = useCallback(async () => {
     const db = await getDatabase();
+    const rules = await listSavingsRules(db);
     if (granularity === "all") {
       const rows = await listTransactions(db, { order: "asc" });
       return {
         transactions: rows,
         periodStartMs: 0,
+        earliestStartMs: 0,
+        savingsRules: rules,
       };
     }
     const periodStartMs = new Date(start!.year, start!.month, 1).getTime();
     const endMs = new Date(end!.year, end!.month + 1, 1).getTime();
-    const rows = await listTransactionsByRange(db, periodStartMs, endMs);
+    const ruleStarts = rules
+      .map((rule) => rule.startDate)
+      .filter((date): date is number => date != null);
+    const earliestStartMs =
+      ruleStarts.length > 0
+        ? Math.min(periodStartMs, ...ruleStarts)
+        : periodStartMs;
+    const rows = await listTransactionsByRange(db, earliestStartMs, endMs);
     return {
       transactions: rows,
       periodStartMs,
+      earliestStartMs,
+      savingsRules: rules,
     };
   }, [granularity, start, end]);
 
   const resource = useAsyncResource(load);
   const reload = resource.reload;
   const transactions = resource.data?.transactions ?? null;
+  const savingsRules = useMemo(
+    () => resource.data?.savingsRules ?? [],
+    [resource.data?.savingsRules],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -153,6 +171,14 @@ export default function StatisticsScreen() {
     () => monthlySeries(periodRows, months),
     [periodRows, months],
   );
+  const savings = useMemo(
+    () => savingsByRule(rows, savingsRules, periodStartMs),
+    [rows, savingsRules, periodStartMs],
+  );
+  const savingsTotal = useMemo(
+    () => savings.reduce((sum, contribution) => sum + contribution.amount, 0),
+    [savings],
+  );
 
   const navigate = (delta: number) =>
     setCursor((c) => {
@@ -172,6 +198,14 @@ export default function StatisticsScreen() {
   const periodLabel = rangeLabel(granularity, cursor);
   const headerLabel =
     periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1);
+  const earliestStartMs = resource.data?.earliestStartMs ?? periodStartMs;
+  const savingsLabel =
+    earliestStartMs < periodStartMs
+      ? `depuis ${formatMonthLabel(
+          new Date(earliestStartMs).getFullYear(),
+          new Date(earliestStartMs).getMonth(),
+        )}`
+      : periodLabel;
   return (
     <>
       <Stack.Screen
@@ -453,6 +487,85 @@ export default function StatisticsScreen() {
               )}
             </View>
           ) : null}
+
+          <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              Épargne · {savingsLabel}
+            </Text>
+            {savings.length === 0 ? (
+              <View style={{ alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm }}>
+                <Text style={{ color: theme.secondaryLabel, textAlign: "center" }}>
+                  Aucune règle d&apos;épargne. Définissez un pourcentage par
+                  catégorie de revenus pour voir votre cible en temps réel.
+                </Text>
+                <Pressable
+                  onPress={() => router.push("/savings")}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    {
+                      backgroundColor: theme.accent,
+                      paddingHorizontal: spacing.xl,
+                      paddingVertical: spacing.sm + 2,
+                      borderRadius: radius.xl,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
+                    Configurer
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <View style={{ gap: spacing.sm }}>
+                  {savings.map(({ rule, amount }) => (
+                    <View key={rule.id} style={styles.summaryRow}>
+                      {rule.categoryIcon ? (
+                        <CategoryIcon name={rule.categoryIcon} size={17} color={theme.accent} />
+                      ) : (
+                        <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+                      )}
+                      <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
+                        {rule.categoryName ?? "Tous les revenus"}
+                      </Text>
+                      <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                        {rule.percent} %
+                      </Text>
+                      <Text style={[styles.legendAmount, { color: theme.label }]}>
+                        {formatAmount(amount)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: theme.separator,
+                    paddingTop: spacing.md,
+                  }}
+                >
+                  <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>
+                    À épargner
+                  </Text>
+                  <Text
+                    selectable
+                    style={{
+                      color: theme.accent,
+                      fontWeight: "800",
+                      fontSize: 17,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {formatAmount(savingsTotal)}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
         </ScrollView>
       )}
       <Modal

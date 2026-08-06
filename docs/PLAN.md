@@ -44,6 +44,19 @@ App **Expo SDK 57** (Expo Router, TypeScript), **Android**, usage personnel, **o
   - **Revenus** : Salaire, Virement reçu, Cadeau, Remboursement, Autre.
   - **Dépenses** : Nourriture, Transport, Logement, Factures, Santé, Éducation, Loisirs, Shopping, Autre.
 
+### Apparence
+- Le mode clair/sombre reste indépendant de la couleur d’accent.
+- L’utilisateur peut choisir **Bleu** (`#339CFF`) ou **Vert** (palette historique) dans l’écran Apparence.
+- Le bleu est la valeur par défaut ; le choix est enregistré localement sous `accent_theme`.
+- La couleur d’accent concerne les actions, sélections, liens et éléments de navigation. Les couleurs sémantiques des revenus, dépenses et alertes restent fixes.
+- La palette multicolore des graphiques reste stable pour préserver la comparaison entre catégories.
+
+### Épargne
+- Chaque règle d’épargne possède son propre choix **Retirer du disponible estimé**.
+- Une règle désactivée reste informative et n’influence pas le disponible estimé.
+- Les anciennes installations dont l’ancien réglage global était activé transmettent ce choix à leurs règles lors de la migration SQLite.
+- L’écran de suivi présente les 12 derniers mois, le total estimé, le total retiré du disponible et le détail par règle.
+
 ### Sécurité (avant distribution publique)
 - **Verrouillage** : biométrie (empreinte) + **PIN 6 chiffres de secours**, activable dans Réglages → Sécurité.
   - Déclenchement : lancement de l'app, retour au premier plan après un **délai configurable** (30 s / 1 min / 5 min / 15 min), ou bouton « Verrouiller maintenant ».

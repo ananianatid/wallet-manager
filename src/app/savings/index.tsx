@@ -1,11 +1,12 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Stack, useFocusEffect } from "expo-router";
-import { Pencil, Trash } from "lucide-react-native";
+import { router, Stack, useFocusEffect } from "expo-router";
+import { ChevronRight, Pencil, PiggyBank, Trash } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -36,6 +37,8 @@ interface EditRowProps {
   percent: string;
   onPercentChange: (value: string) => void;
   startDate: number | null;
+  subtractFromAvailable: boolean;
+  onSubtractFromAvailableChange: (value: boolean) => void;
   onStartDateChange: (value: number | null) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -50,6 +53,8 @@ function EditRow({
   onPercentChange,
   startDate,
   onStartDateChange,
+  subtractFromAvailable,
+  onSubtractFromAvailableChange,
   onCancel,
   onSave,
   theme,
@@ -129,6 +134,24 @@ function EditRow({
         ) : null}
       </View>
 
+      <View style={styles.ruleToggle}>
+        <View style={styles.switchBody}>
+          <Text style={{ color: theme.label, fontWeight: "600" }}>
+            Retirer du disponible estimé
+          </Text>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 17 }}>
+            Désactivé : règle informative uniquement.
+          </Text>
+        </View>
+        <Switch
+          value={subtractFromAvailable}
+          onValueChange={onSubtractFromAvailableChange}
+          trackColor={{ true: theme.accent }}
+          thumbColor="#FFFFFF"
+          accessibilityLabel="Retirer cette règle du disponible estimé"
+        />
+      </View>
+
       <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
         <Pressable
           onPress={onCancel}
@@ -148,7 +171,7 @@ function EditRow({
             pressed && { opacity: 0.7 },
           ]}
         >
-          <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Enregistrer</Text>
+          <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Enregistrer</Text>
         </Pressable>
       </View>
     </View>
@@ -161,6 +184,7 @@ export default function SavingsScreen() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [percent, setPercent] = useState("");
   const [startDate, setStartDate] = useState<number | null>(null);
+  const [subtractFromAvailable, setSubtractFromAvailable] = useState(false);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -189,6 +213,7 @@ export default function SavingsScreen() {
     setCategoryId(null);
     setPercent("");
     setStartDate(firstIncomeDate);
+    setSubtractFromAvailable(false);
   };
 
   const startEdit = (rule: SavingsRule) => {
@@ -196,6 +221,7 @@ export default function SavingsScreen() {
     setCategoryId(rule.categoryId);
     setPercent(String(rule.percent));
     setStartDate(rule.startDate);
+    setSubtractFromAvailable(rule.subtractFromAvailable);
   };
 
   const cancelEdit = () => {
@@ -203,6 +229,7 @@ export default function SavingsScreen() {
     setCategoryId(null);
     setPercent("");
     setStartDate(null);
+    setSubtractFromAvailable(false);
   };
 
   const save = async () => {
@@ -213,7 +240,12 @@ export default function SavingsScreen() {
     }
     const db = await getDatabase();
     try {
-      await setSavingsRule(db, { categoryId, percent: parsed, startDate });
+      await setSavingsRule(db, {
+        categoryId,
+        percent: parsed,
+        startDate,
+        subtractFromAvailable,
+      });
       cancelEdit();
       await resource.reload();
     } catch (e) {
@@ -236,6 +268,21 @@ export default function SavingsScreen() {
     ]);
   };
 
+  const toggleRuleSubtract = async (rule: SavingsRule, next: boolean) => {
+    try {
+      const db = await getDatabase();
+      await setSavingsRule(db, {
+        categoryId: rule.categoryId,
+        percent: rule.percent,
+        startDate: rule.startDate,
+        subtractFromAvailable: next,
+      });
+      await resource.reload();
+    } catch {
+      Alert.alert("Impossible d'enregistrer", "Le réglage de cette règle n'a pas pu être mis à jour.");
+    }
+  };
+
   return (
     <>
       <Stack.Screen options={{ title: "Épargne" }} />
@@ -256,9 +303,33 @@ export default function SavingsScreen() {
       >
         <Text style={{ color: theme.secondaryLabel, lineHeight: 20 }}>
           Projetez combien vous économisez : un pourcentage de vos revenus par
-          catégorie. La cible est calculée en temps réel sur la période des
-          statistiques.
+          catégorie. La cible est calculée en temps réel depuis la date de
+          départ de chaque règle.
         </Text>
+
+        <Pressable
+          onPress={() => router.push("/savings/history")}
+          accessibilityRole="button"
+          accessibilityLabel="Voir le suivi mensuel de l’épargne"
+          style={({ pressed }) => [
+            styles.historyButton,
+            { backgroundColor: theme.surface },
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <View style={[styles.switchIcon, { backgroundColor: theme.surfaceElevated }]}>
+            <PiggyBank size={18} color={theme.accent} />
+          </View>
+          <View style={styles.switchBody}>
+            <Text style={{ color: theme.label, fontWeight: "600" }}>
+              Suivi mensuel de l’épargne
+            </Text>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 17 }}>
+              Consultez les prélèvements estimés mois par mois.
+            </Text>
+          </View>
+          <ChevronRight size={20} color={theme.secondaryLabel} />
+        </Pressable>
 
         {rules.length === 0 && editingKey === null ? (
           <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.xl }}>
@@ -295,6 +366,8 @@ export default function SavingsScreen() {
                     onPercentChange={setPercent}
                     startDate={startDate}
                     onStartDateChange={setStartDate}
+                    subtractFromAvailable={subtractFromAvailable}
+                    onSubtractFromAvailableChange={setSubtractFromAvailable}
                     onCancel={cancelEdit}
                     onSave={save}
                     theme={theme}
@@ -314,10 +387,20 @@ export default function SavingsScreen() {
                         À épargner sur chaque revenu
                         {rule.startDate != null ? ` depuis le ${formatDate(rule.startDate)}` : ""}
                       </Text>
+                      <Text style={{ color: rule.subtractFromAvailable ? theme.accent : theme.secondaryLabel, fontSize: 12, fontWeight: "600" }}>
+                        {rule.subtractFromAvailable ? "Retirée du disponible" : "Informatif uniquement"}
+                      </Text>
                     </View>
-                    <Text style={[styles.amount, { color: theme.label }]}>
+                    <Text selectable style={[styles.amount, { color: theme.label }]}>
                       {rule.percent} %
                     </Text>
+                    <Switch
+                      value={rule.subtractFromAvailable}
+                      onValueChange={(next) => void toggleRuleSubtract(rule, next)}
+                      trackColor={{ true: theme.accent }}
+                      thumbColor="#FFFFFF"
+                      accessibilityLabel={`Retirer la règle ${rule.categoryName ?? "globale"} du disponible estimé`}
+                    />
                     <IconButton
                       label={`Modifier la règle ${rule.categoryName ?? "globale"}`}
                       onPress={() => startEdit(rule)}
@@ -351,6 +434,8 @@ export default function SavingsScreen() {
                 onPercentChange={setPercent}
                 startDate={startDate}
                 onStartDateChange={setStartDate}
+                subtractFromAvailable={subtractFromAvailable}
+                onSubtractFromAvailableChange={setSubtractFromAvailable}
                 onCancel={cancelEdit}
                 onSave={save}
                 theme={theme}
@@ -368,7 +453,7 @@ export default function SavingsScreen() {
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
+            <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
               + Ajouter une règle
             </Text>
           </Pressable>
@@ -386,6 +471,31 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     gap: spacing.lg,
+  },
+  historyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  ruleToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  switchIcon: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+  },
+  switchBody: {
+    flex: 1,
+    gap: 2,
   },
   body: {
     flex: 1,

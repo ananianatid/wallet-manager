@@ -24,9 +24,20 @@ export interface ThemeColors {
   warning: string;
   income: string;
   expense: string;
+  accentSurface: string;
+  accentSurfaceLabel: string;
+  accentSurfaceText: string;
+  dangerSurface: string;
+  dangerSurfaceLabel: string;
+  dangerSurfaceText: string;
+  accentSurfaceIncome: string;
+  accentSurfaceExpense: string;
+  dangerSurfaceIncome: string;
+  dangerSurfaceExpense: string;
 }
 
 export type ThemeMode = "system" | "light" | "dark";
+export type AccentTheme = "blue" | "green";
 
 export const palettes: Record<"dark" | "light", ThemeColors> = {
   dark: {
@@ -43,6 +54,16 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
     warning: "#F59E0B",
     income: "#4ADE80",
     expense: "#F87171",
+    accentSurface: "#0F3D2E",
+    accentSurfaceLabel: "#B8F0D8",
+    accentSurfaceText: "#FFFFFF",
+    dangerSurface: "#5A232B",
+    dangerSurfaceLabel: "#FFD0D6",
+    dangerSurfaceText: "#FFFFFF",
+    accentSurfaceIncome: "#86EFAC",
+    accentSurfaceExpense: "#FFB0B0",
+    dangerSurfaceIncome: "#86EFAC",
+    dangerSurfaceExpense: "#FFB0B0",
   },
   light: {
     background: "#FFFFFF",
@@ -58,8 +79,113 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
     warning: "#B45309",
     income: "#16A34A",
     expense: "#DC2626",
+    accentSurface: "#0F3D2E",
+    accentSurfaceLabel: "#B8F0D8",
+    accentSurfaceText: "#FFFFFF",
+    dangerSurface: "#5A232B",
+    dangerSurfaceLabel: "#FFD0D6",
+    dangerSurfaceText: "#FFFFFF",
+    accentSurfaceIncome: "#86EFAC",
+    accentSurfaceExpense: "#FFB0B0",
+    dangerSurfaceIncome: "#86EFAC",
+    dangerSurfaceExpense: "#FFB0B0",
   },
 };
+
+export const ACCENT_THEME_VALUES: AccentTheme[] = ["blue", "green"];
+
+const ACCENT_PALETTES: Record<
+  AccentTheme,
+  Record<
+    "dark" | "light",
+    Pick<
+      ThemeColors,
+      | "accent"
+      | "onAccent"
+      | "accentSurface"
+      | "accentSurfaceLabel"
+      | "accentSurfaceText"
+      | "dangerSurface"
+      | "dangerSurfaceLabel"
+      | "dangerSurfaceText"
+      | "accentSurfaceIncome"
+      | "accentSurfaceExpense"
+      | "dangerSurfaceIncome"
+      | "dangerSurfaceExpense"
+    >
+  >
+> = {
+  blue: {
+    dark: {
+      accent: "#339CFF",
+      onAccent: "#07111F",
+      accentSurface: "#123A60",
+      accentSurfaceLabel: "#B7DBFF",
+      accentSurfaceText: "#FFFFFF",
+      dangerSurface: "#5A232B",
+      dangerSurfaceLabel: "#FFD0D6",
+      dangerSurfaceText: "#FFFFFF",
+      accentSurfaceIncome: "#86EFAC",
+      accentSurfaceExpense: "#FFB0B0",
+      dangerSurfaceIncome: "#86EFAC",
+      dangerSurfaceExpense: "#FFB0B0",
+    },
+    light: {
+      accent: "#339CFF",
+      onAccent: "#07111F",
+      accentSurface: "#123A60",
+      accentSurfaceLabel: "#B7DBFF",
+      accentSurfaceText: "#FFFFFF",
+      dangerSurface: "#5A232B",
+      dangerSurfaceLabel: "#FFD0D6",
+      dangerSurfaceText: "#FFFFFF",
+      accentSurfaceIncome: "#86EFAC",
+      accentSurfaceExpense: "#FFB0B0",
+      dangerSurfaceIncome: "#86EFAC",
+      dangerSurfaceExpense: "#FFB0B0",
+    },
+  },
+  green: {
+    dark: {
+      accent: "#34D399",
+      onAccent: "#0A0A0B",
+      accentSurface: "#0F3D2E",
+      accentSurfaceLabel: "#B8F0D8",
+      accentSurfaceText: "#FFFFFF",
+      dangerSurface: "#5A232B",
+      dangerSurfaceLabel: "#FFD0D6",
+      dangerSurfaceText: "#FFFFFF",
+      accentSurfaceIncome: "#86EFAC",
+      accentSurfaceExpense: "#FFB0B0",
+      dangerSurfaceIncome: "#86EFAC",
+      dangerSurfaceExpense: "#FFB0B0",
+    },
+    light: {
+      accent: "#059669",
+      onAccent: "#FFFFFF",
+      accentSurface: "#0F3D2E",
+      accentSurfaceLabel: "#B8F0D8",
+      accentSurfaceText: "#FFFFFF",
+      dangerSurface: "#5A232B",
+      dangerSurfaceLabel: "#FFD0D6",
+      dangerSurfaceText: "#FFFFFF",
+      accentSurfaceIncome: "#86EFAC",
+      accentSurfaceExpense: "#FFB0B0",
+      dangerSurfaceIncome: "#86EFAC",
+      dangerSurfaceExpense: "#FFB0B0",
+    },
+  },
+};
+
+export function getThemePalette(
+  scheme: "dark" | "light",
+  accentTheme: AccentTheme = "blue",
+): ThemeColors {
+  return {
+    ...palettes[scheme],
+    ...ACCENT_PALETTES[accentTheme][scheme],
+  };
+}
 
 export function withAlpha(color: string, alpha: string): string {
   return `${color}${alpha}`;
@@ -82,7 +208,9 @@ interface ThemeContextValue {
   theme: ThemeColors;
   scheme: "light" | "dark";
   mode: ThemeMode;
+  accentTheme: AccentTheme;
   setMode: (mode: ThemeMode) => void;
+  setAccentTheme: (accentTheme: AccentTheme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -92,19 +220,25 @@ const MODE_VALUES: ThemeMode[] = ["system", "light", "dark"];
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>("system");
+  const [accentTheme, setAccentThemeState] = useState<AccentTheme>("blue");
 
   useEffect(() => {
     let cancelled = false;
-    getDatabase()
-      .then((db) => getSetting(db, "theme_mode"))
-      .then((value) => {
-        if (cancelled) {
-          return;
-        }
-        if (MODE_VALUES.includes(value as ThemeMode)) {
-          setModeState(value as ThemeMode);
-        }
-      })
+    getDatabase().then(async (db) => {
+      const [modeValue, accentThemeValue] = await Promise.all([
+        getSetting(db, "theme_mode"),
+        getSetting(db, "accent_theme"),
+      ]);
+      if (cancelled) {
+        return;
+      }
+      if (MODE_VALUES.includes(modeValue as ThemeMode)) {
+        setModeState(modeValue as ThemeMode);
+      }
+      if (ACCENT_THEME_VALUES.includes(accentThemeValue as AccentTheme)) {
+        setAccentThemeState(accentThemeValue as AccentTheme);
+      }
+    })
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -118,12 +252,23 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       .catch(() => {});
   };
 
+  const setAccentTheme = (next: AccentTheme) => {
+    setAccentThemeState(next);
+    getDatabase()
+      .then((db) => setSetting(db, "accent_theme", next))
+      .catch(() => {});
+  };
+
   const scheme: "light" | "dark" =
     mode === "system" ? (systemScheme === "dark" ? "dark" : "light") : mode;
+  const theme = useMemo(
+    () => getThemePalette(scheme, accentTheme),
+    [accentTheme, scheme],
+  );
 
   const value = useMemo(
-    () => ({ theme: palettes[scheme], scheme, mode, setMode }),
-    [scheme, mode],
+    () => ({ theme, scheme, mode, accentTheme, setMode, setAccentTheme }),
+    [accentTheme, mode, scheme, theme],
   );
 
   return (
@@ -137,7 +282,7 @@ export function useTheme(): ThemeColors {
   if (ctx) {
     return ctx.theme;
   }
-  return scheme === "dark" ? palettes.dark : palettes.light;
+  return getThemePalette(scheme === "dark" ? "dark" : "light");
 }
 
 export function useThemeControl(): ThemeContextValue {

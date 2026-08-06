@@ -119,6 +119,14 @@ export interface SavingsContribution {
   amount: number;
 }
 
+export interface MonthlySavingsBreakdown {
+  year: number;
+  month: number;
+  contributions: SavingsContribution[];
+  total: number;
+  subtractableTotal: number;
+}
+
 export function savingsByRule(
   transactions: Transaction[],
   rules: SavingsRule[],
@@ -177,4 +185,30 @@ export function savingsByRule(
       rule,
       amount: contributions.get(rule.id) ?? 0,
     }));
+}
+
+export function monthlySavingsBreakdown(
+  transactions: Transaction[],
+  rules: SavingsRule[],
+  months: MonthRef[],
+): MonthlySavingsBreakdown[] {
+  return months.map(({ year, month }) => {
+    const startMs = new Date(year, month, 1).getTime();
+    const endMs = new Date(year, month + 1, 1).getTime();
+    const monthTransactions = transactions.filter(
+      (transaction) =>
+        transaction.transactionDate >= startMs &&
+        transaction.transactionDate < endMs,
+    );
+    const contributions = savingsByRule(monthTransactions, rules, startMs);
+    return {
+      year,
+      month,
+      contributions,
+      total: contributions.reduce((sum, contribution) => sum + contribution.amount, 0),
+      subtractableTotal: contributions
+        .filter(({ rule }) => rule.subtractFromAvailable)
+        .reduce((sum, contribution) => sum + contribution.amount, 0),
+    };
+  });
 }

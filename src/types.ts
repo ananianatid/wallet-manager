@@ -148,6 +148,7 @@ export interface SavingsRule {
   categoryName: string | null;
   categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   percent: number;
+  subtractFromAvailable: boolean;
   createdAt: number;
   startDate: number | null;
 }
@@ -155,6 +156,7 @@ export interface SavingsRule {
 export interface SavingsRuleInput {
   categoryId: number | null;
   percent: number;
+  subtractFromAvailable: boolean;
   startDate: number | null;
 }
 
@@ -218,5 +220,6 @@ export interface SafeToSpend {
   eventCount: number;
   recurringEventCount: number;
   futureTransactionCount: number;
+  savings: number;
   suggestion: SafeToSpendSuggestion | null;
 }

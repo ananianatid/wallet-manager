@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { ArrowUpRight, Calendar, Check, RotateCcw, Target, Trash2, Undo2 } from "lucide-react-native";
+import { ArrowUpRight, Calendar, Check, Pencil, RotateCcw, Target, Trash2, Undo2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -118,9 +118,23 @@ export default function GoalDetailScreen() {
           title: goal?.name ?? "Objectif",
           headerRight: () =>
             goal ? (
-              <Pressable onPress={remove} hitSlop={8} accessibilityLabel="Supprimer l'objectif">
-                <Trash2 size={19} strokeWidth={2.1} color={theme.expense} />
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/goals/[id]/edit",
+                      params: { id: String(goal.id) },
+                    })
+                  }
+                  hitSlop={8}
+                  accessibilityLabel="Modifier l'objectif"
+                >
+                  <Pencil size={19} strokeWidth={2.1} color={theme.accent} />
+                </Pressable>
+                <Pressable onPress={remove} hitSlop={8} accessibilityLabel="Supprimer l'objectif">
+                  <Trash2 size={19} strokeWidth={2.1} color={theme.expense} />
+                </Pressable>
+              </View>
             ) : null,
         }}
       />

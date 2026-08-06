@@ -24,7 +24,7 @@ import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
-import { formatAmount } from "@/utils/format";
+import { formatAmount, formatMonthLabel } from "@/utils/format";
 import { savingsByRule, totals } from "@/utils/statistics";
 
 function SectionCard({
@@ -156,9 +156,34 @@ export default function DashboardScreen() {
       })),
     [budgets, monthTotals.expense, spentByCategory],
   );
+  const earliestSavingsStartMs = useMemo(() => {
+    const ruleStarts = savingsRules
+      .map((rule) => rule.startDate)
+      .filter((date): date is number => date != null);
+    return ruleStarts.length > 0
+      ? Math.min(currentMonth.startMs, ...ruleStarts)
+      : currentMonth.startMs;
+  }, [savingsRules, currentMonth.startMs]);
+  const savingsTransactions = useMemo(
+    () =>
+      transactions.filter(
+        (transaction) => transaction.transactionDate >= earliestSavingsStartMs,
+      ),
+    [transactions, earliestSavingsStartMs],
+  );
   const savings = useMemo(
-    () => savingsByRule(monthTransactions, savingsRules, currentMonth.startMs),
-    [monthTransactions, savingsRules, currentMonth.startMs],
+    () => savingsByRule(savingsTransactions, savingsRules, currentMonth.startMs),
+    [savingsTransactions, savingsRules, currentMonth.startMs],
+  );
+  const savingsTitle = useMemo(
+    () =>
+      earliestSavingsStartMs < currentMonth.startMs
+        ? `Épargne · depuis ${formatMonthLabel(
+            new Date(earliestSavingsStartMs).getFullYear(),
+            new Date(earliestSavingsStartMs).getMonth(),
+          )}`
+        : `Épargne · ${currentMonth.label}`,
+    [earliestSavingsStartMs, currentMonth],
   );
   const savingsTotal = useMemo(
     () => savings.reduce((sum, contribution) => sum + contribution.amount, 0),
@@ -260,7 +285,7 @@ export default function DashboardScreen() {
               ) : null}
 
               <SectionCard
-                title={`Épargne · ${currentMonth.label}`}
+                title={savingsTitle}
                 action={{
                   label: "Gérer",
                   onPress: () => router.push("/savings"),

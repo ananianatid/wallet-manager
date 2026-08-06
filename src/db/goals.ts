@@ -143,6 +143,24 @@ export async function createGoal(
   return Number(result.lastInsertRowId);
 }
 
+export async function updateGoal(
+  db: SQLiteDatabase,
+  id: number,
+  input: GoalInput,
+): Promise<void> {
+  const valid = validateGoalInput(input);
+  const result = await db.runAsync(
+    "UPDATE goals SET name = ?, target_amount = ?, target_date = ? WHERE id = ?",
+    valid.name,
+    valid.targetAmount,
+    valid.targetDate,
+    id,
+  );
+  if (result.changes === 0) {
+    throw new Error("Objectif introuvable.");
+  }
+}
+
 export async function closeGoal(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync("UPDATE goals SET status = 'closed' WHERE id = ?", id);
 }
