@@ -1,7 +1,7 @@
 import { Stack } from "expo-router/stack";
 import { useTheme } from "@/theme";
 
-export default function TransactionsLayout() {
+export default function DashboardLayout() {
   const theme = useTheme();
   return (
     <Stack
@@ -13,8 +13,7 @@ export default function TransactionsLayout() {
         contentStyle: { backgroundColor: theme.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Transactions" }} />
-      <Stack.Screen name="search" options={{ title: "Recherche et filtres" }} />
+      <Stack.Screen name="index" options={{ title: "Accueil" }} />
     </Stack>
   );
 }

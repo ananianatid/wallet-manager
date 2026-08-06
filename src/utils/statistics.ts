@@ -33,13 +33,14 @@ export interface CategorySlice {
   pct: number;
 }
 
-export function expenseByCategory(
+export function categoryBreakdown(
   transactions: Transaction[],
+  type: "income" | "expense",
 ): CategorySlice[] {
   const byName = new Map<string, { categoryId: number | null; categoryIcon: CategoryIconName | null; total: number; count: number }>();
   let grandTotal = 0;
   for (const t of transactions) {
-    if (t.type !== "expense") {
+    if (t.type !== type) {
       continue;
     }
     const name = t.categoryName ?? "Sans catégorie";

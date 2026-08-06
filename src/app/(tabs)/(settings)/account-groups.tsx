@@ -465,11 +465,6 @@ export default function AccountGroupsScreen() {
               <EmptyState
                 title="Aucun groupe"
                 message="Créez un groupe pour organiser vos comptes."
-                actionLabel="Créer un groupe"
-                onAction={() => {
-                  setAdding(true);
-                  setNewName("");
-                }}
               />
             ) : null}
           </View>

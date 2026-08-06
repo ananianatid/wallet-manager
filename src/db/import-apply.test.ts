@@ -10,8 +10,8 @@ interface Call {
 function plan(overrides: Partial<ImportPlan> = {}): ImportPlan {
   return {
     accounts: [
-      { name: "Banque A", groupName: null },
-      { name: "Banque B", groupName: null },
+      { name: "Banque A", groupName: null, deleted: false },
+      { name: "Banque B", groupName: null, deleted: false },
     ],
     categories: [
       { type: "account", name: IMPORT_ACCOUNT_CATEGORY },

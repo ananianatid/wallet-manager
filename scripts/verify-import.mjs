@@ -10,7 +10,7 @@ if (!path) {
 const db = new DatabaseSync(path);
 
 const accounts = db
-  .prepare("SELECT uid, NIC_NAME AS name, groupUid FROM ASSETS")
+  .prepare("SELECT uid, NIC_NAME AS name, groupUid, ZDATA AS zdata FROM ASSETS")
   .all();
 const groups = db
   .prepare("SELECT uid, ACC_GROUP_NAME AS name FROM ASSETGROUP")
@@ -80,10 +80,10 @@ expect(
   1,
 );
 expect("catégorie de comptes", accountCategories[0]?.name ?? "", "Espèces");
-expect("comptes", plan.stats.accounts, 17);
+expect("comptes", plan.stats.accounts, 18);
 expect("revenus", plan.stats.income, 127);
-expect("dépenses", plan.stats.expense, 719);
-expect("transferts", plan.stats.transfer, 237);
-expect("frais fusionnés", plan.stats.feesMerged, 40);
+expect("dépenses", plan.stats.expense, 725);
+expect("transferts", plan.stats.transfer, 238);
+expect("frais fusionnés", plan.stats.feesMerged, 41);
 expect("frais orphelins", plan.stats.feeOrphans, 3);
-expect("total planifié", total, 1083);
+expect("total planifié", total, 1090);

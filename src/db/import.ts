@@ -22,7 +22,8 @@ async function dumpMoneyManager(
     uid: string;
     name: string | null;
     groupUid: string | null;
-  }>("SELECT uid, NIC_NAME AS name, groupUid FROM ASSETS");
+    zdata: number | null;
+  }>("SELECT uid, NIC_NAME AS name, groupUid, ZDATA AS zdata FROM ASSETS");
   const groups = await db.getAllAsync<{ uid: string; name: string | null }>(
     "SELECT uid, ACC_GROUP_NAME AS name FROM ASSETGROUP",
   );

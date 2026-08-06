@@ -1,29 +1,28 @@
-import { CalendarDays } from "lucide-react-native";
-import { router, useFocusEffect, Stack } from "expo-router";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
+import { useFocusEffect, Stack } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { PeriodSheet } from "@/components/period-sheet";
-import { PieChart } from "@/components/pie-chart";
 import { CategoryIcon } from "@/components/category-icons";
-import { IconButton, ScreenState } from "@/components/ui";
-import { listBudgets } from "@/db/budgets";
+import { LabeledDonutChart } from "@/components/labeled-donut-chart";
+import { ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { listSavingsRules } from "@/db/savings";
-import { listTransactionsByRange, listTransactionYears } from "@/db/transactions";
-import { chartColors, radius, spacing, useTheme } from "@/theme";
+import { listTransactions, listTransactionsByRange } from "@/db/transactions";
+import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
 import {
+  categoryBreakdown,
   enumerateMonths,
-  expenseByCategory,
+  monthFromIndex,
+  monthIndex,
   monthlySeries,
-  savingsByRule,
   totals,
   type MonthRef,
 } from "@/utils/statistics";
@@ -32,56 +31,88 @@ const BAR_HEIGHT = 130;
 const BAR_WIDTH = 9;
 const BAR_GAP = 3;
 
+type Granularity = "month" | "quarter" | "year" | "all";
+
+const GRANULARITY_OPTIONS = [
+  { value: "month", label: "Mois" },
+  { value: "quarter", label: "Trimestre" },
+  { value: "year", label: "Année" },
+  { value: "all", label: "Tout" },
+] as const;
+
+const TYPE_OPTIONS = [
+  { value: "income", label: "Revenus" },
+  { value: "expense", label: "Dépenses" },
+] as const;
+
+function rangeLabel(granularity: Granularity, cursor: MonthRef): string {
+  if (granularity === "month") {
+    return formatMonthLabel(cursor.year, cursor.month);
+  }
+  if (granularity === "quarter") {
+    return `T${Math.floor(cursor.month / 3) + 1} ${cursor.year}`;
+  }
+  if (granularity === "year") {
+    return String(cursor.year);
+  }
+  return "Toutes les périodes";
+}
+
 export default function StatisticsScreen() {
   const theme = useTheme();
   const now = new Date();
-  const [start, setStart] = useState<MonthRef>({
+  const [granularity, setGranularity] = useState<Granularity>("month");
+  const [cursor, setCursor] = useState<MonthRef>({
     year: now.getFullYear(),
     month: now.getMonth(),
   });
-  const [end, setEnd] = useState<MonthRef>({
-    year: now.getFullYear(),
-    month: now.getMonth(),
-  });
-  const [periodOpen, setPeriodOpen] = useState(false);
+  const [granularityOpen, setGranularityOpen] = useState(false);
+  const [type, setType] = useState<"income" | "expense">("expense");
+
+  const range = useMemo<{ start: MonthRef | null; end: MonthRef | null }>(
+    () => {
+      if (granularity === "all") {
+        return { start: null, end: null };
+      }
+      if (granularity === "month") {
+        return { start: cursor, end: cursor };
+      }
+      if (granularity === "year") {
+        return {
+          start: { year: cursor.year, month: 0 },
+          end: { year: cursor.year, month: 11 },
+        };
+      }
+      const qStart = Math.floor(monthIndex(cursor) / 3) * 3;
+      return { start: monthFromIndex(qStart), end: monthFromIndex(qStart + 2) };
+    },
+    [granularity, cursor],
+  );
+
+  const start = range.start;
+  const end = range.end;
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const periodStartMs = new Date(start.year, start.month, 1).getTime();
-    const endMs = new Date(end.year, end.month + 1, 1).getTime();
-    const [b, s, ys] = await Promise.all([
-      listBudgets(db),
-      listSavingsRules(db),
-      listTransactionYears(db),
-    ]);
-    const ruleStarts = s
-      .map((rule) => rule.startDate)
-      .filter((d): d is number => d != null);
-    const earliestStartMs =
-      ruleStarts.length > 0
-        ? Math.min(periodStartMs, ...ruleStarts)
-        : periodStartMs;
-    const rows = await listTransactionsByRange(db, earliestStartMs, endMs);
-    const yearSet = new Set<number>([new Date().getFullYear(), ...ys]);
+    if (granularity === "all") {
+      const rows = await listTransactions(db, { order: "asc" });
+      return {
+        transactions: rows,
+        periodStartMs: 0,
+      };
+    }
+    const periodStartMs = new Date(start!.year, start!.month, 1).getTime();
+    const endMs = new Date(end!.year, end!.month + 1, 1).getTime();
+    const rows = await listTransactionsByRange(db, periodStartMs, endMs);
     return {
       transactions: rows,
-      budgets: b,
-      savingsRules: s,
-      years: [...yearSet].sort((a, b) => b - a),
       periodStartMs,
-      earliestStartMs,
     };
-  }, [start, end]);
+  }, [granularity, start, end]);
 
   const resource = useAsyncResource(load);
   const reload = resource.reload;
   const transactions = resource.data?.transactions ?? null;
-  const budgets = useMemo(() => resource.data?.budgets ?? [], [resource.data?.budgets]);
-  const savingsRules = useMemo(
-    () => resource.data?.savingsRules ?? [],
-    [resource.data?.savingsRules],
-  );
-  const years = resource.data?.years ?? [];
 
   useFocusEffect(
     useCallback(() => {
@@ -89,97 +120,117 @@ export default function StatisticsScreen() {
     }, [reload]),
   );
 
-  const months = useMemo(
-    () =>
-      enumerateMonths(start, end).sort(
-        (a, b) =>
-          a.year * 12 + a.month - (b.year * 12 + b.month),
-      ),
-    [start, end],
-  );
-
   const rows = useMemo(() => transactions ?? [], [transactions]);
-  const periodStartMs = useMemo(
-    () => new Date(start.year, start.month, 1).getTime(),
-    [start],
-  );
+  const periodStartMs = resource.data?.periodStartMs ?? 0;
   const periodRows = useMemo(
     () => rows.filter((t) => t.transactionDate >= periodStartMs),
     [rows, periodStartMs],
   );
   const t = useMemo(() => totals(periodRows), [periodRows]);
-  const slices = useMemo(() => expenseByCategory(periodRows), [periodRows]);
+  const slices = useMemo(
+    () => categoryBreakdown(periodRows, type),
+    [periodRows, type],
+  );
+  const months = useMemo(() => {
+    if (periodRows.length === 0) {
+      return [];
+    }
+    let minIdx = Infinity;
+    let maxIdx = -Infinity;
+    for (const r of periodRows) {
+      const d = new Date(r.transactionDate);
+      const idx = monthIndex({ year: d.getFullYear(), month: d.getMonth() });
+      if (idx < minIdx) {
+        minIdx = idx;
+      }
+      if (idx > maxIdx) {
+        maxIdx = idx;
+      }
+    }
+    return enumerateMonths(monthFromIndex(minIdx), monthFromIndex(maxIdx));
+  }, [periodRows]);
   const series = useMemo(
     () => monthlySeries(periodRows, months),
     [periodRows, months],
   );
 
-  const spentByCategory = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const tx of periodRows) {
-      if (tx.type === "expense" && tx.categoryId != null) {
-        map.set(tx.categoryId, (map.get(tx.categoryId) ?? 0) + tx.amount);
+  const navigate = (delta: number) =>
+    setCursor((c) => {
+      if (granularity === "month") {
+        return monthFromIndex(monthIndex(c) + delta);
       }
-    }
-    return map;
-  }, [periodRows]);
-
-  const budgetRows = useMemo(
-    () =>
-      budgets.map((budget) => {
-        const spent =
-          budget.categoryId == null
-            ? t.expense
-            : (spentByCategory.get(budget.categoryId) ?? 0);
-        return { budget, spent };
-      }),
-    [budgets, spentByCategory, t.expense],
-  );
-
-  const savings = useMemo(
-    () => savingsByRule(rows, savingsRules, periodStartMs),
-    [rows, savingsRules, periodStartMs],
-  );
-  const savingsTotal = useMemo(
-    () => savings.reduce((sum, s) => sum + s.amount, 0),
-    [savings],
-  );
-
-  const changePeriod = (s: MonthRef, e: MonthRef) => {
-    setStart(s);
-    setEnd(e);
-  };
+      if (granularity === "quarter") {
+        return monthFromIndex(monthIndex(c) + 3 * delta);
+      }
+      return { year: c.year + delta, month: c.month };
+    });
+  const canNavigate = granularity !== "all";
 
   const maxBar = Math.max(t.income, t.expense + t.fees, 1);
 
   const hasActivity = periodRows.length > 0;
-  const periodLabel =
-    months.length === 1
-      ? formatMonthLabel(start.year, start.month)
-      : `du ${formatMonthLabel(start.year, start.month)} au ${formatMonthLabel(
-          end.year,
-          end.month,
-        )}`;
-  const earliestStartMs = resource.data?.earliestStartMs ?? periodStartMs;
-  const savingsLabel =
-    earliestStartMs < periodStartMs
-      ? `depuis ${formatMonthLabel(
-          new Date(earliestStartMs).getFullYear(),
-          new Date(earliestStartMs).getMonth(),
-        )}`
-      : periodLabel;
-
+  const periodLabel = rangeLabel(granularity, cursor);
+  const headerLabel =
+    periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1);
   return (
     <>
       <Stack.Screen
         options={{
-          title: periodLabel,
+          headerTitleAlign: "center",
+          headerTitle: () => (
+            <View style={styles.headerTitle}>
+              <Pressable
+                onPress={() => navigate(-1)}
+                disabled={!canNavigate}
+                accessibilityRole="button"
+                accessibilityLabel="Période précédente"
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.headerArrow,
+                  !canNavigate && styles.headerArrowDisabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <ChevronLeft size={24} strokeWidth={2.4} color={theme.accent} />
+              </Pressable>
+              <Text
+                numberOfLines={1}
+                style={[styles.headerLabel, { color: theme.label }]}
+              >
+                {headerLabel}
+              </Text>
+              <Pressable
+                onPress={() => navigate(1)}
+                disabled={!canNavigate}
+                accessibilityRole="button"
+                accessibilityLabel="Période suivante"
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.headerArrow,
+                  !canNavigate && styles.headerArrowDisabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <ChevronRight size={24} strokeWidth={2.4} color={theme.accent} />
+              </Pressable>
+            </View>
+          ),
           headerRight: () => (
-            <IconButton
-              onPress={() => setPeriodOpen(true)}
-              label="Choisir la période"
-              icon={<CalendarDays size={21} strokeWidth={2.2} color={theme.accent} />}
-            />
+            <Pressable
+              onPress={() => setGranularityOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Changer la granularité"
+              style={styles.granularityChip}
+            >
+              <Text style={[styles.granularityChipText, { color: theme.accent }]}>
+                {
+                  GRANULARITY_OPTIONS.find(
+                    (o) => o.value === granularity,
+                  )!.label
+                }
+              </Text>
+              <ChevronDown size={15} strokeWidth={2.4} color={theme.accent} />
+            </Pressable>
           ),
         }}
       />
@@ -190,293 +241,334 @@ export default function StatisticsScreen() {
           onRetry={() => void resource.reload()}
         />
       ) : (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{
-          padding: spacing.lg,
-          paddingBottom: spacing.xxl,
-          gap: spacing.lg,
-        }}
-      >
-        <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-          Dépenses par catégorie
-        </Text>
-        {slices.length === 0 ? (
-          <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.lg }}>
-            {hasActivity
-              ? "Aucune dépense sur la période."
-              : "Aucune activité sur la période."}
-          </Text>
-        ) : (
-          <>
-            <View style={{ alignItems: "center" }}>
-              <View
-                accessible
-                accessibilityRole="image"
-                accessibilityLabel={`Dépenses par catégorie : ${slices
-                  .map((slice) => `${slice.categoryName}, ${Math.round(slice.pct)} pour cent, ${formatAmount(slice.total)}`)
-                  .join(". ")}`}
-              >
-                <PieChart
-                  slices={slices.map((s, i) => ({
-                    value: s.total,
-                    color: chartColors[i % chartColors.length],
-                  }))}
-                />
-              </View>
-            </View>
-            <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-              {slices.map((slice, index) => (
-                <View key={slice.categoryName} style={styles.legendRow}>
-                  {slice.categoryIcon ? (
-                    <CategoryIcon
-                      name={slice.categoryIcon}
-                      size={17}
-                      color={chartColors[index % chartColors.length]}
-                    />
-                  ) : (
-                    <View
-                      style={[
-                        styles.dot,
-                        {
-                          backgroundColor:
-                            chartColors[index % chartColors.length],
-                        },
-                      ]}
-                    />
-                  )}
-                  <Text
-                    style={[styles.legendName, { color: theme.label }]}
-                    numberOfLines={1}
-                  >
-                    {slice.categoryName}
-                  </Text>
-                  <Text
-                    style={{ color: theme.secondaryLabel, fontSize: 13 }}
-                  >
-                    {slice.pct.toLocaleString("fr-FR", {
-                      maximumFractionDigits: 1,
-                    })}
-                    %
-                  </Text>
-                  <Text
-                    style={[
-                      styles.legendAmount,
-                      { color: theme.label },
+        <ScrollView
+          style={{ flex: 1 }}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            padding: spacing.lg,
+            paddingBottom: spacing.xxl,
+            gap: spacing.lg,
+          }}
+        >
+          <View>
+            <View style={[styles.typeControl, { backgroundColor: theme.surface }]}>
+              {TYPE_OPTIONS.map((option) => {
+                const selected = type === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setType(option.value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={({ pressed }) => [
+                      styles.typeSegment,
+                      {
+                        backgroundColor: selected
+                          ? theme.accent
+                          : "transparent",
+                      },
+                      pressed && styles.pressed,
                     ]}
                   >
-                    {formatAmount(slice.total)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-      </View>
-
-      {budgetRows.length > 0 ? (
-        <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-            Budgets · {t.expense.toLocaleString("fr-FR")} F dépensés
-          </Text>
-          {budgetRows.map(({ budget, spent }) => {
-            const pct = Math.min((spent / budget.amount) * 100, 100);
-            const over = spent > budget.amount;
-            const color = over
-              ? theme.expense
-              : spent >= budget.amount * 0.8
-                ? "#F59E0B"
-                : theme.accent;
-            return (
-              <View key={budget.id} style={{ gap: spacing.xs }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                  {budget.categoryIcon ? (
-                    <CategoryIcon name={budget.categoryIcon} size={17} color={theme.accent} />
-                  ) : null}
-                  <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
-                    {budget.categoryName ?? "Toutes les dépenses"}
-                  </Text>
-                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                    {Math.round((spent / budget.amount) * 100)}%
-                  </Text>
-                  <Text style={{ color: theme.label, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
-                    {formatAmount(spent)} / {formatAmount(budget.amount)}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    height: 8,
-                    borderRadius: radius.md,
-                    backgroundColor: theme.surfaceElevated,
-                    overflow: "hidden",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: `${pct}%`,
-                      height: "100%",
-                      borderRadius: radius.md,
-                      backgroundColor: color,
-                    }}
-                  />
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
-
-      <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-          Épargne · {savingsLabel}
-        </Text>
-        {savings.length === 0 ? (
-          <View style={{ alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm }}>
-            <Text style={{ color: theme.secondaryLabel, textAlign: "center" }}>
-              Aucune règle d&apos;épargne. Définissez un pourcentage par catégorie de
-              revenus pour voir votre cible en temps réel.
-            </Text>
-            <Pressable
-              onPress={() => router.push("/savings")}
-              style={({ pressed }) => [
-                {
-                  backgroundColor: theme.accent,
-                  paddingHorizontal: spacing.xl,
-                  paddingVertical: spacing.sm + 2,
-                  borderRadius: radius.xl,
-                },
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
-                Configurer
-              </Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            <View style={{ gap: spacing.sm }}>
-              {savings.map(({ rule, amount }) => (
-                <View key={rule.id} style={styles.legendRow}>
-                  {rule.categoryIcon ? (
-                    <CategoryIcon name={rule.categoryIcon} size={17} color={theme.accent} />
-                  ) : null}
-                  <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
-                    {rule.categoryName ?? "Tous les revenus"}
-                  </Text>
-                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                    {rule.percent} %
-                  </Text>
-                  <Text style={[styles.legendAmount, { color: theme.label }]}>
-                    {formatAmount(amount)}
-                  </Text>
-                </View>
-              ))}
+                    <Text
+                      style={{
+                        color: selected ? "#0A0A0B" : theme.secondaryLabel,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
             <View
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                borderTopWidth: StyleSheet.hairlineWidth,
-                borderTopColor: theme.separator,
-                paddingTop: spacing.md,
+                height: StyleSheet.hairlineWidth,
+                backgroundColor: theme.separator,
               }}
-            >
-              <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>
-                À épargner
-              </Text>
+            />
+          </View>
+
+          <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              {type === "expense"
+                ? "Dépenses par catégorie"
+                : "Revenus par catégorie"}
+            </Text>
+            {slices.length === 0 ? (
               <Text
-                selectable
                 style={{
-                  color: theme.accent,
-                  fontWeight: "800",
-                  fontSize: 17,
-                  fontVariant: ["tabular-nums"],
+                  color: theme.secondaryLabel,
+                  textAlign: "center",
+                  paddingVertical: spacing.lg,
                 }}
               >
-                {formatAmount(savingsTotal)}
+                {!hasActivity
+                  ? "Aucune activité sur la période."
+                  : type === "expense"
+                    ? "Aucune dépense sur la période."
+                    : "Aucun revenu sur la période."}
               </Text>
-            </View>
-          </>
-        )}
-      </View>
-
-      {months.length > 1 ? (
-        <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-            Évolution · {periodLabel}
-          </Text>
-          {!hasActivity ? (
-            <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.lg }}>
-              Aucune activité sur la période.
-            </Text>
-          ) : (
-            <View style={{ gap: spacing.sm }}>
-              <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                Revenus vs dépenses
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.barsRow}>
-                {series.map((m) => (
-                  <View key={`${m.year}-${m.month}`} style={styles.barGroup}>
-                    <View style={styles.barPair}>
+            ) : (
+              <>
+                <View
+                  style={{ alignItems: "center" }}
+                  accessible
+                  accessibilityRole="image"
+                  accessibilityLabel={`${type === "expense" ? "Dépenses" : "Revenus"} par catégorie : ${slices
+                    .map(
+                      (slice) =>
+                        `${slice.categoryName}, ${Math.round(slice.pct)} pour cent, ${formatAmount(slice.total)}`,
+                    )
+                    .join(". ")}`}
+                >
+                  <LabeledDonutChart
+                    slices={slices.map((s, i) => ({
+                      value: s.total,
+                      color: chartColors[i % chartColors.length],
+                      name: s.categoryName,
+                    }))}
+                  />
+                </View>
+                <View
+                  style={{
+                    height: StyleSheet.hairlineWidth,
+                    backgroundColor: theme.separator,
+                    marginVertical: spacing.sm,
+                  }}
+                />
+                <View style={{ gap: spacing.xs }}>
+                  {slices.map((slice, index) => (
+                    <View key={slice.categoryName} style={styles.summaryRow}>
                       <View
-                        style={{
-                          width: BAR_WIDTH,
-                          height: Math.max(
-                            (m.income / maxBar) * BAR_HEIGHT,
-                            m.income > 0 ? 2 : 0,
-                          ),
-                          backgroundColor: theme.income,
-                          borderRadius: 3,
-                        }}
-                      />
-                      <View
-                        style={{
-                          width: BAR_WIDTH,
-                          height: Math.max(
-                            ((m.expense + m.fees) / maxBar) * BAR_HEIGHT,
-                            m.expense + m.fees > 0 ? 2 : 0,
-                          ),
-                          backgroundColor: theme.expense,
-                          borderRadius: 3,
-                        }}
-                      />
+                        style={[
+                          styles.pctBadge,
+                          {
+                            backgroundColor: withAlpha(
+                              chartColors[index % chartColors.length],
+                              "18",
+                            ),
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.pctBadgeText,
+                            {
+                              color: chartColors[index % chartColors.length],
+                            },
+                          ]}
+                        >
+                          {Math.round(slice.pct)}%
+                        </Text>
+                      </View>
+                      {slice.categoryIcon ? (
+                        <CategoryIcon
+                          name={slice.categoryIcon}
+                          size={18}
+                          color={chartColors[index % chartColors.length]}
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.dot,
+                            {
+                              backgroundColor:
+                                chartColors[index % chartColors.length],
+                            },
+                          ]}
+                        />
+                      )}
+                      <Text
+                        style={[styles.legendName, { color: theme.label }]}
+                        numberOfLines={1}
+                      >
+                        {slice.categoryName}
+                      </Text>
+                      <Text
+                        style={[styles.legendAmount, { color: theme.label }]}
+                      >
+                        {formatAmount(slice.total)}
+                      </Text>
                     </View>
-                    <Text style={[styles.monthLabel, { color: theme.secondaryLabel }]}>
-                      {new Date(m.year, m.month, 1)
-                        .toLocaleDateString("fr-FR", { month: "short" })
-                        .replace(".", "")}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-              </ScrollView>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+
+          {months.length > 1 ? (
+            <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                Évolution · {periodLabel}
+              </Text>
+              {!hasActivity ? (
+                <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.lg }}>
+                  Aucune activité sur la période.
+                </Text>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                    Revenus vs dépenses
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.barsRow}>
+                      {series.map((m) => (
+                        <View key={`${m.year}-${m.month}`} style={styles.barGroup}>
+                          <View style={styles.barPair}>
+                            <View
+                              style={{
+                                width: BAR_WIDTH,
+                                height: Math.max(
+                                  (m.income / maxBar) * BAR_HEIGHT,
+                                  m.income > 0 ? 2 : 0,
+                                ),
+                                backgroundColor: theme.income,
+                                borderRadius: 3,
+                              }}
+                            />
+                            <View
+                              style={{
+                                width: BAR_WIDTH,
+                                height: Math.max(
+                                  ((m.expense + m.fees) / maxBar) * BAR_HEIGHT,
+                                  m.expense + m.fees > 0 ? 2 : 0,
+                                ),
+                                backgroundColor: theme.expense,
+                                borderRadius: 3,
+                              }}
+                            />
+                          </View>
+                          <Text style={[styles.monthLabel, { color: theme.secondaryLabel }]}>
+                            {new Date(m.year, m.month, 1)
+                              .toLocaleDateString("fr-FR", { month: "short" })
+                              .replace(".", "")}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-      ) : null}
-      </ScrollView>
+          ) : null}
+        </ScrollView>
       )}
-      <PeriodSheet
-        visible={periodOpen}
-        start={start}
-        end={end}
-        years={years}
-        onChange={changePeriod}
-        onClose={() => setPeriodOpen(false)}
-      />
+      <Modal
+        visible={granularityOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGranularityOpen(false)}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setGranularityOpen(false)}
+          accessibilityLabel="Fermer"
+        >
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.sheetTitle, { color: theme.label }]}>Période</Text>
+            {GRANULARITY_OPTIONS.map((option) => {
+              const selected = granularity === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => {
+                    setGranularity(option.value);
+                    setGranularityOpen(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={({ pressed }) => [
+                    styles.granularityRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: theme.label,
+                      flex: 1,
+                      fontWeight: selected ? "700" : "500",
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                  {selected ? (
+                    <Check size={18} strokeWidth={2.4} color={theme.accent} />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.7 },
+  headerTitle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  headerArrow: {
+    padding: spacing.xs,
+  },
+  headerArrowDisabled: {
+    opacity: 0.3,
+  },
+  headerLabel: {
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  granularityChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: spacing.sm,
+    minHeight: 48,
+  },
+  granularityChipText: {
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  typeControl: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    borderRadius: radius.lg,
+    padding: 4,
+  },
+  typeSegment: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    borderRadius: radius.lg - 4,
+  },
   card: {
     borderRadius: radius.lg,
     padding: spacing.lg,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minHeight: 48,
+  },
+  pctBadge: {
+    minWidth: 46,
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  pctBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   legendRow: {
     flexDirection: "row",
@@ -515,5 +607,29 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     fontSize: 11,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
+  },
+  sheetTitle: {
+    fontWeight: "700",
+    fontSize: 16,
+    paddingBottom: spacing.md,
+  },
+  granularityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 48,
+    paddingHorizontal: spacing.sm,
   },
 });

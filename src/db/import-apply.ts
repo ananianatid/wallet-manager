@@ -130,11 +130,12 @@ export async function applyImportPlan(
         groupId = groupIdsByName.get(account.groupName)!;
       }
       const result = await db.runAsync(
-        "INSERT INTO accounts (name, category_id, group_id, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO accounts (name, category_id, group_id, created_at, deleted_at) VALUES (?, ?, ?, ?, ?)",
         account.name,
         accountCategoryId ?? null,
         groupId,
         now,
+        account.deleted ? now : null,
       );
       accountIdsByName.set(account.name, Number(result.lastInsertRowId));
       report.accountsCreated += 1;

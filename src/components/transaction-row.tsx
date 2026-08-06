@@ -6,7 +6,7 @@ import { formatAmount, formatDate, formatTime } from "@/utils/format";
 
 interface Props {
   transaction: Transaction;
-  onPress: () => void;
+  onPress?: () => void;
   hideDate?: boolean;
 }
 
@@ -30,15 +30,8 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
     details.push(`Frais : ${formatAmount(transaction.fee)}`);
   }
 
-  return (
-    <Pressable
-      onPress={onPress}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={`${title}. ${details.join(". ")}. ${formatAmount(transaction.amount)}`}
-      accessibilityHint="Ouvre la transaction pour la modifier."
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
-    >
+  const content = (
+    <>
       {isTransfer ? (
         <View style={[styles.dot, { backgroundColor: color }]} />
       ) : (
@@ -69,6 +62,29 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
         {isIncome ? "+" : isExpense ? "−" : ""}
         {formatAmount(transaction.amount)}
       </Text>
+    </>
+  );
+
+  const accessibilityLabel = `${title}. ${details.join(". ")}. ${formatAmount(transaction.amount)}`;
+
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={accessibilityLabel} style={styles.row}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint="Ouvre la transaction pour la modifier."
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+    >
+      {content}
     </Pressable>
   );
 }

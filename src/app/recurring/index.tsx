@@ -193,6 +193,9 @@ export default function RecurringScreen() {
           items.length > 0 ? (
             <View style={{ padding: spacing.lg }}>
               {actionError ? <InlineError message={actionError} onRetry={() => setActionError(null)} /> : null}
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18, marginBottom: spacing.sm }}>
+                Les échéances dues sont aussi vérifiées automatiquement à l’ouverture de Transactions.
+              </Text>
               <Pressable
                 onPress={generateNow}
                 disabled={generating}
@@ -214,18 +217,9 @@ export default function RecurringScreen() {
             <Text style={{ color: theme.secondaryLabel, textAlign: "center" }}>
               Aucune transaction récurrente.
             </Text>
-            <Pressable
-              onPress={() => router.push("/recurring/form")}
-              style={({ pressed }) => [
-                styles.generateButton,
-                { backgroundColor: theme.accent },
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
-                Créer une récurrence
-              </Text>
-            </Pressable>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13, textAlign: "center" }}>
+              Utilisez le bouton + en haut pour créer votre première règle.
+            </Text>
           </View>
         }
       />

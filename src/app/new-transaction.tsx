@@ -25,12 +25,20 @@ import {
 } from "@/db/transactions";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account, Category, Goal, TransactionType } from "@/types";
-import { formatDate, formatTime } from "@/utils/format";
+import { formatAmount, formatDate, formatTime } from "@/utils/format";
+import { calculateTransferFee } from "@/utils/transfer-fees";
 
 const TYPES: { value: TransactionType; label: string }[] = [
   { value: "income", label: "Revenu" },
   { value: "expense", label: "Dépense" },
   { value: "transfer", label: "Transfert" },
+];
+
+type TransferFeeMode = "manual" | "calculated";
+
+const FEE_MODES: { value: TransferFeeMode; label: string }[] = [
+  { value: "manual", label: "Frais connu" },
+  { value: "calculated", label: "Calcul automatique" },
 ];
 
 export default function NewTransactionScreen() {
@@ -51,6 +59,8 @@ export default function NewTransactionScreen() {
   const [goalReservationId, setGoalReservationId] = useState<number | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [fee, setFee] = useState("");
+  const [feeMode, setFeeMode] = useState<TransferFeeMode>("manual");
+  const [debitedAmount, setDebitedAmount] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -79,6 +89,8 @@ export default function NewTransactionScreen() {
       setGoalReservationId(null);
       setCategoryId(existing.categoryId);
       setFee(existing.fee ? String(existing.fee) : "");
+      setFeeMode("manual");
+      setDebitedAmount("");
       setNote(existing.note ?? "");
       setDate(new Date(existing.transactionDate));
     } else if (goalParam) {
@@ -138,13 +150,65 @@ export default function NewTransactionScreen() {
       setDestinationId(null);
       setGoalReservationId(null);
       setFee("");
+      setFeeMode("manual");
+      setDebitedAmount("");
     }
   };
+
+  const switchFeeMode = (mode: TransferFeeMode) => {
+    if (mode === feeMode) {
+      return;
+    }
+
+    const parsedAmount = Number(amount);
+    const parsedFee = Number(fee);
+    const parsedDebitedAmount = Number(debitedAmount);
+
+    if (mode === "calculated") {
+      if (
+        Number.isInteger(parsedAmount) &&
+        parsedAmount > 0 &&
+        (!fee.trim() || (Number.isInteger(parsedFee) && parsedFee >= 0))
+      ) {
+        setDebitedAmount(String(parsedAmount + (fee.trim() ? parsedFee : 0)));
+      }
+    } else if (
+      Number.isInteger(parsedAmount) &&
+      parsedAmount > 0 &&
+      Number.isInteger(parsedDebitedAmount) &&
+      parsedDebitedAmount >= parsedAmount
+    ) {
+      const computedFee = parsedDebitedAmount - parsedAmount;
+      setFee(computedFee > 0 ? String(computedFee) : "");
+    }
+
+    setFeeMode(mode);
+    setErrors((current) => ({ ...current, fee: "", debitedAmount: "" }));
+  };
+
+  const calculatedFeePreview = useMemo(() => {
+    if (feeMode !== "calculated") {
+      return null;
+    }
+
+    const parsedAmount = Number(amount);
+    const parsedDebitedAmount = Number(debitedAmount);
+    if (
+      !Number.isInteger(parsedAmount) ||
+      parsedAmount <= 0 ||
+      !Number.isInteger(parsedDebitedAmount) ||
+      parsedDebitedAmount < parsedAmount
+    ) {
+      return null;
+    }
+
+    return parsedDebitedAmount - parsedAmount;
+  }, [amount, debitedAmount, feeMode]);
 
   const save = async () => {
     setErrors({});
     const parsedAmount = Number(amount);
-    const parsedFee = fee.trim() ? Number(fee) : null;
+    let parsedFee: number | null = fee.trim() ? Number(fee) : null;
     if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
       setErrors({ amount: "Saisissez un montant entier en FCFA." });
       return;
@@ -163,7 +227,32 @@ export default function NewTransactionScreen() {
       });
       return;
     }
-    if (parsedFee != null && (!Number.isInteger(parsedFee) || parsedFee <= 0)) {
+    if (
+      type === "transfer" &&
+      goalReservationId == null &&
+      feeMode === "calculated"
+    ) {
+      const parsedDebitedAmount = Number(debitedAmount);
+      try {
+        const computedFee = calculateTransferFee(parsedDebitedAmount, parsedAmount);
+        parsedFee = computedFee > 0 ? computedFee : null;
+      } catch (error) {
+        setErrors({
+          debitedAmount:
+            error instanceof Error
+              ? error.message
+              : "Le total débité est invalide.",
+        });
+        return;
+      }
+    }
+    if (
+      type === "transfer" &&
+      goalReservationId == null &&
+      feeMode === "manual" &&
+      parsedFee != null &&
+      (!Number.isInteger(parsedFee) || parsedFee <= 0)
+    ) {
       setErrors({ fee: "Les frais doivent être un entier positif." });
       return;
     }
@@ -283,13 +372,21 @@ export default function NewTransactionScreen() {
           })}
         </View>
 
-        <FormField label="Montant" error={errors.amount}>
+        <FormField
+          label={type === "transfer" ? "Montant arrivé" : "Montant"}
+          error={errors.amount}
+        >
         <View
           style={{
             backgroundColor: theme.surface,
-            borderRadius: radius.lg,
+            borderColor: theme.separator,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderRadius: radius.md,
+            minHeight: 48,
+            flexDirection: "row",
             alignItems: "center",
-            paddingVertical: spacing.sm,
+            gap: spacing.sm,
+            paddingHorizontal: spacing.lg,
           }}
         >
           <TextInput
@@ -302,14 +399,14 @@ export default function NewTransactionScreen() {
             placeholderTextColor={theme.secondaryLabel}
             keyboardType="number-pad"
             inputMode="numeric"
-            accessibilityLabel="Montant en FCFA"
+            accessibilityLabel={`${type === "transfer" ? "Montant arrivé" : "Montant"} en FCFA`}
             style={{
               color: theme.label,
-              fontSize: 36,
-              fontWeight: "800",
+              fontSize: 24,
+              fontWeight: "700",
               fontVariant: ["tabular-nums"],
-              textAlign: "center",
-              minWidth: 160,
+              textAlign: "left",
+              flex: 1,
             }}
           />
           <Text style={{ color: theme.secondaryLabel }}>FCFA</Text>
@@ -340,6 +437,8 @@ export default function NewTransactionScreen() {
                 onChange={(id) => {
                   setDestinationId(id);
                   setGoalReservationId(null);
+                  setFeeMode("manual");
+                  setDebitedAmount("");
                   setErrors((current) => ({ ...current, destination: "" }));
                 }}
               />
@@ -356,6 +455,9 @@ export default function NewTransactionScreen() {
                 onChange={(id) => {
                   setGoalReservationId(id);
                   setDestinationId(null);
+                  setFee("");
+                  setFeeMode("manual");
+                  setDebitedAmount("");
                   setErrors((current) => ({ ...current, destination: "" }));
                 }}
               />
@@ -377,24 +479,95 @@ export default function NewTransactionScreen() {
         )}
 
         {type === "transfer" && goalReservationId == null ? (
-          <FormField label="Frais (optionnel)" error={errors.fee}>
-            <TextInput
-              value={fee}
-              onChangeText={(value) => {
-                setFee(value);
-                setErrors((current) => ({ ...current, fee: "" }));
-              }}
-              placeholder="0"
-              placeholderTextColor={theme.secondaryLabel}
-              keyboardType="number-pad"
-              inputMode="numeric"
-              accessibilityLabel="Frais en FCFA, optionnels"
-              style={[
-                styles.input,
-                { backgroundColor: theme.surface, color: theme.label },
-              ]}
-            />
-          </FormField>
+          <View style={styles.feeSection}>
+            <FormField label="Mode de saisie des frais">
+              <View accessible accessibilityRole="radiogroup" style={styles.feeModeRow}>
+                {FEE_MODES.map((option) => {
+                  const active = feeMode === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => switchFeeMode(option.value)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={option.label}
+                      accessibilityState={{ selected: active }}
+                      style={({ pressed }) => [
+                        styles.feeModeButton,
+                        {
+                          backgroundColor: active ? theme.accent : theme.surface,
+                          borderColor: active ? theme.accent : theme.separator,
+                        },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: active ? theme.onAccent : theme.secondaryLabel,
+                          fontWeight: "700",
+                          textAlign: "center",
+                        }}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </FormField>
+
+            {feeMode === "manual" ? (
+              <FormField label="Frais (optionnel)" error={errors.fee}>
+                <TextInput
+                  value={fee}
+                  onChangeText={(value) => {
+                    setFee(value);
+                    setErrors((current) => ({ ...current, fee: "" }));
+                  }}
+                  placeholder="0"
+                  placeholderTextColor={theme.secondaryLabel}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  accessibilityLabel="Frais en FCFA, optionnels"
+                  style={[
+                    styles.input,
+                    { backgroundColor: theme.surface, color: theme.label },
+                  ]}
+                />
+              </FormField>
+            ) : (
+              <FormField label="Total débité" error={errors.debitedAmount}>
+                <TextInput
+                  value={debitedAmount}
+                  onChangeText={(value) => {
+                    setDebitedAmount(value);
+                    setErrors((current) => ({ ...current, debitedAmount: "" }));
+                  }}
+                  placeholder="0"
+                  placeholderTextColor={theme.secondaryLabel}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  accessibilityLabel="Total débité en FCFA"
+                  style={[
+                    styles.input,
+                    { backgroundColor: theme.surface, color: theme.label },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.calculationCard,
+                    { backgroundColor: theme.surfaceElevated },
+                  ]}
+                >
+                  <Text style={{ color: theme.secondaryLabel }}>Frais calculés</Text>
+                  <Text selectable style={{ color: theme.label, fontWeight: "700" }}>
+                    {calculatedFeePreview == null
+                      ? "—"
+                      : formatAmount(calculatedFeePreview)}
+                  </Text>
+                </View>
+              </FormField>
+            )}
+          </View>
         ) : null}
 
         {type === "transfer" && goalReservationId != null ? (
@@ -517,6 +690,32 @@ const styles = StyleSheet.create({
   input: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
+    borderRadius: radius.md,
+  },
+  feeSection: {
+    gap: spacing.sm,
+  },
+  feeModeRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  feeModeButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  calculationCard: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radius.md,
   },
   dateButton: {

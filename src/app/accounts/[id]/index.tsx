@@ -112,15 +112,7 @@ export default function AccountDetailScreen() {
         data={transactions}
         keyExtractor={(t) => String(t.id)}
         renderItem={({ item }) => (
-          <TransactionRow
-            transaction={item}
-            onPress={() =>
-              router.push({
-                pathname: "/new-transaction",
-                params: { id: String(item.id) },
-              })
-            }
-          />
+          <TransactionRow transaction={item} />
         )}
         ItemSeparatorComponent={() => (
           <View

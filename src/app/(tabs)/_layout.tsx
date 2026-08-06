@@ -16,6 +16,10 @@ export default function TabsLayout() {
       indicatorColor={`${theme.accent}33`}
       rippleColor={`${theme.accent}1F`}
     >
+      <NativeTabs.Trigger name="(dashboard)">
+        <NativeTabs.Trigger.Icon sf="square.grid.2x2" md="dashboard" />
+        <NativeTabs.Trigger.Label>Accueil</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(transactions)">
         <NativeTabs.Trigger.Icon sf="list.dash" md="receipt_long" />
         <NativeTabs.Trigger.Label>Transactions</NativeTabs.Trigger.Label>

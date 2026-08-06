@@ -30,6 +30,9 @@ App **Expo SDK 57** (Expo Router, TypeScript), **Android**, usage personnel, **o
 - **Une seule transaction**, deux références : `account_id` (source) + `destination_account_id`.
 - **Sans catégorie**.
 - `fee` optionnel, **déduit du compte source**, comptabilisé comme dépense.
+- Pour un transfert ponctuel, le formulaire propose soit la saisie directe du frais, soit le calcul automatique à partir du **total débité** et du **montant arrivé** : `frais = total débité − montant arrivé`.
+- Le montant enregistré dans `amount` reste toujours le montant arrivé ; un frais calculé nul est stocké comme `NULL`.
+- Les transferts récurrents conservent un frais fixe optionnel ; les réservations d’objectif ne proposent pas de frais.
 - Neutre globalement ; visible dans la liste de **chacun des deux comptes** (`account_id = ? OR destination_account_id = ?`).
 
 ### Catégories

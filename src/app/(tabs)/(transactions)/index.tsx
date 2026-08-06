@@ -1,4 +1,4 @@
-import { ListFilter, Plus, Search } from "lucide-react-native";
+import { Plus, Search } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { useCallback, useMemo, useState } from "react";
@@ -11,10 +11,9 @@ import {
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { MonthHeader } from "@/components/month-header";
-import { SafeToSpendCard } from "@/components/safe-to-spend-card";
+import { MonthlySummaryCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { listAccounts } from "@/db/accounts";
-import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
 import { applyDueRecurring } from "@/db/recurring";
 import { getSetting, setSetting } from "@/db/settings";
@@ -35,7 +34,8 @@ import { totals } from "@/utils/statistics";
 interface DaySection {
   key: string;
   title: string;
-  total: number;
+  income: number;
+  expense: number;
   data: Transaction[];
 }
 
@@ -46,15 +46,17 @@ interface MonthSection {
   data: Transaction[];
 }
 
+type TransactionSection = DaySection | MonthSection;
+
 export default function TransactionsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const filters = useTransactionFilters();
   const [recurringError, setRecurringError] = useState<string | null>(null);
+  const [recurringNotice, setRecurringNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const forecast = await calculateSafeToSpend(db);
     const [rows, accs] = await Promise.all([
       listTransactions(db, {
         startMs:
@@ -72,7 +74,6 @@ export default function TransactionsScreen() {
     return {
       transactions: filterTransactions(rows, filters),
       accounts: accs,
-      safeToSpend: forecast,
       monthTotals: totals(rows),
     };
   }, [filters]);
@@ -81,7 +82,6 @@ export default function TransactionsScreen() {
   const reload = resource.reload;
   const transactions = resource.data?.transactions ?? null;
   const accounts = resource.data?.accounts ?? [];
-  const safeToSpend = resource.data?.safeToSpend ?? null;
   const monthTotals = resource.data?.monthTotals ?? null;
 
   const checkRecurring = useCallback(async () => {
@@ -94,7 +94,7 @@ export default function TransactionsScreen() {
     ).getTime();
     const lastCheck = await getSetting(db, "recurring_last_check");
     if (lastCheck === String(todayKey)) {
-      return;
+      return 0;
     }
     const generated = await applyDueRecurring(db, Date.now());
     await setSetting(db, "recurring_last_check", String(todayKey));
@@ -108,8 +108,14 @@ export default function TransactionsScreen() {
     useCallback(() => {
       const refresh = async () => {
         setRecurringError(null);
+        setRecurringNotice(null);
         try {
-          await checkRecurring();
+          const generated = await checkRecurring();
+          if (generated > 0) {
+            setRecurringNotice(
+              `${generated} échéance${generated > 1 ? "s" : ""} récurrente${generated > 1 ? "s" : ""} ajoutée${generated > 1 ? "s" : ""} automatiquement.`,
+            );
+          }
         } catch (error) {
           setRecurringError(
             error instanceof Error ? error.message : "Les récurrences n'ont pas pu être vérifiées.",
@@ -132,7 +138,7 @@ export default function TransactionsScreen() {
   const setMonth = (year: number, month: number) =>
     setTransactionFilters({ ...filters, year, month });
 
-  const sections = useMemo<DaySection[] | MonthSection[]>(() => {
+  const sections = useMemo<TransactionSection[]>(() => {
     const rows = transactions ?? [];
 
     if (filters.mode === "all") {
@@ -174,24 +180,24 @@ export default function TransactionsScreen() {
       const date = new Date(t.transactionDate);
       const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
       let section = groups.get(key);
-      if (!section) {
-        section = {
-          key,
-          title: formatDayLabel(t.transactionDate),
-          total: 0,
-          data: [],
-        };
-        groups.set(key, section);
-      }
-      section.data.push(t);
-      section.total +=
-        t.type === "income"
-          ? t.amount
-          : t.type === "expense"
-            ? -t.amount
-            : t.fee
-              ? -t.fee
-              : 0;
+        if (!section) {
+          section = {
+            key,
+            title: formatDayLabel(t.transactionDate),
+            income: 0,
+            expense: 0,
+            data: [],
+          };
+          groups.set(key, section);
+        }
+        section.data.push(t);
+        if (t.type === "income") {
+          section.income += t.amount;
+        } else if (t.type === "expense") {
+          section.expense += t.amount;
+        } else if (t.fee) {
+          section.expense += t.fee;
+        }
     }
     return [...groups.values()];
   }, [transactions, filters]);
@@ -203,8 +209,6 @@ export default function TransactionsScreen() {
     router.push({ pathname: "/new-transaction", params: { id: String(id) } });
 
   const hasTransactions = monthRows.length > 0;
-  const openFilters = () => router.push("/filters");
-
   const openSearch = () => router.push("/search");
 
   return (
@@ -225,18 +229,11 @@ export default function TransactionsScreen() {
                 )
               : undefined,
           headerRight: () => (
-            <View style={styles.headerActions}>
-              <IconButton
-                onPress={openFilters}
-                label="Personnaliser les filtres"
-                icon={<ListFilter size={21} strokeWidth={2.2} color={theme.accent} />}
-              />
-              <IconButton
-                onPress={openSearch}
-                label="Rechercher"
-                icon={<Search size={22} strokeWidth={2.2} color={theme.accent} />}
-              />
-            </View>
+            <IconButton
+              onPress={openSearch}
+              label="Rechercher et filtrer"
+              icon={<Search size={22} strokeWidth={2.2} color={theme.accent} />}
+            />
           ),
         }}
       />
@@ -262,7 +259,7 @@ export default function TransactionsScreen() {
           onRetry={() => void resource.reload()}
         />
       ) : (
-      <SectionList
+      <SectionList<Transaction, TransactionSection>
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
@@ -306,28 +303,47 @@ export default function TransactionsScreen() {
             <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "600" }}>
               {section.title}
             </Text>
-            <Text
-              style={[
-                styles.dayTotal,
-                {
-                  color:
-                    section.total >= 0 ? theme.label : theme.expense,
-                },
-              ]}
-            >
-              {formatAmount(section.total)}
-            </Text>
+            {"income" in section ? (
+              <View style={styles.daySummary}>
+                {section.income > 0 ? (
+                  <Text style={[styles.dayAmount, { color: theme.income }]}>
+                    + {formatAmount(section.income)}
+                  </Text>
+                ) : null}
+                {section.expense > 0 ? (
+                  <Text style={[styles.dayAmount, { color: theme.expense }]}>
+                    −{formatAmount(section.expense)}
+                  </Text>
+                ) : null}
+              </View>
+            ) : (
+              <Text
+                style={[
+                  styles.dayTotal,
+                  {
+                    color:
+                      section.total >= 0 ? theme.label : theme.expense,
+                  },
+                ]}
+              >
+                {formatAmount(section.total)}
+              </Text>
+            )}
           </View>
         )}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <View style={{ gap: spacing.lg, paddingTop: spacing.lg }}>
-              {safeToSpend && accounts.length > 0 ? (
-                <SafeToSpendCard
-                  data={safeToSpend}
-                  monthTotals={monthTotals ?? undefined}
-                  onPress={() => router.push("/cashflow")}
-                />
+              {monthTotals && accounts.length > 0 ? (
+                <MonthlySummaryCard totals={monthTotals} />
+              ) : null}
+              {recurringNotice ? (
+                <View style={[styles.recurringNotice, { backgroundColor: `${theme.accent}18` }]}>
+                  <Text style={{ color: theme.label, flex: 1 }}>{recurringNotice}</Text>
+                  <Pressable onPress={() => router.push("/recurring")} hitSlop={8}>
+                    <Text style={{ color: theme.accent, fontWeight: "700" }}>Gérer</Text>
+                  </Pressable>
+                </View>
               ) : null}
               {accounts.length === 0 || !hasTransactions ? (
                 <EmptyState
@@ -370,10 +386,13 @@ export default function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerActions: {
+  recurringNotice: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.lg,
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.lg,
   },
   dayHeader: {
     flexDirection: "row",
@@ -388,6 +407,16 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   dayTotal: {
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  daySummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  dayAmount: {
+    fontSize: 12,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },

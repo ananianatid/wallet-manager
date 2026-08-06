@@ -26,7 +26,6 @@ import { CategoryIcon } from "@/components/category-icons";
 import { EmptyState } from "@/components/empty-state";
 import { TransactionRow } from "@/components/transaction-row";
 import {
-  ActionButton,
   FormField,
   IconButton,
   InlineError,
@@ -578,9 +577,6 @@ export default function TransactionSearchScreen() {
         ) : null}
       </View>
 
-      <View style={styles.actionRow}>
-        <ActionButton label="Réinitialiser" onPress={reset} variant="secondary" />
-      </View>
     </View>
   );
   const displayStatus = validationError ? "idle" : status;
@@ -589,10 +585,10 @@ export default function TransactionSearchScreen() {
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <Stack.Screen
         options={{
-          title: "Recherche",
+          title: "Recherche et filtres",
           headerRight: () => (
             <IconButton
-              label="Réinitialiser la recherche"
+              label="Réinitialiser la recherche et les filtres"
               onPress={reset}
               icon={<RotateCcw size={19} strokeWidth={2.2} color={theme.accent} />}
             />
@@ -714,7 +710,6 @@ const styles = StyleSheet.create({
   choiceLabel: { fontSize: 15, fontWeight: "600" },
   choiceDetail: { fontSize: 12 },
   checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  actionRow: { alignItems: "flex-start" },
   resultsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: spacing.md },
   resultsEyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
   resultsTitle: { fontSize: 19, fontWeight: "800", marginTop: spacing.xs },

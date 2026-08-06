@@ -4,6 +4,7 @@ export interface MmAccountRow {
   uid: string;
   name: string | null;
   groupUid?: string | null;
+  zdata?: number | null;
 }
 
 export interface MmGroupRow {
@@ -42,6 +43,7 @@ export interface PlannedCategory {
 export interface PlannedAccount {
   name: string;
   groupName: string | null;
+  deleted: boolean;
 }
 
 export interface PlannedTransaction {
@@ -127,15 +129,19 @@ export function buildImportPlan(data: MoneyManagerData): ImportPlan {
   const accountNames: string[] = [];
   const accountNameByUid = new Map<string, string>();
   const groupNameByAccountName = new Map<string, string | null>();
+  const deletedByName = new Map<string, boolean>();
   const seenAccounts = new Set<string>();
   for (const account of data.accounts) {
     const name = normalize(account.name);
-    if (!name || !usedAccountUids.has(account.uid)) {
+    const deleted = Number(account.zdata) === 2;
+    // Garde aussi les comptes supprimés dans Money Manager (ZDATA=2), même sans transactions.
+    if (!name || (!usedAccountUids.has(account.uid) && !deleted)) {
       continue;
     }
     if (!seenAccounts.has(name)) {
       seenAccounts.add(name);
       accountNames.push(name);
+      deletedByName.set(name, deleted);
       groupNameByAccountName.set(
         name,
         groupNameByUid.get(account.groupUid ?? "") ?? null,
@@ -353,6 +359,7 @@ export function buildImportPlan(data: MoneyManagerData): ImportPlan {
     accounts: accountNames.map((name) => ({
       name,
       groupName: groupNameByAccountName.get(name) ?? null,
+      deleted: deletedByName.get(name) ?? false,
     })),
     categories,
     transactions: planned,

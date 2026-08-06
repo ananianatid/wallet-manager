@@ -538,8 +538,6 @@ export default function AccountsScreen() {
           <EmptyState
             title="Aucun compte"
             message="Créez votre premier compte pour commencer à suivre vos transactions."
-            actionLabel="Créer un compte"
-            onAction={openForm}
           />
         ) : (
           <View style={{ padding: spacing.xl }}>

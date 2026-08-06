@@ -44,7 +44,7 @@ class WalletDbShim {
 }
 
 const plan = buildImportPlan({
-  accounts: mm.prepare("SELECT uid, NIC_NAME AS name, groupUid FROM ASSETS").all(),
+  accounts: mm.prepare("SELECT uid, NIC_NAME AS name, groupUid, ZDATA AS zdata FROM ASSETS").all(),
   groups: mm.prepare("SELECT uid, ACC_GROUP_NAME AS name FROM ASSETGROUP").all(),
   categories: mm.prepare("SELECT uid, NAME AS name, TYPE AS type FROM ZCATEGORY").all(),
   transactions: mm.prepare("SELECT DO_TYPE AS doType, ZMONEY AS money, ZDATE AS date, ZCONTENT AS note, ctgUid AS categoryUid, assetUid AS accountUid, toAssetUid AS destinationUid FROM INOUTCOME WHERE IS_DEL = 0").all(),
@@ -125,13 +125,21 @@ const expect = (label, actual, wanted) => {
 };
 
 console.log("\n=== Vérifications ===");
-expect("transactions insérées", report1.transactionsInserted, 1083);
-expect("doublons au 2e import", report2.transactionsSkipped, 1083);
+expect("transactions insérées", report1.transactionsInserted, 1090);
+expect("doublons au 2e import", report2.transactionsSkipped, 1090);
 expect("réinsérées au 2e import", report2.transactionsInserted, 0);
 expect("catégories finales", counts.categories, 18);
-expect("comptes finaux", counts.accounts, 17);
-expect("transactions finales", counts.transactions, 1083);
+expect("comptes finaux", counts.accounts, 18);
+expect("transactions finales", counts.transactions, 1090);
 expect("écarts de solde", mismatches, 0);
+const deletedAccounts = Number(
+  wallet.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE deleted_at IS NOT NULL").get().n,
+);
+expect("comptes supprimés (deleted_at)", deletedAccounts, 7);
+const activeAccounts = Number(
+  wallet.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE deleted_at IS NULL").get().n,
+);
+expect("comptes actifs", activeAccounts, 11);
 
 const groupByAccount = new Map(
   wallet.db
@@ -142,7 +150,7 @@ const groupByAccount = new Map(
     .all()
     .map((r) => [r.account.trim(), r.groupe]),
 );
-expect("groupe Espèces", groupByAccount.get("Espèces"), "Banque");
+expect("groupe Espèces", groupByAccount.get("Espèces"), "Espèces");
 expect("groupe Xpress", groupByAccount.get("Xpress"), "Banque");
 expect("groupe 10", groupByAccount.get("10"), "Épargne");
 expect("groupe Dette", groupByAccount.get("Dette"), "Découvert");

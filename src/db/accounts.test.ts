@@ -1,5 +1,9 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-import { planBalanceAdjustment, setAccountBalance } from "./accounts";
+import {
+  getAccountBalance,
+  planBalanceAdjustment,
+  setAccountBalance,
+} from "./accounts";
 
 interface AccountRowLike {
   id: number;
@@ -79,6 +83,19 @@ describe("planBalanceAdjustment", () => {
       type: "income",
       amount: 500,
     });
+  });
+});
+
+describe("getAccountBalance", () => {
+  it("keeps transfer fees included in the source debit", async () => {
+    const getFirstAsync = jest.fn(async (sql: string, ...params: unknown[]) => {
+      expect(sql).toContain("-(amount + COALESCE(fee, 0))");
+      expect(params).toEqual([[7, 7, 7]]);
+      return { balance: -12_250 };
+    });
+    const db = { getFirstAsync } as unknown as SQLiteDatabase;
+
+    await expect(getAccountBalance(db, 7)).resolves.toBe(-12_250);
   });
 });
 

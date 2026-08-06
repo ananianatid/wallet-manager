@@ -139,8 +139,6 @@ export default function GoalsScreen() {
           <EmptyState
             title="Aucun objectif"
             message="Créez une première cible, comme une PS5, un voyage ou un fonds de sécurité."
-            actionLabel="Créer un objectif"
-            onAction={() => router.push("/goals/new")}
           />
         ) : null}
 

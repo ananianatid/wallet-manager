@@ -62,8 +62,8 @@ describe("buildImportPlan", () => {
     );
 
     expect(plan.accounts).toEqual([
-      { name: "Banque A", groupName: "Banque" },
-      { name: "Banque B", groupName: null },
+      { name: "Banque A", groupName: "Banque", deleted: false },
+      { name: "Banque B", groupName: null, deleted: false },
     ]);
   });
 
