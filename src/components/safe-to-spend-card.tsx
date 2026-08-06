@@ -3,14 +3,16 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { radius, spacing, useTheme } from "@/theme";
 import type { SafeToSpend } from "@/types";
 import { formatAmount } from "@/utils/format";
+import type { Totals } from "@/utils/statistics";
 
 interface Props {
   data: SafeToSpend;
+  monthTotals?: Totals;
   onPress?: () => void;
   interactive?: boolean;
 }
 
-export function SafeToSpendCard({ data, onPress, interactive = true }: Props) {
+export function SafeToSpendCard({ data, monthTotals, onPress, interactive = true }: Props) {
   const theme = useTheme();
   const isNegative = data.amount < 0;
   const accent = isNegative ? theme.expense : theme.accent;
@@ -42,30 +44,32 @@ export function SafeToSpendCard({ data, onPress, interactive = true }: Props) {
       <View style={[styles.footer, { borderTopColor: theme.separator }]}>
         <View style={styles.footerItem}>
           <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Revenus</Text>
-          <Text
-            style={[
-              styles.footerValue,
-              { color: theme.income },
-            ]}
-          >
-            + {formatAmount(data.plannedIncome)}
+          <Text style={[styles.footerValue, { color: theme.income }]}>
+            + {formatAmount(monthTotals?.income ?? data.plannedIncome)}
           </Text>
         </View>
         <View style={[styles.footerItem, styles.footerItemCenter]}>
           <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Dépenses</Text>
           <Text style={[styles.footerValue, { color: theme.expense }]}>
-            −{formatAmount(data.plannedOutflows)}
+            −{formatAmount(monthTotals?.expense ?? data.plannedOutflows)}
           </Text>
         </View>
         <View style={[styles.footerItem, styles.footerItemRight]}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Solde</Text>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>
+            {monthTotals ? "Total du mois" : "Solde"}
+          </Text>
           <Text
             style={[
               styles.footerValue,
-              { color: data.amount >= 0 ? theme.label : theme.expense },
+              {
+                color:
+                  (monthTotals ? monthTotals.net : data.amount) >= 0
+                    ? theme.label
+                    : theme.expense,
+              },
             ]}
           >
-            {formatAmount(data.amount)}
+            {formatAmount(monthTotals ? monthTotals.net : data.amount)}
           </Text>
         </View>
       </View>

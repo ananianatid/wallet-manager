@@ -30,6 +30,7 @@ import {
   formatDayLabel,
   formatMonthLabel,
 } from "@/utils/format";
+import { totals } from "@/utils/statistics";
 
 interface DaySection {
   key: string;
@@ -72,6 +73,7 @@ export default function TransactionsScreen() {
       transactions: filterTransactions(rows, filters),
       accounts: accs,
       safeToSpend: forecast,
+      monthTotals: totals(rows),
     };
   }, [filters]);
 
@@ -80,6 +82,7 @@ export default function TransactionsScreen() {
   const transactions = resource.data?.transactions ?? null;
   const accounts = resource.data?.accounts ?? [];
   const safeToSpend = resource.data?.safeToSpend ?? null;
+  const monthTotals = resource.data?.monthTotals ?? null;
 
   const checkRecurring = useCallback(async () => {
     const db = await getDatabase();
@@ -322,6 +325,7 @@ export default function TransactionsScreen() {
               {safeToSpend && accounts.length > 0 ? (
                 <SafeToSpendCard
                   data={safeToSpend}
+                  monthTotals={monthTotals ?? undefined}
                   onPress={() => router.push("/cashflow")}
                 />
               ) : null}
