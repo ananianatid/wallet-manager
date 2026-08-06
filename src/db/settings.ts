@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export type SettingKey = "theme_mode" | "recurring_last_check";
+export type SettingKey = "theme_mode" | "recurring_last_check" | "backup_last_date";
 
 export async function getSetting(
   db: SQLiteDatabase,

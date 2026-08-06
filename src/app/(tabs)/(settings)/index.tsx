@@ -3,17 +3,19 @@ import {
   ArrowUp,
   ChevronRight,
   Info,
+  Lock,
   PiggyBank,
   RefreshCcw,
   Sun,
   Target,
   Wallet,
 } from "lucide-react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getDatabase } from "@/db/database";
+import { getSetting } from "@/db/settings";
 import { applyImportPlan, readMoneyManagerBackup, type ImportReport } from "@/db/import";
 import type { ImportPlan } from "@/db/money-manager";
 import { ActionButton, InlineError } from "@/components/ui";
@@ -30,10 +32,11 @@ const ENTRIES: {
     | "/savings"
     | "/recurring"
     | "/goals"
+    | "/security"
     | "/appearance"
     | "/about"
     | "/(tabs)/(settings)/accounts-settings";
-  section: "Organisation" | "Planification" | "Préférences";
+  section: "Organisation" | "Planification" | "Sécurité" | "Préférences";
 }[] = [
   { label: "Comptes", icon: Wallet, href: "/(tabs)/(settings)/accounts-settings", section: "Organisation" },
   { label: "Catégories de revenus", icon: ArrowUp, href: "/categories/income", section: "Organisation" },
@@ -42,6 +45,7 @@ const ENTRIES: {
   { label: "Épargne", icon: PiggyBank, href: "/savings", section: "Planification" },
   { label: "Transactions récurrentes", icon: RefreshCcw, href: "/recurring", section: "Planification" },
   { label: "Objectifs", icon: Target, href: "/goals", section: "Planification" },
+  { label: "Sécurité", icon: Lock, href: "/security", section: "Sécurité" },
   { label: "Apparence", icon: Sun, href: "/appearance", section: "Préférences" },
   { label: "À propos", icon: Info, href: "/about", section: "Préférences" },
 ];
@@ -54,7 +58,25 @@ export default function SettingsScreen() {
   const [importStatus, setImportStatus] = useState<"idle" | "reading" | "confirming" | "applying" | "success" | "error">("idle");
   const [importError, setImportError] = useState<string | null>(null);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [lastBackup, setLastBackup] = useState<number | null>(null);
   const importing = importStatus === "reading" || importStatus === "confirming" || importStatus === "applying";
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      getDatabase()
+        .then((db) => getSetting(db, "backup_last_date"))
+        .then((value) => {
+          if (!cancelled && value != null) {
+            setLastBackup(Number(value));
+          }
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const applyPlan = async (plan: ImportPlan) => {
     setImportStatus("applying");
@@ -105,6 +127,19 @@ export default function SettingsScreen() {
     }
   };
 
+  const pickAndRestore = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      if (result.canceled || result.assets.length === 0) {
+        return;
+      }
+      const asset = result.assets[0];
+      router.push({ pathname: "/backup-restore", params: { uri: asset.uri } });
+    } catch (e) {
+      Alert.alert("Impossible d'ouvrir le fichier", errorMessage(e));
+    }
+  };
+
   return (
     <ScrollView
       style={{ flex: 1 }}
@@ -130,6 +165,29 @@ export default function SettingsScreen() {
 
       <View style={{ gap: spacing.sm }}>
         <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "600" }}>DONNÉES</Text>
+        <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
+          <Text style={{ color: theme.label, fontWeight: "600" }}>Sauvegarde chiffrée</Text>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+            Exporte toutes vos données dans un fichier protégé par mot de passe, puis restaurez-les à tout moment sur cet appareil.
+          </Text>
+          {lastBackup != null ? (
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              Dernière sauvegarde : {formatDate(lastBackup)}
+            </Text>
+          ) : null}
+          <ActionButton
+            label="Exporter une sauvegarde chiffrée"
+            onPress={() => router.push("/backup-export")}
+            accessibilityLabel="Exporter une sauvegarde chiffrée"
+          />
+          <ActionButton
+            label="Restaurer une sauvegarde"
+            variant="secondary"
+            onPress={() => void pickAndRestore()}
+            accessibilityLabel="Restaurer une sauvegarde"
+          />
+        </View>
+
         <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
           {importError ? <InlineError message={importError} onRetry={() => setImportStatus("idle")} /> : null}
           <Text style={{ color: theme.label, fontWeight: "600" }}>Importer Money Manager</Text>

@@ -6,11 +6,17 @@ import {
 } from "expo-router/react-navigation";
 import { ThemeProvider as AppThemeProvider, useTheme, useThemeControl } from "@/theme";
 import { StatusBar } from "react-native";
+import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { LockScreen } from "@/components/lock-screen";
+import { initLock, useLockState } from "@/state/lock";
+import { useDataEpoch } from "@/state/data-epoch";
 
 function RootNavigator() {
   const theme = useTheme();
   const { scheme } = useThemeControl();
+  const lock = useLockState();
+  const epoch = useDataEpoch();
   return (
     <>
       <StatusBar
@@ -20,6 +26,7 @@ function RootNavigator() {
       />
       <ThemeProvider value={scheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack
+          key={epoch}
           screenOptions={{
             headerStyle: { backgroundColor: theme.background },
             headerTitleStyle: { color: theme.label },
@@ -48,13 +55,33 @@ function RootNavigator() {
           <Stack.Screen name="categories/[type]" options={{ title: "Catégories" }} />
           <Stack.Screen name="appearance" options={{ title: "Apparence" }} />
           <Stack.Screen name="about" options={{ title: "À propos" }} />
+          <Stack.Screen name="security" options={{ title: "Sécurité" }} />
+          <Stack.Screen
+            name="pin-setup"
+            options={{ presentation: "modal", title: "Code" }}
+          />
+          <Stack.Screen
+            name="backup-export"
+            options={{ presentation: "modal", title: "Exporter une sauvegarde" }}
+          />
+          <Stack.Screen
+            name="backup-restore"
+            options={{ presentation: "modal", title: "Restaurer une sauvegarde" }}
+          />
         </Stack>
       </ThemeProvider>
+      {lock.status !== "unlocked" ? (
+        <LockScreen obscured={lock.status === "obscured"} />
+      ) : null}
     </>
   );
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    initLock();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AppThemeProvider>

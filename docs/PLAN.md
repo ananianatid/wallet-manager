@@ -41,14 +41,28 @@ App **Expo SDK 57** (Expo Router, TypeScript), **Android**, usage personnel, **o
   - **Revenus** : Salaire, Virement reçu, Cadeau, Remboursement, Autre.
   - **Dépenses** : Nourriture, Transport, Logement, Factures, Santé, Éducation, Loisirs, Shopping, Autre.
 
+### Sécurité (avant distribution publique)
+- **Verrouillage** : biométrie (empreinte) + **PIN 6 chiffres de secours**, activable dans Réglages → Sécurité.
+  - Déclenchement : lancement de l'app, retour au premier plan après un **délai configurable** (30 s / 1 min / 5 min / 15 min), ou bouton « Verrouiller maintenant ».
+  - Le verrou est une **barrière d'accès à l'UI** (pas de chiffrement au repos de la DB) ; la DB reste en clair dans le sandbox.
+  - PIN haché (SHA-256 + sel) dans **expo-secure-store** (Keystore Android), config du verrou également en SecureStore (indépendante de la DB, survit à une restauration).
+  - 5 échecs → verrouillage 30 s. Code oublié → seule issue : réinitialisation de l'app (suppression des données), après avertissement.
+  - **Android hardening** : `allowBackup=false` (pas de copie de la DB en clair sur Google Drive) + `FLAG_SECURE` (recents/captures masquées) via `plugins/with-flag-secure.js`.
+- **Backup explicite chiffré** (`.wlbak`) : export manuel via Réglages → Données, protégé par mot de passe.
+  - Format : en-tête 34 octets (`WLTBKUP1` magic, version, kdf id, itérations, sel) en **AAD GCM**, puis `IV‖ciphertext‖tag`.
+  - Chiffrement **AES-256-GCM** (expo-crypto), clé dérivée par **PBKDF2-HMAC-SHA256, 100 000 itérations** (`@noble/hashes`).
+  - Restauration : remplacement complet de la DB après validation (magic SQLite, `user_version` ≤ version app, tables requises) et confirmation explicite. Le verrou et le PIN ne sont pas touchés.
+  - Mot de passe perdu = données irrécupérables (pas de backdoor), message explicite.
+
 ### Périmètre v1 (hors périmètre)
 | Inclus | Exclu |
 |---|---|
 | Transactions (liste, filtre **mois** seul, ‹ ›, défaut mois courant) | Statistiques / graphiques |
 | Comptes (liste + détail : transactions liées) | Budgets / plafonds |
-| Saisie de transaction (formulaire unique) | Verrouillage (PIN / biométrie) |
-| Catégories (CRUD) | Corbeille / archive |
-| | Multi-devises |
+| Saisie de transaction (formulaire unique) | Corbeille / archive |
+| Catégories (CRUD) | Multi-devises |
+| Verrouillage (PIN + biométrie) | Chiffrement de la DB au repos (SQLCipher non supporté par expo-sqlite) |
+| Export/restauration chiffrée (`.wlbak`) | Sauvegarde automatique / cloud |
 
 ## 2. Schéma SQLite
 

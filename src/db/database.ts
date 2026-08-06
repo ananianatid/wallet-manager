@@ -19,3 +19,15 @@ async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
   await migrateDbIfNeeded(db);
   return db;
 }
+
+export async function closeDatabase(): Promise<void> {
+  if (databasePromise) {
+    const db = await databasePromise;
+    databasePromise = null;
+    await db.closeAsync();
+  }
+}
+
+export async function resetDatabase(): Promise<void> {
+  await closeDatabase();
+}
