@@ -199,7 +199,7 @@ export default function CategoriesByTypeScreen() {
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Ajouter</Text>
+                <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Ajouter</Text>
               </Pressable>
             </View>
           ) : null}
@@ -251,7 +251,7 @@ export default function CategoriesByTypeScreen() {
                       pressed && { opacity: 0.7 },
                     ]}
                   >
-                    <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>OK</Text>
+                    <Text style={{ color: theme.onAccent, fontWeight: "700" }}>OK</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -304,7 +304,7 @@ export default function CategoriesByTypeScreen() {
             pressed && { opacity: 0.7 },
           ]}
         >
-          <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
+          <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
             {adding ? "Annuler" : "+ Ajouter une catégorie"}
           </Text>
         </Pressable>

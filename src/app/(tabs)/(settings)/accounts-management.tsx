@@ -207,15 +207,19 @@ export default function AccountsManagementScreen() {
       <Modal
         visible={assigningAccount != null}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setAssigningAccount(null)}
       >
         <Pressable
-          style={styles.backdrop}
+          style={[styles.backdrop, { backgroundColor: theme.scrim }]}
           onPress={() => setAssigningAccount(null)}
           accessibilityLabel="Fermer"
         >
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            accessibilityViewIsModal
+            style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}
+          >
             <Text style={[styles.sheetTitle, { color: theme.label }]}>
               {assigningAccount?.name}
             </Text>
@@ -265,7 +269,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   sheet: {

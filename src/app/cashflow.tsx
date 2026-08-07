@@ -7,12 +7,14 @@ import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { ScreenState } from "@/components/ui";
 import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
+import { useCurrency } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
 
 export default function CashflowScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
   const load = useCallback(async () => {
     const db = await getDatabase();
     return calculateSafeToSpend(db);
@@ -47,7 +49,12 @@ export default function CashflowScreen() {
           <>
             <SafeToSpendCard data={data} interactive={false} />
 
-            <View style={[styles.panel, { backgroundColor: theme.surface }]}>
+            <View
+              style={[
+                styles.panel,
+                { backgroundColor: withAlpha(theme.accentSurface, "0C") },
+              ]}
+            >
               <Text style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
                 Le calcul
               </Text>
@@ -59,7 +66,7 @@ export default function CashflowScreen() {
                   <Text style={{ color: theme.label }}>Disponible maintenant</Text>
                 </View>
                 <Text style={{ color: theme.label, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-                  {formatAmount(data.currentAvailable)}
+                  {formatAmount(data.currentAvailable, baseCurrency)}
                 </Text>
               </View>
               <View style={[styles.row, { borderBottomColor: theme.separator }]}>
@@ -70,7 +77,7 @@ export default function CashflowScreen() {
                   <Text style={{ color: theme.label }}>Échéances prévues</Text>
                 </View>
                 <Text style={{ color: theme.expense, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-                  −{formatAmount(data.plannedOutflows)}
+                  −{formatAmount(data.plannedOutflows, baseCurrency)}
                 </Text>
               </View>
               <View style={[styles.row, { borderBottomColor: theme.separator }]}>
@@ -81,7 +88,7 @@ export default function CashflowScreen() {
                   <Text style={{ color: theme.label }}>Revenus prévus</Text>
                 </View>
                 <Text style={{ color: theme.income, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-                  +{formatAmount(data.plannedIncome)}
+                  +{formatAmount(data.plannedIncome, baseCurrency)}
                 </Text>
               </View>
               {data.savings > 0 ? (
@@ -93,7 +100,7 @@ export default function CashflowScreen() {
                     <Text style={{ color: theme.label }}>Épargne</Text>
                   </View>
                   <Text style={{ color: theme.accent, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-                    −{formatAmount(data.savings)}
+                    −{formatAmount(data.savings, baseCurrency)}
                   </Text>
                 </View>
               ) : null}
@@ -121,7 +128,7 @@ export default function CashflowScreen() {
                       style={({ pressed }) => [styles.suggestion, { borderColor: theme.separator }, pressed && { opacity: 0.7 }]}
                     >
                       <Text style={{ color: theme.label, flex: 1 }}>
-                        Voir « {data.suggestion.goalName} » · libérer jusqu&apos;à {formatAmount(data.suggestion.amount)}
+                        Voir « {data.suggestion.goalName} » · libérer jusqu&apos;à {formatAmount(data.suggestion.amount, baseCurrency)}
                       </Text>
                       <ChevronRight size={17} color={theme.secondaryLabel} />
                     </Pressable>

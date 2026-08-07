@@ -15,6 +15,9 @@ import { Stack } from "expo-router/stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SectionList,
   StyleSheet,
@@ -34,6 +37,7 @@ import {
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { searchTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import {
@@ -173,6 +177,8 @@ function ChoiceRow({
 
 export default function TransactionSearchScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const criteria = useTransactionSearch();
   const [minInput, setMinInput] = useState(amountInput(criteria.minAmount));
   const [maxInput, setMaxInput] = useState(amountInput(criteria.maxAmount));
@@ -291,17 +297,19 @@ export default function TransactionSearchScreen() {
         groups.set(key, section);
       }
       section.data.push(transaction);
+      const amount = convert(transaction.amount, transaction.accountCurrencyCode ?? baseCurrency) ?? 0;
+      const fee = transaction.fee == null ? 0 : convert(transaction.fee, transaction.accountCurrencyCode ?? baseCurrency) ?? 0;
       section.total +=
         transaction.type === "income"
-          ? transaction.amount
+          ? amount
           : transaction.type === "expense"
-            ? -transaction.amount
-            : transaction.fee
-              ? -transaction.fee
+            ? -amount
+            : fee
+              ? -fee
               : 0;
     }
     return [...groups.values()];
-  }, [results, validationError]);
+  }, [baseCurrency, convert, results, validationError]);
 
   const update = (patch: Partial<TransactionSearchCriteria>) => {
     setTransactionSearch({ ...criteria, ...patch });
@@ -375,6 +383,7 @@ export default function TransactionSearchScreen() {
               accessibilityLabel="Recherche de transaction"
               style={[styles.searchInput, { color: theme.label }]}
               returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
           </View>
         </FormField>
@@ -602,13 +611,18 @@ export default function TransactionSearchScreen() {
           onRetry={() => void reloadOptions()}
         />
       ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => String(item.id)}
-          contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          stickySectionHeadersEnabled={false}
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => String(item.id)}
+            contentInsetAdjustmentBehavior="automatic"
+            contentContainerStyle={styles.content}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            keyboardShouldPersistTaps="handled"
+            stickySectionHeadersEnabled={false}
           ListHeaderComponent={
             <>
               {renderForm}
@@ -639,7 +653,7 @@ export default function TransactionSearchScreen() {
                 {section.title}
               </Text>
               <Text style={[styles.sectionHeaderTotal, { color: section.total >= 0 ? theme.label : theme.expense }]}>
-                {formatAmount(section.total)}
+                {formatAmount(section.total, baseCurrency)}
               </Text>
             </View>
           )}
@@ -662,7 +676,8 @@ export default function TransactionSearchScreen() {
               />
             ) : validationError ? null : null
           }
-        />
+          />
+        </KeyboardAvoidingView>
       )}
     </View>
   );
@@ -670,6 +685,7 @@ export default function TransactionSearchScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  flex: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2, gap: spacing.lg },
   form: { gap: spacing.lg },
   hero: { padding: spacing.xl, borderRadius: radius.xl, gap: spacing.md, borderCurve: "continuous" },
@@ -685,7 +701,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minHeight: 40,
+    minHeight: 48,
   },
   toggleMeta: {
     flexDirection: "row",

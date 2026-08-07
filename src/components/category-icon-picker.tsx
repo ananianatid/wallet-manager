@@ -20,7 +20,7 @@ export function CategoryIconPicker({ visible, value, onSelect, onClose }: Props)
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { backgroundColor: theme.scrim }]}>
         <View style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
           <View style={styles.header}>
             <Text style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
@@ -91,7 +91,6 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   sheet: {
     maxHeight: "78%",

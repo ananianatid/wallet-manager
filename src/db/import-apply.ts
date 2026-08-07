@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import type { ImportPlan } from "./money-manager";
+import { getReferenceCurrency } from "@/currency/service";
 
 export interface ImportReport {
   accountsCreated: number;
@@ -44,6 +45,10 @@ export async function applyImportPlan(
   };
 
   await db.withTransactionAsync(async () => {
+    const referenceCurrency =
+      typeof (db as unknown as { execAsync?: unknown }).execAsync === "function"
+        ? await getReferenceCurrency(db)
+        : "XOF";
     const categoryIds = new Map<string, number>();
     for (const category of plan.categories) {
       const key = `${category.type}|${category.name}`;
@@ -130,10 +135,11 @@ export async function applyImportPlan(
         groupId = groupIdsByName.get(account.groupName)!;
       }
       const result = await db.runAsync(
-        "INSERT INTO accounts (name, category_id, group_id, created_at, deleted_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO accounts (name, category_id, group_id, currency_code, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)",
         account.name,
         accountCategoryId ?? null,
         groupId,
+        referenceCurrency,
         now,
         account.deleted ? now : null,
       );
@@ -163,6 +169,15 @@ export async function applyImportPlan(
     );
     const existingKeys = new Set(existingTransactions.map(transactionKey));
 
+    const accountCurrencyRows = await db.getAllAsync<{
+      id: number;
+      currencyCode: string | null;
+    }>("SELECT id, currency_code AS currencyCode FROM accounts");
+    const hasCurrencyData = accountCurrencyRows.some((account) => account.currencyCode != null);
+    const accountCurrencies = new Map(
+      accountCurrencyRows.map((account) => [account.id, account.currencyCode]),
+    );
+
     for (const tx of plan.transactions) {
       const accountId = accountIdsByName.get(tx.accountName);
       if (accountId == null) {
@@ -179,6 +194,20 @@ export async function applyImportPlan(
       const categoryId = tx.categoryName
         ? (categoryIds.get(`${tx.type}|${tx.categoryName}`) ?? null)
         : null;
+
+      if (hasCurrencyData && accountCurrencies.get(accountId) !== referenceCurrency) {
+        throw new Error(
+          `L'import attend la devise de référence ${referenceCurrency} pour le compte « ${tx.accountName} ».`,
+        );
+      }
+      if (
+        destinationAccountId != null &&
+        hasCurrencyData && accountCurrencies.get(destinationAccountId) !== referenceCurrency
+      ) {
+        throw new Error(
+          `L'import attend la devise de référence ${referenceCurrency} pour le compte « ${tx.destinationName} ».`,
+        );
+      }
 
       const key = transactionKey({
         type: tx.type,
@@ -197,14 +226,20 @@ export async function applyImportPlan(
 
       await db.runAsync(
         `INSERT INTO transactions
-           (type, amount, category_id, account_id, destination_account_id, fee, note, transaction_date, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (type, amount, category_id, account_id, destination_account_id, fee,
+            destination_amount, exchange_rate, exchange_rate_date, exchange_rate_provider,
+            note, transaction_date, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         tx.type,
         tx.amount,
         categoryId,
         accountId,
         destinationAccountId,
         tx.fee,
+        tx.type === "transfer" ? tx.amount : null,
+        tx.type === "transfer" ? 1 : null,
+        tx.type === "transfer" ? new Date(tx.date).toISOString().slice(0, 10) : null,
+        tx.type === "transfer" ? "Money Manager import" : null,
         tx.note,
         tx.date,
         now,

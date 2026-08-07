@@ -1,4 +1,4 @@
-import { getThemePalette } from "./theme";
+import { ACCENT_THEME_VALUES, getThemePalette } from "./theme";
 
 function contrastRatio(foreground: string, background: string): number {
   const luminance = (color: string) => {
@@ -19,6 +19,10 @@ function contrastRatio(foreground: string, background: string): number {
 }
 
 describe("accent themes", () => {
+  it("accepts midnight as a persisted accent option", () => {
+    expect(ACCENT_THEME_VALUES).toContain("midnight");
+  });
+
   it("uses blue as the default accent with dark action text", () => {
     expect(getThemePalette("light")).toMatchObject({
       accent: "#339CFF",
@@ -38,7 +42,23 @@ describe("accent themes", () => {
     });
     expect(getThemePalette("light", "green")).toMatchObject({
       accent: "#059669",
-      onAccent: "#FFFFFF",
+      onAccent: "#0A0A0B",
+    });
+  });
+
+  it("exposes navy as an additional global accent theme", () => {
+    expect(getThemePalette("light", "midnight")).toMatchObject({
+      accent: "#123A60",
+      accentSurface: "#123A60",
+      accentSurfaceText: "#FFFFFF",
+      background: "#F3F7FC",
+      surfaceElevated: "#EAF3FC",
+    });
+    expect(getThemePalette("dark", "midnight")).toMatchObject({
+      accent: "#7CC2FF",
+      accentSurface: "#123A60",
+      background: "#07111F",
+      surface: "#0C1C2B",
     });
   });
 
@@ -50,11 +70,12 @@ describe("accent themes", () => {
   });
 
   it("provides contrast-safe colored surfaces in every theme combination", () => {
-    for (const accentTheme of ["blue", "green"] as const) {
+    for (const accentTheme of ["blue", "midnight", "green"] as const) {
       for (const scheme of ["light", "dark"] as const) {
         const palette = getThemePalette(scheme, accentTheme);
 
         expect(contrastRatio(palette.accentSurfaceText, palette.accentSurface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(palette.onAccent, palette.accent)).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(palette.accentSurfaceLabel, palette.accentSurface)).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(palette.dangerSurfaceText, palette.dangerSurface)).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(palette.dangerSurfaceLabel, palette.dangerSurface)).toBeGreaterThanOrEqual(4.5);

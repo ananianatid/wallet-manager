@@ -1,5 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import { getAccountAvailableBalance } from "./accounts";
+import { convertMinorAmount } from "@/currency/currencies";
+import { getRateForPair } from "@/currency/service";
 import type {
   Goal,
   GoalInput,
@@ -12,6 +14,7 @@ interface GoalRow {
   id: number;
   name: string;
   targetAmount: number;
+  currencyCode: string;
   targetDate: number;
   status: GoalStatus;
   createdAt: number;
@@ -23,7 +26,13 @@ interface ReservationRow {
   goalId: number;
   sourceAccountId: number;
   sourceAccountName: string;
+  sourceCurrencyCode: string;
   amount: number;
+  referenceAmount: number;
+  referenceCurrency: string;
+  exchangeRate: number;
+  exchangeRateDate: string | null;
+  exchangeRateProvider: string | null;
   note: string | null;
   reservationDate: number;
   createdAt: number;
@@ -46,6 +55,7 @@ function mapGoal(row: GoalRow): Goal {
     id: row.id,
     name: row.name,
     targetAmount: row.targetAmount,
+    currencyCode: row.currencyCode,
     targetDate: row.targetDate,
     status: row.status,
     createdAt: row.createdAt,
@@ -67,7 +77,13 @@ function mapReservation(row: ReservationRow): GoalReservation {
     goalId: row.goalId,
     sourceAccountId: row.sourceAccountId,
     sourceAccountName: row.sourceAccountName,
+    sourceCurrencyCode: row.sourceCurrencyCode,
     amount: row.amount,
+    referenceAmount: row.referenceAmount,
+    referenceCurrency: row.referenceCurrency,
+    exchangeRate: row.exchangeRate,
+    exchangeRateDate: row.exchangeRateDate,
+    exchangeRateProvider: row.exchangeRateProvider,
     note: row.note,
     reservationDate: row.reservationDate,
     createdAt: row.createdAt,
@@ -79,10 +95,11 @@ const GOAL_FIELDS = `
   g.id,
   g.name,
   g.target_amount AS targetAmount,
+  g.currency_code AS currencyCode,
   g.target_date AS targetDate,
   g.status,
   g.created_at AS createdAt,
-  COALESCE(SUM(CASE WHEN r.released_at IS NULL THEN r.amount ELSE 0 END), 0) AS reservedAmount
+  COALESCE(SUM(CASE WHEN r.released_at IS NULL THEN r.reference_amount ELSE 0 END), 0) AS reservedAmount
 `;
 
 function validateGoalInput(input: GoalInput): GoalInput {
@@ -96,7 +113,12 @@ function validateGoalInput(input: GoalInput): GoalInput {
   if (!Number.isInteger(input.targetDate)) {
     throw new Error("La date cible est invalide.");
   }
-  return { name, targetAmount: input.targetAmount, targetDate: input.targetDate };
+  return {
+    name,
+    targetAmount: input.targetAmount,
+    targetDate: input.targetDate,
+    currencyCode: input.currencyCode,
+  };
 }
 
 export async function listGoals(db: SQLiteDatabase): Promise<Goal[]> {
@@ -132,14 +154,24 @@ export async function createGoal(
   input: GoalInput,
 ): Promise<number> {
   const valid = validateGoalInput(input);
-  const result = await db.runAsync(
-    `INSERT INTO goals (name, target_amount, target_date, created_at)
-     VALUES (?, ?, ?, ?)`,
-    valid.name,
-    valid.targetAmount,
-    valid.targetDate,
-    Date.now(),
-  );
+  const result = valid.currencyCode == null
+    ? await db.runAsync(
+        `INSERT INTO goals (name, target_amount, target_date, created_at)
+         VALUES (?, ?, ?, ?)`,
+        valid.name,
+        valid.targetAmount,
+        valid.targetDate,
+        Date.now(),
+      )
+    : await db.runAsync(
+        `INSERT INTO goals (name, target_amount, target_date, created_at, currency_code)
+         VALUES (?, ?, ?, ?, ?)`,
+        valid.name,
+        valid.targetAmount,
+        valid.targetDate,
+        Date.now(),
+        valid.currencyCode,
+      );
   return Number(result.lastInsertRowId);
 }
 
@@ -149,13 +181,22 @@ export async function updateGoal(
   input: GoalInput,
 ): Promise<void> {
   const valid = validateGoalInput(input);
-  const result = await db.runAsync(
-    "UPDATE goals SET name = ?, target_amount = ?, target_date = ? WHERE id = ?",
-    valid.name,
-    valid.targetAmount,
-    valid.targetDate,
-    id,
-  );
+  const result = valid.currencyCode == null
+    ? await db.runAsync(
+        "UPDATE goals SET name = ?, target_amount = ?, target_date = ? WHERE id = ?",
+        valid.name,
+        valid.targetAmount,
+        valid.targetDate,
+        id,
+      )
+    : await db.runAsync(
+        "UPDATE goals SET name = ?, target_amount = ?, target_date = ?, currency_code = ? WHERE id = ?",
+        valid.name,
+        valid.targetAmount,
+        valid.targetDate,
+        valid.currencyCode,
+        id,
+      );
   if (result.changes === 0) {
     throw new Error("Objectif introuvable.");
   }
@@ -185,7 +226,13 @@ export async function listGoalReservations(
             r.goal_id AS goalId,
             r.source_account_id AS sourceAccountId,
             a.name AS sourceAccountName,
+            a.currency_code AS sourceCurrencyCode,
             r.amount,
+            r.reference_amount AS referenceAmount,
+            r.reference_currency AS referenceCurrency,
+            r.exchange_rate AS exchangeRate,
+            r.exchange_rate_date AS exchangeRateDate,
+            r.exchange_rate_provider AS exchangeRateProvider,
             r.note,
             r.reservation_date AS reservationDate,
             r.created_at AS createdAt,
@@ -209,8 +256,8 @@ export async function createGoalReservation(
   if (!Number.isInteger(input.reservationDate)) {
     throw new Error("La date de réservation est invalide.");
   }
-  const goal = await db.getFirstAsync<{ status: GoalStatus }>(
-    "SELECT status FROM goals WHERE id = ?",
+  const goal = await db.getFirstAsync<{ status: GoalStatus; currencyCode: string }>(
+    "SELECT status, currency_code AS currencyCode FROM goals WHERE id = ?",
     input.goalId,
   );
   if (!goal) {
@@ -222,16 +269,51 @@ export async function createGoalReservation(
   const available = await getAccountAvailableBalance(db, input.sourceAccountId);
   if (input.amount > available) {
     throw new Error(
-      `Solde disponible insuffisant. Disponible : ${available.toLocaleString("fr-FR")} F.`,
+      `Solde disponible insuffisant. Disponible : ${available.toLocaleString("fr-FR")} .`,
     );
+  }
+  const account = await db.getFirstAsync<{ currencyCode: string }>(
+    "SELECT currency_code AS currencyCode FROM accounts WHERE id = ?",
+    input.sourceAccountId,
+  );
+  const sourceCurrency = account?.currencyCode ?? "XOF";
+  const rate =
+    input.exchangeRate != null
+      ? {
+          rate: input.exchangeRate,
+          date: input.exchangeRateDate ?? new Date().toISOString().slice(0, 10),
+          provider: input.exchangeRateProvider ?? "manual",
+        }
+      : await getRateForPair(db, sourceCurrency, goal.currencyCode);
+  if (!rate) {
+    throw new Error(
+      `Taux indisponible pour ${sourceCurrency}/${goal.currencyCode}.`,
+    );
+  }
+  const referenceAmount =
+    input.referenceAmount ??
+    convertMinorAmount(
+      input.amount,
+      sourceCurrency,
+      goal.currencyCode,
+      rate.rate,
+    );
+  if (!Number.isInteger(referenceAmount) || referenceAmount <= 0) {
+    throw new Error("Le montant converti de la réservation est invalide.");
   }
   const result = await db.runAsync(
     `INSERT INTO goal_reservations
-       (goal_id, source_account_id, amount, note, reservation_date, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+       (goal_id, source_account_id, amount, reference_amount, reference_currency,
+        exchange_rate, exchange_rate_date, exchange_rate_provider, note, reservation_date, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     input.goalId,
     input.sourceAccountId,
     input.amount,
+    referenceAmount,
+    goal.currencyCode,
+    rate.rate,
+    rate.date,
+    rate.provider,
     input.note?.trim() || null,
     input.reservationDate,
     Date.now(),

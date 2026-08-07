@@ -15,6 +15,8 @@ import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { deleteBudget, listBudgets, setBudget } from "@/db/budgets";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
+import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, type ThemeColors } from "@/theme";
@@ -94,7 +96,7 @@ function EditRow({
             pressed && { opacity: 0.7 },
           ]}
         >
-          <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Enregistrer</Text>
+          <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Enregistrer</Text>
         </Pressable>
       </View>
     </View>
@@ -103,6 +105,8 @@ function EditRow({
 
 export default function BudgetsScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
@@ -123,16 +127,16 @@ export default function BudgetsScreen() {
       if (t.type !== "expense") {
         continue;
       }
-      totalExpense += t.amount;
+      totalExpense += convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
       if (t.categoryId != null) {
         spentByCategory.set(
           t.categoryId,
-          (spentByCategory.get(t.categoryId) ?? 0) + t.amount,
+          (spentByCategory.get(t.categoryId) ?? 0) + (convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0),
         );
       }
     }
     return { budgets: b, expenseCategories: cats, spentByCategory, totalExpense };
-  }, []);
+  }, [baseCurrency, convert]);
 
   const resource = useAsyncResource(load);
   const reload = resource.reload;
@@ -161,7 +165,7 @@ export default function BudgetsScreen() {
   const startEdit = (budget: Budget) => {
     setEditingKey(String(budget.id));
     setCategoryId(budget.categoryId);
-    setAmount(String(budget.amount));
+    setAmount((budget.amount / 10 ** currencyDigits(budget.currencyCode)).toString());
   };
 
   const cancelEdit = () => {
@@ -171,9 +175,9 @@ export default function BudgetsScreen() {
   };
 
   const save = async () => {
-    const parsed = Number(amount);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      Alert.alert("Montant invalide", "Saisissez un budget entier positif en FCFA.");
+    const parsed = parseMoneyInput(amount, baseCurrency);
+    if (parsed == null || Number.isNaN(parsed) || parsed <= 0) {
+      Alert.alert("Montant invalide", `Saisissez un budget positif en ${baseCurrency}.`);
       return;
     }
     if (categoryId == null && editingBudget && editingBudget.categoryId != null) {
@@ -182,7 +186,7 @@ export default function BudgetsScreen() {
     }
     const db = await getDatabase();
     try {
-      await setBudget(db, categoryId, parsed);
+      await setBudget(db, categoryId, parsed, baseCurrency);
       cancelEdit();
       await resource.reload();
     } catch (e) {
@@ -280,7 +284,7 @@ export default function BudgetsScreen() {
                         {budget.categoryName ?? "Toutes les dépenses"}
                       </Text>
                       <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                        {formatAmount(spent)} / {formatAmount(budget.amount)} ce mois
+                        {formatAmount(spent, baseCurrency)} / {formatAmount(budget.amount, budget.currencyCode)} ce mois
                       </Text>
                       <View style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}>
                         <View
@@ -295,7 +299,7 @@ export default function BudgetsScreen() {
                       </View>
                     </View>
                     <Text style={[styles.amount, { color: theme.label }]}>
-                      {formatAmount(budget.amount)}
+                      {formatAmount(budget.amount, budget.currencyCode)}
                     </Text>
                     <IconButton
                       label={`Modifier le budget ${budget.categoryName ?? "global"}`}
@@ -345,7 +349,7 @@ export default function BudgetsScreen() {
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
+            <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
               + Ajouter un budget
             </Text>
           </Pressable>

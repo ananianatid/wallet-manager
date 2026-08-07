@@ -53,7 +53,7 @@ export default function GoalDetailScreen() {
   const release = (reservation: GoalReservation) => {
     Alert.alert(
       "Libérer cette réservation ?",
-      `${formatAmount(reservation.amount)} redeviendra disponible sur ${reservation.sourceAccountName}.`,
+      `${formatAmount(reservation.amount, reservation.sourceCurrencyCode)} redeviendra disponible sur ${reservation.sourceAccountName}.`,
       [
         { text: "Annuler", style: "cancel" },
         {
@@ -172,7 +172,7 @@ export default function GoalDetailScreen() {
             </View>
             <View style={{ alignItems: "flex-end", gap: spacing.xs }}>
               <Text style={{ color: item.releasedAt ? theme.secondaryLabel : theme.label, fontWeight: "800" }}>
-                {formatAmount(item.amount)}
+                {formatAmount(item.amount, item.sourceCurrencyCode)}
               </Text>
               {!item.releasedAt ? (
                 <IconButton
@@ -208,16 +208,16 @@ export default function GoalDetailScreen() {
                 <View style={styles.metrics}>
                   <View>
                     <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Réservé</Text>
-                    <Text style={{ color: theme.label, fontSize: 20, fontWeight: "800" }}>{formatAmount(goal.reservedAmount)}</Text>
+                    <Text style={{ color: theme.label, fontSize: 20, fontWeight: "800" }}>{formatAmount(goal.reservedAmount, goal.currencyCode)}</Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Reste</Text>
-                    <Text style={{ color: theme.label, fontSize: 20, fontWeight: "800" }}>{formatAmount(goal.remainingAmount)}</Text>
+                    <Text style={{ color: theme.label, fontSize: 20, fontWeight: "800" }}>{formatAmount(goal.remainingAmount, goal.currencyCode)}</Text>
                   </View>
                 </View>
                 {!goal.isAchieved ? (
                   <Text style={{ color: goal.isOverdue ? theme.expense : theme.secondaryLabel }}>
-                    {goal.isOverdue ? "Objectif en retard" : `Rythme recommandé : ${formatAmount(goal.monthlyRequired)} par mois`}
+                    {goal.isOverdue ? "Objectif en retard" : `Rythme recommandé : ${formatAmount(goal.monthlyRequired, goal.currencyCode)} par mois`}
                   </Text>
                 ) : null}
               </View>
@@ -227,8 +227,8 @@ export default function GoalDetailScreen() {
                 disabled={goal.status !== "active"}
                 style={({ pressed }) => [styles.reserveButton, { backgroundColor: theme.accent }, goal.status !== "active" && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}
               >
-                <ArrowUpRight size={18} color="#0A0A0B" strokeWidth={2.4} />
-                <Text style={{ color: "#0A0A0B", fontWeight: "800" }}>Réserver une somme</Text>
+                <ArrowUpRight size={18} color={theme.onAccent} strokeWidth={2.4} />
+                <Text style={{ color: theme.onAccent, fontWeight: "800" }}>Réserver une somme</Text>
               </Pressable>
 
               <View style={styles.actionsRow}>

@@ -15,6 +15,9 @@ interface Props {
   donutSize?: number;
   strokeWidth?: number;
   labelMaxWidth?: number;
+  surfaceColor?: string;
+  labelColor?: string;
+  outlineColor?: string;
 }
 
 const LABEL_CAP = 6; // ponytail: cap donut labels; the summary list shows all
@@ -26,8 +29,14 @@ export function LabeledDonutChart({
   donutSize = 200,
   strokeWidth = 36,
   labelMaxWidth = 58,
+  surfaceColor,
+  labelColor,
+  outlineColor,
 }: Props) {
   const theme = useTheme();
+  const chartSurface = surfaceColor ?? theme.surface;
+  const chartLabel = labelColor ?? theme.label;
+  const chartOutline = outlineColor ?? theme.outline;
   const center = size / 2;
   const ringR = (donutSize - strokeWidth) / 2;
   const ringOuter = ringR + strokeWidth / 2;
@@ -95,7 +104,7 @@ export function LabeledDonutChart({
             />
           );
         })}
-        <Circle cx={center} cy={center} r={ringR * 0.62} fill={theme.surface} />
+        <Circle cx={center} cy={center} r={ringR * 0.62} fill={chartSurface} />
         {labels.map((l) => (
           <Fragment key={l.key}>
             <Line
@@ -103,7 +112,7 @@ export function LabeledDonutChart({
               y1={l.y0}
               x2={l.x1}
               y2={l.y1}
-              stroke={theme.outline}
+              stroke={chartOutline}
               strokeWidth={1}
             />
             <Line
@@ -111,7 +120,7 @@ export function LabeledDonutChart({
               y1={l.y1}
               x2={l.anchorX}
               y2={l.y1}
-              stroke={theme.outline}
+              stroke={chartOutline}
               strokeWidth={1}
             />
           </Fragment>
@@ -129,7 +138,7 @@ export function LabeledDonutChart({
               left: l.right ? l.anchorX : l.anchorX - labelMaxWidth,
               width: labelMaxWidth,
               textAlign: l.right ? "left" : "right",
-              color: theme.label,
+              color: chartLabel,
             },
           ]}
         >

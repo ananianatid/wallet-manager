@@ -33,6 +33,7 @@ export interface Account {
   hidden: boolean;
   excludeFromTotal: boolean;
   description: string | null;
+  currencyCode: string;
   createdAt: number;
   balance: number;
   reservedAmount: number;
@@ -57,9 +58,15 @@ export interface Transaction {
   categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   accountId: number;
   accountName: string;
+  accountCurrencyCode?: string;
   destinationAccountId: number | null;
   destinationAccountName: string | null;
+  destinationCurrencyCode?: string | null;
   fee: number | null;
+  destinationAmount?: number | null;
+  exchangeRate?: number | null;
+  exchangeRateDate?: string | null;
+  exchangeRateProvider?: string | null;
   note: string | null;
   transactionDate: number;
   createdAt: number;
@@ -82,6 +89,7 @@ export interface AccountInput {
   hidden?: boolean;
   excludeFromTotal?: boolean;
   description?: string | null;
+  currencyCode?: string;
 }
 
 export interface TransactionInput {
@@ -91,6 +99,10 @@ export interface TransactionInput {
   accountId: number;
   destinationAccountId: number | null;
   fee: number | null;
+  destinationAmount?: number | null;
+  exchangeRate?: number | null;
+  exchangeRateDate?: string | null;
+  exchangeRateProvider?: string | null;
   note: string | null;
   transactionDate: number;
 }
@@ -101,6 +113,7 @@ export interface Budget {
   categoryName: string | null;
   categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
   amount: number;
+  currencyCode: string;
   createdAt: number;
 }
 
@@ -116,6 +129,8 @@ export interface RecurringTransaction {
   destinationAccountId: number | null;
   destinationAccountName: string | null;
   fee: number | null;
+  sourceCurrencyCode: string;
+  destinationCurrencyCode: string | null;
   note: string | null;
   frequency: Frequency;
   interval: number;
@@ -166,6 +181,7 @@ export interface Goal {
   id: number;
   name: string;
   targetAmount: number;
+  currencyCode: string;
   targetDate: number;
   status: GoalStatus;
   createdAt: number;
@@ -181,6 +197,7 @@ export interface GoalInput {
   name: string;
   targetAmount: number;
   targetDate: number;
+  currencyCode?: string;
 }
 
 export interface GoalReservation {
@@ -188,7 +205,13 @@ export interface GoalReservation {
   goalId: number;
   sourceAccountId: number;
   sourceAccountName: string;
+  sourceCurrencyCode?: string;
   amount: number;
+  referenceAmount: number;
+  referenceCurrency: string;
+  exchangeRate: number;
+  exchangeRateDate: string | null;
+  exchangeRateProvider: string | null;
   note: string | null;
   reservationDate: number;
   createdAt: number;
@@ -201,6 +224,11 @@ export interface GoalReservationInput {
   amount: number;
   note: string | null;
   reservationDate: number;
+  referenceAmount?: number;
+  referenceCurrency?: string;
+  exchangeRate?: number;
+  exchangeRateDate?: string | null;
+  exchangeRateProvider?: string | null;
 }
 
 export interface SafeToSpendSuggestion {

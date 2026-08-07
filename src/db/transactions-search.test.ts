@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-import { searchTransactions } from "./transactions";
+import { listTransactions, searchTransactions } from "./transactions";
 import type { TransactionSearchCriteria } from "@/types";
 
 function criteria(
@@ -68,5 +68,30 @@ describe("searchTransactions", () => {
     expect(sql).toContain("t.amount >= ?");
     expect(sql).toContain("t.amount <= ?");
     expect(params).toEqual([35_000, 35_000, 200]);
+  });
+});
+
+describe("listTransactions", () => {
+  it("limits recent transactions in the database query", async () => {
+    const getAllAsync = jest.fn().mockResolvedValue([]);
+    const db = { getAllAsync } as unknown as SQLiteDatabase;
+
+    await listTransactions(db, { order: "desc", limit: 5 });
+
+    const [sql, params] = getAllAsync.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("ORDER BY t.transaction_date DESC");
+    expect(sql).toContain("LIMIT ?");
+    expect(params).toEqual([5]);
+  });
+
+  it("rejects non-positive or non-integer limits", async () => {
+    const db = { getAllAsync: jest.fn() } as unknown as SQLiteDatabase;
+
+    expect(() => listTransactions(db, { limit: 0 })).toThrow(
+      "La limite de transactions doit être un entier positif.",
+    );
+    expect(() => listTransactions(db, { limit: 1.5 })).toThrow(
+      "La limite de transactions doit être un entier positif.",
+    );
   });
 });

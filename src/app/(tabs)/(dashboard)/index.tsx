@@ -19,26 +19,38 @@ import { listAccounts } from "@/db/accounts";
 import { listBudgets } from "@/db/budgets";
 import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { listGoals } from "@/db/goals";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme } from "@/theme";
-import { formatAmount, formatMonthLabel } from "@/utils/format";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { formatAmount, formatDate, formatMonthLabel } from "@/utils/format";
 import { savingsByRule, totals } from "@/utils/statistics";
 
 function SectionCard({
   title,
   action,
+  tone = "neutral",
   children,
 }: {
   title: string;
   action?: { label: string; onPress: () => void };
+  tone?: "neutral" | "accent";
   children: ReactNode;
 }) {
   const theme = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor:
+            tone === "accent" ? withAlpha(theme.accentSurface, "12") : theme.surface,
+          gap: spacing.md,
+        },
+      ]}
+    >
       <View style={styles.cardHeader}>
         <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
           {title}
@@ -47,8 +59,8 @@ function SectionCard({
           <Pressable
             onPress={action.onPress}
             accessibilityRole="button"
-            hitSlop={8}
-            style={({ pressed }) => pressed && styles.pressed}
+            accessibilityLabel={action.label}
+            style={({ pressed }) => [styles.cardAction, pressed && styles.pressed]}
           >
             <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 13 }}>
               {action.label}
@@ -63,18 +75,40 @@ function SectionCard({
 
 export default function DashboardScreen() {
   const theme = useTheme();
+  const { baseCurrency, lastRefresh, stale } = useCurrency();
+  const convert = useCurrencyConverter();
   const insets = useSafeAreaInsets();
+
+  const currentMonth = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return {
+      label: start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+    };
+  }, []);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [forecast, accounts, goals, budgets, savingsRules, recentRows] = await Promise.all([
+    const [forecast, accounts, goals, budgets, savingsRules] = await Promise.all([
       calculateSafeToSpend(db),
       listAccounts(db),
       listGoals(db),
       listBudgets(db),
       listSavingsRules(db),
-      // ponytail: loads all rows for the 5 latest; add LIMIT 5 in listTransactions if it gets heavy
-      listTransactions(db, { order: "desc" }),
+    ]);
+    const ruleStarts = savingsRules
+      .map((rule) => rule.startDate)
+      .filter((date): date is number => date != null);
+    const transactionStartMs =
+      ruleStarts.length > 0
+        ? Math.min(currentMonth.startMs, ...ruleStarts)
+        : currentMonth.startMs;
+    const [transactions, recent] = await Promise.all([
+      listTransactions(db, { startMs: transactionStartMs, order: "asc" }),
+      listTransactions(db, { order: "desc", limit: 5 }),
     ]);
 
     return {
@@ -83,10 +117,10 @@ export default function DashboardScreen() {
       goals,
       budgets,
       savingsRules,
-      transactions: recentRows,
-      recent: recentRows.slice(0, 5),
+      transactions,
+      recent,
     };
-  }, []);
+  }, [currentMonth.startMs]);
 
   const resource = useAsyncResource(load);
   const reload = resource.reload;
@@ -113,16 +147,6 @@ export default function DashboardScreen() {
   );
   const recent = useMemo(() => data?.recent ?? [], [data?.recent]);
 
-  const currentMonth = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return {
-      label: start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
-      startMs: start.getTime(),
-      endMs: end.getTime(),
-    };
-  }, []);
   const monthTransactions = useMemo(
     () =>
       transactions.filter(
@@ -132,19 +156,20 @@ export default function DashboardScreen() {
       ),
     [transactions, currentMonth],
   );
-  const monthTotals = useMemo(() => totals(monthTransactions), [monthTransactions]);
+  const monthTotals = useMemo(() => totals(monthTransactions, convert), [monthTransactions, convert]);
   const spentByCategory = useMemo(() => {
     const map = new Map<number, number>();
     for (const transaction of monthTransactions) {
       if (transaction.type === "expense" && transaction.categoryId != null) {
         map.set(
           transaction.categoryId,
-          (map.get(transaction.categoryId) ?? 0) + transaction.amount,
+          (map.get(transaction.categoryId) ?? 0) +
+            (convert(transaction.amount, transaction.accountCurrencyCode ?? baseCurrency) ?? 0),
         );
       }
     }
     return map;
-  }, [monthTransactions]);
+  }, [baseCurrency, convert, monthTransactions]);
   const budgetRows = useMemo(
     () =>
       budgets.map((budget) => ({
@@ -172,8 +197,8 @@ export default function DashboardScreen() {
     [transactions, earliestSavingsStartMs],
   );
   const savings = useMemo(
-    () => savingsByRule(savingsTransactions, savingsRules, currentMonth.startMs),
-    [savingsTransactions, savingsRules, currentMonth.startMs],
+    () => savingsByRule(savingsTransactions, savingsRules, currentMonth.startMs, convert),
+    [savingsTransactions, savingsRules, currentMonth.startMs, convert],
   );
   const savingsTitle = useMemo(
     () =>
@@ -210,8 +235,8 @@ export default function DashboardScreen() {
           style={{ flex: 1 }}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{
-            padding: spacing.lg,
-            paddingBottom: spacing.xxl,
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.xxl + 56 + insets.bottom + spacing.lg,
             gap: spacing.lg,
           }}
         >
@@ -224,6 +249,11 @@ export default function DashboardScreen() {
             />
           ) : (
             <>
+              {lastRefresh != null ? (
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                  Taux actuels du {formatDate(lastRefresh)}{stale ? " · hors connexion" : ""}
+                </Text>
+              ) : null}
               {safeToSpend ? (
                 // SafeToSpendCard porte son propre marginHorizontal: annule celui-ci
                 // pour rester aligné avec les autres cards (conteneur paddé).
@@ -238,7 +268,7 @@ export default function DashboardScreen() {
 
               {budgetRows.length > 0 ? (
                 <SectionCard
-                  title={`Budgets · ${formatAmount(monthTotals.expense)} dépensés`}
+                  title={`Budgets · ${formatAmount(monthTotals.expense, baseCurrency)} dépensés`}
                   action={{
                     label: "Gérer",
                     onPress: () => router.push("/budgets"),
@@ -250,7 +280,7 @@ export default function DashboardScreen() {
                     const color = over
                       ? theme.expense
                       : spent >= budget.amount * 0.8
-                        ? "#F59E0B"
+                        ? theme.warning
                         : theme.accent;
                     return (
                       <View key={budget.id} style={{ gap: spacing.xs }}>
@@ -258,14 +288,14 @@ export default function DashboardScreen() {
                           {budget.categoryIcon ? (
                             <CategoryIcon name={budget.categoryIcon} size={17} color={theme.accent} />
                           ) : null}
-                          <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
+                          <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={2}>
                             {budget.categoryName ?? "Toutes les dépenses"}
                           </Text>
                           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                             {Math.round((spent / budget.amount) * 100)}%
                           </Text>
                           <Text style={{ color: theme.label, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
-                            {formatAmount(spent)} / {formatAmount(budget.amount)}
+                            {formatAmount(spent, baseCurrency)} / {formatAmount(budget.amount, budget.currencyCode)}
                           </Text>
                         </View>
                         <View style={[styles.track, { backgroundColor: theme.surfaceElevated }]}>
@@ -286,6 +316,7 @@ export default function DashboardScreen() {
 
               <SectionCard
                 title={savingsTitle}
+                tone="accent"
                 action={{
                   label: "Gérer",
                   onPress: () => router.push("/savings"),
@@ -303,14 +334,14 @@ export default function DashboardScreen() {
                           {rule.categoryIcon ? (
                             <CategoryIcon name={rule.categoryIcon} size={17} color={theme.accent} />
                           ) : null}
-                          <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={1}>
+                          <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={2}>
                             {rule.categoryName ?? "Tous les revenus"}
                           </Text>
                           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                             {rule.percent} %
                           </Text>
                           <Text style={[styles.legendAmount, { color: theme.label }]}>
-                            {formatAmount(amount)}
+                            {formatAmount(amount, baseCurrency)}
                           </Text>
                         </View>
                       ))}
@@ -328,7 +359,7 @@ export default function DashboardScreen() {
                           fontVariant: ["tabular-nums"],
                         }}
                       >
-                        {formatAmount(savingsTotal)}
+                        {formatAmount(savingsTotal, baseCurrency)}
                       </Text>
                     </View>
                   </>
@@ -336,9 +367,10 @@ export default function DashboardScreen() {
               </SectionCard>
 
               {activeGoals.length > 0 ? (
-                <SectionCard
-                  title="Objectifs en cours"
-                  action={{
+              <SectionCard
+                title="Objectifs en cours"
+                tone="accent"
+                action={{
                     label: "Tout voir",
                     onPress: () => router.push("/goals"),
                   }}
@@ -365,7 +397,7 @@ export default function DashboardScreen() {
                         <View style={styles.budgetRow}>
                           <Text
                             style={[styles.legendName, { color: theme.label }]}
-                            numberOfLines={1}
+                            numberOfLines={2}
                           >
                             {goal.name}
                           </Text>
@@ -389,9 +421,9 @@ export default function DashboardScreen() {
                           />
                         </View>
                         <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                          {formatAmount(goal.reservedAmount)} sur{" "}
-                          {formatAmount(goal.targetAmount)} · reste{" "}
-                          {formatAmount(goal.remainingAmount)}
+                          {formatAmount(goal.reservedAmount, goal.currencyCode)} sur{" "}
+                          {formatAmount(goal.targetAmount, goal.currencyCode)} · reste{" "}
+                          {formatAmount(goal.remainingAmount, goal.currencyCode)}
                         </Text>
                       </Pressable>
                     );
@@ -414,8 +446,7 @@ export default function DashboardScreen() {
                     <Pressable
                       onPress={() => router.push("/(tabs)/(transactions)")}
                       accessibilityRole="button"
-                      hitSlop={8}
-                      style={({ pressed }) => pressed && styles.pressed}
+                      style={({ pressed }) => [styles.cardAction, pressed && styles.pressed]}
                     >
                       <Text
                         style={{ color: theme.accent, fontWeight: "700", fontSize: 13 }}
@@ -456,7 +487,11 @@ export default function DashboardScreen() {
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.fab,
-            { backgroundColor: theme.accent, bottom: insets.bottom + spacing.lg },
+            {
+              backgroundColor: theme.accent,
+              bottom: insets.bottom + spacing.lg,
+              boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
+            },
             pressed && { opacity: 0.8 },
           ]}
         >
@@ -469,6 +504,13 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
+  cardAction: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+  },
   card: {
     borderRadius: radius.lg,
     padding: spacing.lg,
@@ -526,6 +568,5 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35)",
   },
 });

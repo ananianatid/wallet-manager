@@ -1,4 +1,5 @@
 import { Stack } from "expo-router/stack";
+import { CompactStackHeader } from "@/components/compact-stack-header";
 import { useTheme } from "@/theme";
 
 export default function AccountsLayout() {
@@ -6,7 +7,10 @@ export default function AccountsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: theme.background },
+        headerStyle: {
+          backgroundColor: theme.background,
+        },
+        header: CompactStackHeader,
         headerTitleStyle: { color: theme.label },
         headerShadowVisible: false,
         headerTintColor: theme.accent,

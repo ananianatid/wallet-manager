@@ -20,16 +20,20 @@ export function MonthPicker({ visible, year, month, years, onSelect, onClose }: 
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
       onShow={() => setSession((s) => s + 1)}
     >
       <Pressable
-        style={styles.backdrop}
+        style={[styles.backdrop, { backgroundColor: theme.scrim }]}
         onPress={onClose}
         accessibilityLabel="Fermer"
       >
-        <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+        <Pressable
+          onPress={(event) => event.stopPropagation()}
+          accessibilityViewIsModal
+          style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}
+        >
           <Text style={[styles.sheetTitle, { color: theme.label }]}>
             Choisir un mois
           </Text>
@@ -52,7 +56,6 @@ export function MonthPicker({ visible, year, month, years, onSelect, onClose }: 
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   sheet: {

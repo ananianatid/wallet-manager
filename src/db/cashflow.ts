@@ -5,6 +5,8 @@ import { listRecurring, applyDueRecurring } from "./recurring";
 import { listSavingsRules } from "./savings";
 import { listTransactions } from "./transactions";
 import { savingsByRule } from "../utils/statistics";
+import { convertMinorAmount } from "@/currency/currencies";
+import { getRateForPair, getReferenceCurrency } from "@/currency/service";
 import type {
   Account,
   Frequency,
@@ -56,25 +58,41 @@ function isIncluded(accountId: number, accounts: Map<number, Account>): boolean 
 }
 
 function transactionImpact(
-  transaction: Pick<Transaction, "type" | "amount" | "fee" | "accountId" | "destinationAccountId">,
+  transaction: Pick<Transaction, "type" | "amount" | "fee" | "accountId" | "destinationAccountId" | "destinationAmount" | "accountCurrencyCode" | "destinationCurrencyCode">,
   accounts: Map<number, Account>,
+  referenceCurrency: string,
+  rates: Map<string, number>,
 ): number {
+  const toReference = (amount: number, currency: string | null | undefined): number => {
+    if (!currency || currency === referenceCurrency) return amount;
+    const rate = rates.get(currency);
+    return rate == null ? 0 : convertMinorAmount(amount, currency, referenceCurrency, rate);
+  };
   if (transaction.type === "income") {
-    return isIncluded(transaction.accountId, accounts) ? transaction.amount : 0;
+    return isIncluded(transaction.accountId, accounts)
+      ? toReference(transaction.amount, transaction.accountCurrencyCode)
+      : 0;
   }
   if (transaction.type === "expense") {
-    return isIncluded(transaction.accountId, accounts) ? -transaction.amount : 0;
+    return isIncluded(transaction.accountId, accounts)
+      ? -toReference(transaction.amount, transaction.accountCurrencyCode)
+      : 0;
   }
 
   let impact = 0;
   if (isIncluded(transaction.accountId, accounts)) {
-    impact -= transaction.amount + (transaction.fee ?? 0);
+    impact -=
+      toReference(transaction.amount, transaction.accountCurrencyCode) +
+      toReference(transaction.fee ?? 0, transaction.accountCurrencyCode);
   }
   if (
     transaction.destinationAccountId != null &&
     isIncluded(transaction.destinationAccountId, accounts)
   ) {
-    impact += transaction.amount;
+    impact += toReference(
+      transaction.destinationAmount ?? transaction.amount,
+      transaction.destinationCurrencyCode,
+    );
   }
   return impact;
 }
@@ -100,6 +118,8 @@ function recurringEvents(
   accounts: Map<number, Account>,
   now: number,
   horizon: number,
+  referenceCurrency: string,
+  rates: Map<string, number>,
 ): ForecastEvent[] {
   const events: ForecastEvent[] = [];
   for (const row of recurring) {
@@ -114,7 +134,17 @@ function recurringEvents(
     ) {
       events.push({
         date,
-        impact: transactionImpact(row, accounts),
+        impact: transactionImpact(
+          {
+            ...row,
+            accountCurrencyCode: row.sourceCurrencyCode,
+            destinationCurrencyCode: row.destinationCurrencyCode,
+            destinationAmount: row.amount,
+          },
+          accounts,
+          referenceCurrency,
+          rates,
+        ),
         isRecurring: true,
       });
       date = advanceDate(date, row.frequency, row.interval);
@@ -161,6 +191,21 @@ export async function calculateSafeToSpend(
     listGoals(db),
     listSavingsRules(db),
   ]);
+  const referenceCurrency = await getReferenceCurrency(db);
+  const currencies = new Set(accountsRows.map((account) => account.currencyCode));
+  for (const transaction of transactions) {
+    if (transaction.accountCurrencyCode) currencies.add(transaction.accountCurrencyCode);
+    if (transaction.destinationCurrencyCode) currencies.add(transaction.destinationCurrencyCode);
+  }
+  const rates = new Map<string, number>();
+  for (const currency of currencies) {
+    if (currency === referenceCurrency) {
+      rates.set(currency, 1);
+      continue;
+    }
+    const rate = await getRateForPair(db, currency, referenceCurrency);
+    if (rate) rates.set(currency, rate.rate);
+  }
   const accounts = new Map(accountsRows.map((account) => [account.id, account]));
   const nextIncomeDate = findNextIncome(transactions, recurring, accounts, now);
   const usesFallbackHorizon = nextIncomeDate == null;
@@ -168,10 +213,17 @@ export async function calculateSafeToSpend(
 
   const currentBalance = transactions
     .filter((transaction) => transaction.transactionDate <= now)
-    .reduce((sum, transaction) => sum + transactionImpact(transaction, accounts), 0);
+    .reduce(
+      (sum, transaction) =>
+        sum + transactionImpact(transaction, accounts, referenceCurrency, rates),
+      0,
+    );
   const reserved = accountsRows
     .filter((account) => !account.excludeFromTotal)
-    .reduce((sum, account) => sum + account.reservedAmount, 0);
+    .reduce((sum, account) => {
+      const rate = rates.get(account.currencyCode) ?? 1;
+      return sum + convertMinorAmount(account.reservedAmount, account.currencyCode, referenceCurrency, rate);
+    }, 0);
   const currentAvailable = currentBalance - reserved;
 
   const manualEvents = transactions
@@ -181,10 +233,17 @@ export async function calculateSafeToSpend(
     )
     .map<ForecastEvent>((transaction) => ({
       date: transaction.transactionDate,
-      impact: transactionImpact(transaction, accounts),
+      impact: transactionImpact(transaction, accounts, referenceCurrency, rates),
       isRecurring: false,
     }));
-  const futureRecurringEvents = recurringEvents(recurring, accounts, now, horizonDate);
+  const futureRecurringEvents = recurringEvents(
+    recurring,
+    accounts,
+    now,
+    horizonDate,
+    referenceCurrency,
+    rates,
+  );
   const events = [...manualEvents, ...futureRecurringEvents];
   const plannedIncome = events
     .filter((event) => event.impact > 0)
@@ -212,6 +271,13 @@ export async function calculateSafeToSpend(
     savingsWindow,
     savingsRules,
     currentMonthStart.getTime(),
+    (amount, currency) => {
+      if (currency === referenceCurrency) return amount;
+      const rate = rates.get(currency);
+      return rate == null
+        ? 0
+        : convertMinorAmount(amount, currency, referenceCurrency, rate);
+    },
   )
     .filter(({ rule }) => rule.subtractFromAvailable)
     .reduce((sum, contribution) => sum + contribution.amount, 0);

@@ -6,6 +6,8 @@ import type {
   RecurringTransactionInput,
   TransactionType,
 } from "../types";
+import { convertMinorAmount } from "@/currency/currencies";
+import { getRateForPair } from "@/currency/service";
 
 interface RecurringRow {
   id: number;
@@ -19,6 +21,8 @@ interface RecurringRow {
   destinationAccountId: number | null;
   destinationAccountName: string | null;
   fee: number | null;
+  sourceCurrencyCode: string;
+  destinationCurrencyCode: string | null;
   note: string | null;
   frequency: Frequency;
   interval: number;
@@ -39,6 +43,8 @@ const SELECT_FIELDS = `
   r.destination_account_id AS destinationAccountId,
   da.name AS destinationAccountName,
   r.fee, r.note,
+  a.currency_code AS sourceCurrencyCode,
+  da.currency_code AS destinationCurrencyCode,
   r.frequency, r.interval,
   r.start_date AS startDate,
   r.next_date AS nextDate,
@@ -67,6 +73,8 @@ function mapRecurring(row: RecurringRow): RecurringTransaction {
     destinationAccountId: row.destinationAccountId,
     destinationAccountName: row.destinationAccountName,
     fee: row.fee,
+    sourceCurrencyCode: row.sourceCurrencyCode,
+    destinationCurrencyCode: row.destinationCurrencyCode,
     note: row.note,
     frequency: row.frequency,
     interval: row.interval,
@@ -269,16 +277,45 @@ export async function applyDueRecurring(
         (row.endDate == null || next <= row.endDate) &&
         count < maxPerSeries
       ) {
+        const sameCurrency =
+          row.destinationCurrencyCode == null ||
+          row.sourceCurrencyCode === row.destinationCurrencyCode;
+        const rate = sameCurrency
+          ? { rate: 1, date: new Date(next).toISOString().slice(0, 10), provider: "same currency" }
+          : await getRateForPair(
+              db,
+              row.sourceCurrencyCode,
+              row.destinationCurrencyCode!,
+            );
+        if (!rate) {
+          throw new Error(
+            `Taux indisponible pour ${row.sourceCurrencyCode}/${row.destinationCurrencyCode}.`,
+          );
+        }
+        const destinationAmount = sameCurrency
+          ? row.amount
+          : convertMinorAmount(
+              row.amount,
+              row.sourceCurrencyCode,
+              row.destinationCurrencyCode!,
+              rate.rate,
+            );
         await db.runAsync(
           `INSERT INTO transactions
-             (type, amount, category_id, account_id, destination_account_id, fee, note, transaction_date, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (type, amount, category_id, account_id, destination_account_id, fee,
+              destination_amount, exchange_rate, exchange_rate_date, exchange_rate_provider,
+              note, transaction_date, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           row.type,
           row.amount,
           row.categoryId,
           row.accountId,
           row.destinationAccountId,
           row.fee,
+          destinationAmount,
+          rate.rate,
+          rate.date,
+          rate.provider,
           row.note,
           next,
           now,

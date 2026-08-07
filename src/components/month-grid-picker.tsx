@@ -72,7 +72,7 @@ export function MonthGridPicker({
             >
               <Text
                 style={{
-                  color: selected ? "#0A0A0B" : theme.label,
+                  color: selected ? theme.onAccent : theme.label,
                   fontWeight: selected ? "700" : "500",
                   fontSize: 14,
                 }}

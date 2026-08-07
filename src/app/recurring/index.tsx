@@ -147,8 +147,8 @@ export default function RecurringScreen() {
             )}
             <View style={styles.body}>
               <Text style={[styles.title, { color: theme.label }]} numberOfLines={1}>
-                {TYPE_LABELS[item.type]} · {formatAmount(item.amount)}
-                {item.fee ? ` + frais ${formatAmount(item.fee)}` : ""}
+                {TYPE_LABELS[item.type]} · {formatAmount(item.amount, item.sourceCurrencyCode)}
+                {item.fee ? ` + frais ${formatAmount(item.fee, item.sourceCurrencyCode)}` : ""}
               </Text>
               <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
                 {item.accountName}
@@ -205,7 +205,7 @@ export default function RecurringScreen() {
                   (pressed || generating) && { opacity: 0.7 },
                 ]}
               >
-                <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>
+                <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
                   {generating ? "Génération…" : "Générer les échéances dues"}
                 </Text>
               </Pressable>

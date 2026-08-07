@@ -1,10 +1,11 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   ActivityIndicator,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -16,6 +17,8 @@ import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/com
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { calculateRateFromMinor, currencyDigits, parseMoneyInput } from "@/currency/currencies";
+import { getRateForPair } from "@/currency/service";
 import { createGoalReservation, listGoals } from "@/db/goals";
 import {
   createTransaction,
@@ -54,6 +57,12 @@ export default function NewTransactionScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
+  const [destinationAmount, setDestinationAmount] = useState("");
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [exchangeRateDate, setExchangeRateDate] = useState<string | null>(null);
+  const [exchangeRateProvider, setExchangeRateProvider] = useState<string | null>(null);
+  const [destinationEdited, setDestinationEdited] = useState(false);
+  const [preserveStoredConversion, setPreserveStoredConversion] = useState(false);
   const [accountId, setAccountId] = useState<number | null>(null);
   const [destinationId, setDestinationId] = useState<number | null>(null);
   const [goalReservationId, setGoalReservationId] = useState<number | null>(null);
@@ -83,9 +92,25 @@ export default function NewTransactionScreen() {
     setGoals(goalRows);
     if (existing) {
       setType(existing.type);
-      setAmount(String(existing.amount));
       setAccountId(existing.accountId);
       setDestinationId(existing.destinationAccountId);
+      const sourceAccount = accs.find((account) => account.id === existing.accountId);
+      const destinationAccount = accs.find((account) => account.id === existing.destinationAccountId);
+      setAmount(
+        sourceAccount
+          ? (existing.amount / 10 ** currencyDigits(sourceAccount.currencyCode)).toString()
+          : String(existing.amount),
+      );
+      setDestinationAmount(
+        existing.destinationAmount == null || !destinationAccount
+          ? ""
+          : (existing.destinationAmount / 10 ** currencyDigits(destinationAccount.currencyCode)).toString(),
+      );
+      setExchangeRate(existing.exchangeRate ?? null);
+      setExchangeRateDate(existing.exchangeRateDate ?? null);
+      setExchangeRateProvider(existing.exchangeRateProvider ?? null);
+      setDestinationEdited(false);
+      setPreserveStoredConversion(existing.type === "transfer" && existing.exchangeRate != null);
       setGoalReservationId(null);
       setCategoryId(existing.categoryId);
       setFee(existing.fee ? String(existing.fee) : "");
@@ -125,7 +150,7 @@ export default function NewTransactionScreen() {
     if (destinationId != null) selectedIds.add(destinationId);
     return accounts
       .filter((a) => !a.hidden || selectedIds.has(a.id))
-      .map((a) => ({ id: a.id, label: a.name }));
+      .map((a) => ({ id: a.id, label: `${a.name} · ${a.currencyCode}` }));
   }, [accounts, accountId, destinationId]);
   const goalOptions = useMemo(
     () =>
@@ -142,6 +167,42 @@ export default function NewTransactionScreen() {
     [categories, type],
   );
 
+  const sourceAccount = accounts.find((account) => account.id === accountId) ?? null;
+  const destinationAccount = accounts.find((account) => account.id === destinationId) ?? null;
+  const sourceCurrency = sourceAccount?.currencyCode ?? "XOF";
+  const destinationCurrency = destinationAccount?.currencyCode ?? sourceCurrency;
+  const isCrossCurrency =
+    type === "transfer" &&
+    destinationId != null &&
+    sourceCurrency !== destinationCurrency;
+
+  useEffect(() => {
+    if (!isCrossCurrency || destinationEdited || preserveStoredConversion || !accountId || !destinationId) return;
+    const sourceAmount = parseMoneyInput(amount, sourceCurrency);
+    if (sourceAmount == null || Number.isNaN(sourceAmount) || sourceAmount <= 0) {
+      return;
+    }
+    const controller = new AbortController();
+    void getDatabase()
+      .then((db) => getRateForPair(db, sourceCurrency, destinationCurrency, { signal: controller.signal }))
+      .then((rate) => {
+        if (!rate) return;
+        const target = Math.round(
+          (sourceAmount / 10 ** currencyDigits(sourceCurrency)) *
+            rate.rate *
+            10 ** currencyDigits(destinationCurrency),
+        );
+        setDestinationAmount(
+          (target / 10 ** currencyDigits(destinationCurrency)).toString(),
+        );
+        setExchangeRate(rate.rate);
+        setExchangeRateDate(rate.date);
+        setExchangeRateProvider(rate.provider);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [accountId, amount, destinationCurrency, destinationEdited, destinationId, isCrossCurrency, preserveStoredConversion, sourceCurrency]);
+
   const switchType = (t: TransactionType) => {
     setType(t);
     if (t === "transfer") {
@@ -152,6 +213,9 @@ export default function NewTransactionScreen() {
       setFee("");
       setFeeMode("manual");
       setDebitedAmount("");
+      setDestinationAmount("");
+      setExchangeRate(null);
+      setDestinationEdited(false);
     }
   };
 
@@ -191,26 +255,28 @@ export default function NewTransactionScreen() {
       return null;
     }
 
-    const parsedAmount = Number(amount);
-    const parsedDebitedAmount = Number(debitedAmount);
+    const parsedAmount = parseMoneyInput(amount, sourceCurrency);
+    const parsedDebitedAmount = parseMoneyInput(debitedAmount, sourceCurrency);
     if (
-      !Number.isInteger(parsedAmount) ||
+      parsedAmount == null ||
+      Number.isNaN(parsedAmount) ||
       parsedAmount <= 0 ||
-      !Number.isInteger(parsedDebitedAmount) ||
+      parsedDebitedAmount == null ||
+      Number.isNaN(parsedDebitedAmount) ||
       parsedDebitedAmount < parsedAmount
     ) {
       return null;
     }
 
     return parsedDebitedAmount - parsedAmount;
-  }, [amount, debitedAmount, feeMode]);
+  }, [amount, debitedAmount, feeMode, sourceCurrency]);
 
   const save = async () => {
     setErrors({});
-    const parsedAmount = Number(amount);
-    let parsedFee: number | null = fee.trim() ? Number(fee) : null;
-    if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
-      setErrors({ amount: "Saisissez un montant entier en FCFA." });
+    const parsedAmount = parseMoneyInput(amount, sourceCurrency);
+    let parsedFee: number | null = fee.trim() ? parseMoneyInput(fee, sourceCurrency) : null;
+    if (parsedAmount == null || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      setErrors({ amount: `Saisissez un montant valide en ${sourceCurrency}.` });
       return;
     }
     if (accountId == null) {
@@ -232,8 +298,11 @@ export default function NewTransactionScreen() {
       goalReservationId == null &&
       feeMode === "calculated"
     ) {
-      const parsedDebitedAmount = Number(debitedAmount);
+      const parsedDebitedAmount = parseMoneyInput(debitedAmount, sourceCurrency);
       try {
+        if (parsedDebitedAmount == null || Number.isNaN(parsedDebitedAmount)) {
+          throw new Error(`Saisissez le total débité en ${sourceCurrency}.`);
+        }
         const computedFee = calculateTransferFee(parsedDebitedAmount, parsedAmount);
         parsedFee = computedFee > 0 ? computedFee : null;
       } catch (error) {
@@ -243,6 +312,48 @@ export default function NewTransactionScreen() {
               ? error.message
               : "Le total débité est invalide.",
         });
+        return;
+      }
+    }
+
+    let parsedDestinationAmount: number | null = null;
+    let savedExchangeRate: number | null = null;
+    let savedExchangeRateDate: string | null = null;
+    let savedExchangeRateProvider: string | null = null;
+    if (type === "transfer" && destinationId != null) {
+      parsedDestinationAmount = isCrossCurrency
+        ? parseMoneyInput(destinationAmount, destinationCurrency)
+        : parsedAmount;
+      if (
+        parsedDestinationAmount == null ||
+        Number.isNaN(parsedDestinationAmount) ||
+        parsedDestinationAmount <= 0
+      ) {
+        setErrors({ destinationAmount: `Saisissez le montant crédité en ${destinationCurrency}.` });
+        return;
+      }
+      savedExchangeRate = isCrossCurrency
+        ? destinationEdited
+          ? calculateRateFromMinor(
+              parsedAmount,
+              sourceCurrency,
+              parsedDestinationAmount,
+              destinationCurrency,
+            )
+          : exchangeRate
+        : 1;
+      savedExchangeRateDate = isCrossCurrency
+        ? destinationEdited
+          ? new Date().toISOString().slice(0, 10)
+          : exchangeRateDate
+        : new Date().toISOString().slice(0, 10);
+      savedExchangeRateProvider = isCrossCurrency
+        ? destinationEdited
+          ? "manual"
+          : exchangeRateProvider
+        : "same currency";
+      if (!savedExchangeRate || !savedExchangeRateDate || !savedExchangeRateProvider) {
+        setErrors({ destinationAmount: "Le taux de change est indisponible. Actualisez ou saisissez un montant." });
         return;
       }
     }
@@ -267,6 +378,10 @@ export default function NewTransactionScreen() {
       accountId: accountId!,
       destinationAccountId,
       fee: type === "transfer" && !isGoalReservation ? parsedFee : null,
+      destinationAmount: isGoalReservation ? null : parsedDestinationAmount,
+      exchangeRate: isGoalReservation ? null : savedExchangeRate,
+      exchangeRateDate: isGoalReservation ? null : savedExchangeRateDate,
+      exchangeRateProvider: isGoalReservation ? null : savedExchangeRateProvider,
       note: note.trim() || null,
       transactionDate: date.getTime(),
     };
@@ -361,7 +476,7 @@ export default function NewTransactionScreen() {
               >
                 <Text
                   style={{
-                    color: active ? "#0A0A0B" : theme.secondaryLabel,
+                    color: active ? theme.onAccent : theme.secondaryLabel,
                     fontWeight: "700",
                   }}
                 >
@@ -373,7 +488,7 @@ export default function NewTransactionScreen() {
         </View>
 
         <FormField
-          label={type === "transfer" ? "Montant arrivé" : "Montant"}
+          label={type === "transfer" ? `Montant débité (${sourceCurrency})` : `Montant (${sourceCurrency})`}
           error={errors.amount}
         >
         <View
@@ -397,9 +512,11 @@ export default function NewTransactionScreen() {
             }}
             placeholder="0"
             placeholderTextColor={theme.secondaryLabel}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            accessibilityLabel={`${type === "transfer" ? "Montant arrivé" : "Montant"} en FCFA`}
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            returnKeyType="done"
+            onSubmitEditing={() => Keyboard.dismiss()}
+            accessibilityLabel={`${type === "transfer" ? "Montant débité" : "Montant"} en ${sourceCurrency}`}
             style={{
               color: theme.label,
               fontSize: 24,
@@ -409,7 +526,7 @@ export default function NewTransactionScreen() {
               flex: 1,
             }}
           />
-          <Text style={{ color: theme.secondaryLabel }}>FCFA</Text>
+          <Text style={{ color: theme.secondaryLabel }}>{sourceCurrency}</Text>
         </View>
         </FormField>
 
@@ -436,6 +553,8 @@ export default function NewTransactionScreen() {
                 options={accountOptions}
                 onChange={(id) => {
                   setDestinationId(id);
+                  setDestinationEdited(false);
+                  setPreserveStoredConversion(false);
                   setGoalReservationId(null);
                   setFeeMode("manual");
                   setDebitedAmount("");
@@ -443,6 +562,47 @@ export default function NewTransactionScreen() {
                 }}
               />
             </FormField>
+            {destinationId != null ? (
+              <FormField label={`Montant crédité (${destinationCurrency})`} error={errors.destinationAmount}>
+                <View style={{
+                  backgroundColor: theme.surface,
+                  borderColor: theme.separator,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderRadius: radius.md,
+                  minHeight: 48,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.sm,
+                  paddingHorizontal: spacing.lg,
+                }}>
+                  <TextInput
+                    value={destinationAmount}
+                    onChangeText={(value) => {
+                      setDestinationAmount(value);
+                      setDestinationEdited(true);
+                      setPreserveStoredConversion(false);
+                      setErrors((current) => ({ ...current, destinationAmount: "" }));
+                    }}
+                    placeholder="0"
+                    placeholderTextColor={theme.secondaryLabel}
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    accessibilityLabel={`Montant crédité en ${destinationCurrency}`}
+                    style={{ color: theme.label, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"], flex: 1 }}
+                  />
+                  <Text style={{ color: theme.secondaryLabel }}>{destinationCurrency}</Text>
+                </View>
+                {isCrossCurrency && exchangeRate ? (
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                    1 {sourceCurrency} = {exchangeRate.toLocaleString("fr-FR", { maximumFractionDigits: 8 })} {destinationCurrency}
+                    {exchangeRateDate ? ` · taux du ${exchangeRateDate}` : ""}
+                    {destinationEdited ? " · manuel" : ""}
+                  </Text>
+                ) : null}
+              </FormField>
+            ) : null}
             <FormField label="Réserver vers un objectif (optionnel)">
               <SelectField
                 label="Objectif à réserver"
@@ -527,7 +687,9 @@ export default function NewTransactionScreen() {
                   placeholderTextColor={theme.secondaryLabel}
                   keyboardType="number-pad"
                   inputMode="numeric"
-                  accessibilityLabel="Frais en FCFA, optionnels"
+                  returnKeyType="done"
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                  accessibilityLabel={`Frais en ${sourceCurrency}, optionnels`}
                   style={[
                     styles.input,
                     { backgroundColor: theme.surface, color: theme.label },
@@ -546,7 +708,9 @@ export default function NewTransactionScreen() {
                   placeholderTextColor={theme.secondaryLabel}
                   keyboardType="number-pad"
                   inputMode="numeric"
-                  accessibilityLabel="Total débité en FCFA"
+                  returnKeyType="done"
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                  accessibilityLabel={`Total débité en ${sourceCurrency}`}
                   style={[
                     styles.input,
                     { backgroundColor: theme.surface, color: theme.label },
@@ -562,7 +726,7 @@ export default function NewTransactionScreen() {
                   <Text selectable style={{ color: theme.label, fontWeight: "700" }}>
                     {calculatedFeePreview == null
                       ? "—"
-                      : formatAmount(calculatedFeePreview)}
+                      : formatAmount(calculatedFeePreview, sourceCurrency)}
                   </Text>
                 </View>
               </FormField>
@@ -651,6 +815,7 @@ export default function NewTransactionScreen() {
             placeholder="Ex. : courses du marché"
             placeholderTextColor={theme.secondaryLabel}
             multiline
+            returnKeyType="done"
             accessibilityLabel="Note optionnelle"
             style={[
               styles.input,
@@ -683,6 +848,8 @@ const styles = StyleSheet.create({
   typeButton: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -701,7 +868,7 @@ const styles = StyleSheet.create({
   },
   feeModeButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.sm,
@@ -720,6 +887,7 @@ const styles = StyleSheet.create({
   },
   dateButton: {
     flex: 1,
+    minHeight: 48,
     gap: 2,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -730,10 +898,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     borderRadius: radius.xl,
     marginTop: spacing.sm,
-  },
-  saveLabel: {
-    color: "#0A0A0B",
-    fontWeight: "700",
-    fontSize: 16,
   },
 });

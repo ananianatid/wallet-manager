@@ -8,9 +8,11 @@ import { ThemeProvider as AppThemeProvider, useTheme, useThemeControl } from "@/
 import { StatusBar } from "react-native";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { CompactStackHeader } from "@/components/compact-stack-header";
 import { LockScreen } from "@/components/lock-screen";
 import { initLock, useLockState } from "@/state/lock";
 import { useDataEpoch } from "@/state/data-epoch";
+import { CurrencyProvider } from "@/currency/context";
 
 function RootNavigator() {
   const theme = useTheme();
@@ -28,7 +30,10 @@ function RootNavigator() {
         <Stack
           key={epoch}
           screenOptions={{
-            headerStyle: { backgroundColor: theme.background },
+            headerStyle: {
+              backgroundColor: theme.background,
+            },
+            header: CompactStackHeader,
             headerTitleStyle: { color: theme.label },
             headerShadowVisible: false,
             headerTintColor: theme.accent,
@@ -54,6 +59,7 @@ function RootNavigator() {
           <Stack.Screen name="cashflow" options={{ title: "Dépenses sûres" }} />
           <Stack.Screen name="categories/[type]" options={{ title: "Catégories" }} />
           <Stack.Screen name="appearance" options={{ title: "Apparence" }} />
+          <Stack.Screen name="calendar-settings" options={{ title: "Calendrier" }} />
           <Stack.Screen name="about" options={{ title: "À propos" }} />
           <Stack.Screen name="security" options={{ title: "Sécurité" }} />
           <Stack.Screen
@@ -85,7 +91,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AppThemeProvider>
-        <RootNavigator />
+        <CurrencyProvider>
+          <RootNavigator />
+        </CurrencyProvider>
       </AppThemeProvider>
     </SafeAreaProvider>
   );

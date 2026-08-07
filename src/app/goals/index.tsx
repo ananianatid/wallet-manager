@@ -8,7 +8,7 @@ import { IconButton, ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listGoals } from "@/db/goals";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Goal } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 
@@ -24,13 +24,18 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
     : goal.isOverdue
       ? theme.expense
       : theme.accent;
+  const cardSurface = goal.isAchieved
+    ? withAlpha(theme.income, "12")
+    : goal.isOverdue
+      ? withAlpha(theme.expense, "12")
+      : withAlpha(theme.accentSurface, "12");
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: theme.surface },
+        { backgroundColor: cardSurface },
         pressed && { opacity: 0.7 },
       ]}
     >
@@ -62,19 +67,19 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
       <View style={styles.cardBottom}>
         <View>
           <Text style={{ color: theme.label, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-            {formatAmount(goal.reservedAmount)}
+            {formatAmount(goal.reservedAmount, goal.currencyCode)}
           </Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-            sur {formatAmount(goal.targetAmount)}
+            sur {formatAmount(goal.targetAmount, goal.currencyCode)}
           </Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-            {goal.isAchieved ? "Objectif atteint" : `Rythme : ${formatAmount(goal.monthlyRequired)}/mois`}
+            {goal.isAchieved ? "Objectif atteint" : `Rythme : ${formatAmount(goal.monthlyRequired, goal.currencyCode)}/mois`}
           </Text>
           {!goal.isAchieved ? (
             <Text style={{ color: theme.label, fontWeight: "600" }}>
-              Reste {formatAmount(goal.remainingAmount)}
+              Reste {formatAmount(goal.remainingAmount, goal.currencyCode)}
             </Text>
           ) : null}
         </View>

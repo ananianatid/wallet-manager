@@ -17,6 +17,7 @@ import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui"
 import { listAccounts } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
+import { parseMoneyInput } from "@/currency/currencies";
 import {
   createRecurring,
   getRecurring,
@@ -121,7 +122,7 @@ export default function RecurringFormScreen() {
     if (destinationId != null) selectedIds.add(destinationId);
     return accounts
       .filter((a) => !a.hidden || selectedIds.has(a.id))
-      .map((a) => ({ id: a.id, label: a.name }));
+      .map((a) => ({ id: a.id, label: `${a.name} · ${a.currencyCode}` }));
   }, [accounts, accountId, destinationId]);
 
   const categoryOptions = useMemo(
@@ -131,6 +132,8 @@ export default function RecurringFormScreen() {
         .map((c) => ({ id: c.id, label: c.name, icon: c.icon })),
     [categories, type],
   );
+
+  const sourceCurrency = accounts.find((account) => account.id === accountId)?.currencyCode ?? "XOF";
 
   const switchType = (t: TransactionType) => {
     setType(t);
@@ -143,11 +146,11 @@ export default function RecurringFormScreen() {
   };
 
   const save = async () => {
-    const parsedAmount = Number(amount);
-    const parsedFee = fee.trim() ? Number(fee) : null;
+    const parsedAmount = parseMoneyInput(amount, sourceCurrency);
+    const parsedFee = fee.trim() ? parseMoneyInput(fee, sourceCurrency) : null;
     const parsedInterval = Number(intervalValue);
-    if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert("Montant invalide", "Saisissez un montant entier positif en FCFA.");
+    if (parsedAmount == null || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert("Montant invalide", `Saisissez un montant positif en ${sourceCurrency}.`);
       return;
     }
     if (!Number.isInteger(parsedInterval) || parsedInterval <= 0) {
@@ -236,7 +239,7 @@ export default function RecurringFormScreen() {
               >
                 <Text
                   style={{
-                    color: active ? "#0A0A0B" : theme.secondaryLabel,
+                    color: active ? theme.onAccent : theme.secondaryLabel,
                     fontWeight: "700",
                   }}
                 >
@@ -262,7 +265,7 @@ export default function RecurringFormScreen() {
             placeholderTextColor={theme.secondaryLabel}
             keyboardType="number-pad"
             inputMode="numeric"
-            accessibilityLabel="Montant en FCFA"
+            accessibilityLabel={`Montant en ${sourceCurrency}`}
             style={{
               color: theme.label,
               fontSize: 40,
@@ -272,7 +275,7 @@ export default function RecurringFormScreen() {
               minWidth: 160,
             }}
           />
-          <Text style={{ color: theme.secondaryLabel }}>FCFA</Text>
+          <Text style={{ color: theme.secondaryLabel }}>{sourceCurrency}</Text>
         </View>
 
         <SelectField
@@ -301,7 +304,7 @@ export default function RecurringFormScreen() {
                 placeholderTextColor={theme.secondaryLabel}
               keyboardType="number-pad"
               inputMode="numeric"
-              accessibilityLabel="Frais en FCFA, optionnels"
+              accessibilityLabel={`Frais en ${sourceCurrency}, optionnels`}
                 style={[
                   styles.input,
                   { backgroundColor: theme.surface, color: theme.label },
@@ -437,7 +440,7 @@ export default function RecurringFormScreen() {
             accessibilityLabel="Récurrence active"
             accessibilityState={{ checked: isActive }}
             trackColor={{ true: theme.accent }}
-            thumbColor="#FFFFFF"
+            thumbColor={theme.accentSurfaceText}
           />
         </View>
 
@@ -502,10 +505,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     borderRadius: radius.xl,
     marginTop: spacing.sm,
-  },
-  saveLabel: {
-    color: "#0A0A0B",
-    fontWeight: "700",
-    fontSize: 16,
   },
 });

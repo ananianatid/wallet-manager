@@ -3,9 +3,12 @@ import type { SQLiteDatabase } from "expo-sqlite";
 export type SettingKey =
   | "theme_mode"
   | "accent_theme"
+  | "week_start_day"
   | "recurring_last_check"
   | "backup_last_date"
-  | "savings_subtract_from_available";
+  | "savings_subtract_from_available"
+  | "base_currency"
+  | "currency_last_refresh";
 
 export async function getSetting(
   db: SQLiteDatabase,

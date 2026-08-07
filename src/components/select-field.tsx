@@ -2,6 +2,7 @@ import { Check, ChevronDown } from "lucide-react-native";
 import { useState } from "react";
 import {
   FlatList,
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
@@ -31,9 +32,9 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
   const [open, setOpen] = useState(false);
   const selectedId = options.find((o) => o.label === value)?.id;
   const selectedOption = options.find((o) => o.id === selectedId);
-  const hasIcons = options.some((o) => o.icon != null);
 
   const select = (id: number) => {
+    Keyboard.dismiss();
     onChange(id);
     setOpen(false);
   };
@@ -44,15 +45,20 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
         <Text style={[styles.label, { color: theme.secondaryLabel }]}>{label}</Text>
       ) : null}
       <Pressable
-        onPress={() => setOpen(true)}
+        disabled={options.length === 0}
+        onPress={() => {
+          Keyboard.dismiss();
+          setOpen(true);
+        }}
         accessibilityRole="combobox"
         accessibilityLabel={label}
+        accessibilityState={{ disabled: options.length === 0 }}
         accessibilityValue={{ text: value ?? "Aucune sélection" }}
         accessibilityHint="Ouvre la liste des options."
         style={({ pressed }) => [
           styles.field,
           { backgroundColor: theme.surface, borderColor: theme.separator },
-          pressed && { opacity: 0.7 },
+          (pressed || options.length === 0) && { opacity: 0.55 },
         ]}
       >
         {selectedOption?.icon ? (
@@ -70,33 +76,40 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
       <Modal
         visible={open}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setOpen(false)}
       >
         <Pressable
-          style={styles.backdrop}
+          style={[styles.backdrop, { backgroundColor: theme.scrim }]}
           onPress={() => setOpen(false)}
           accessibilityLabel="Fermer"
         >
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            accessibilityViewIsModal
+            style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}
+          >
             <Text style={[styles.sheetTitle, { color: theme.label }]}>{label}</Text>
             <FlatList
               data={options}
               keyExtractor={(o) => String(o.id)}
-              numColumns={hasIcons ? 4 : 3}
-              columnWrapperStyle={styles.gridRow}
-              contentContainerStyle={styles.grid}
+              contentContainerStyle={styles.options}
               style={{ maxHeight: 320 }}
+              ListEmptyComponent={
+                <Text style={[styles.empty, { color: theme.secondaryLabel }]}>
+                  Aucune option disponible.
+                </Text>
+              }
               renderItem={({ item }) => {
                 const selected = item.id === selectedId;
-                return hasIcons ? (
+                return (
                   <Pressable
                     onPress={() => select(item.id)}
                     accessibilityRole="radio"
                     accessibilityLabel={item.label}
                     accessibilityState={{ selected }}
                     style={({ pressed }) => [
-                      styles.iconOption,
+                      styles.option,
                       {
                         backgroundColor: selected ? theme.accent : theme.surface,
                         borderColor: selected ? theme.accent : theme.separator,
@@ -105,54 +118,31 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
                     ]}
                   >
                     {item.icon ? (
-                      <CategoryIcon
-                        name={item.icon}
-                        size={22}
-                        strokeWidth={2.1}
-                        color={selected ? theme.onAccent : theme.label}
-                      />
-                    ) : null}
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: selected ? theme.onAccent : theme.secondaryLabel,
-                        fontSize: 10,
-                      }}
-                    >
-                      {item.label}
-                    </Text>
-                    {selected ? (
-                      <View style={[styles.check, { backgroundColor: theme.surfaceElevated }]}>
-                        <Check size={11} strokeWidth={3} color={theme.accent} />
+                      <View
+                        style={[styles.optionIcon, { backgroundColor: theme.surfaceElevated }]}
+                      >
+                        <CategoryIcon
+                          name={item.icon}
+                          size={20}
+                          strokeWidth={2.1}
+                          color={selected ? theme.accent : theme.label}
+                        />
                       </View>
                     ) : null}
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    onPress={() => select(item.id)}
-                    accessibilityRole="radio"
-                    accessibilityLabel={item.label}
-                    accessibilityState={{ selected }}
-                    style={({ pressed }) => [
-                      styles.textOption,
-                      {
-                        backgroundColor: selected ? theme.accent : theme.surface,
-                        borderColor: selected ? theme.accent : theme.separator,
-                      },
-                      pressed && { opacity: 0.65 },
-                    ]}
-                  >
                     <Text
                       numberOfLines={2}
-                      style={{
-                        color: selected ? theme.onAccent : theme.label,
-                        fontSize: 13,
-                        fontWeight: "600",
-                        textAlign: "center",
-                      }}
+                      style={[
+                        styles.optionLabel,
+                        { color: selected ? theme.onAccent : theme.label },
+                      ]}
                     >
                       {item.label}
                     </Text>
+                    <View style={styles.trailing}>
+                      {selected ? (
+                        <Check size={19} strokeWidth={3} color={theme.onAccent} />
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               }}
@@ -183,7 +173,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   sheet: {
@@ -199,43 +188,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
-  grid: {
+  options: {
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.sm,
   },
-  gridRow: {
-    gap: spacing.sm,
-  },
-  iconOption: {
-    flex: 1,
-    minWidth: 72,
-    minHeight: 70,
+  option: {
+    minHeight: 56,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-  },
-  textOption: {
-    flex: 1,
-    minHeight: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.sm,
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
   },
-  check: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 16,
-    height: 16,
+  optionIcon: {
+    width: 34,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: 17,
+  },
+  optionLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  trailing: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  empty: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    textAlign: "center",
   },
 });

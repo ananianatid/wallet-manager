@@ -7,6 +7,7 @@ import {
   spacing,
   useTheme,
   useThemeControl,
+  withAlpha,
   type AccentTheme,
   type ThemeMode,
 } from "@/theme";
@@ -19,10 +20,18 @@ const OPTIONS: { value: ThemeMode; label: string; hint: string }[] = [
 
 const ACCENT_OPTIONS: { value: AccentTheme; label: string; hint: string }[] = [
   { value: "blue", label: "Bleu", hint: "Accent #339CFF" },
+  { value: "midnight", label: "Bleu nuit", hint: "Thème général #123A60" },
   { value: "green", label: "Vert", hint: "Accent vert d’origine" },
 ];
 
-const SWATCH_COLORS = ["background", "surface", "accent", "income", "expense"] as const;
+const SWATCH_COLORS = [
+  "background",
+  "surface",
+  "accentSurface",
+  "accent",
+  "income",
+  "expense",
+] as const;
 
 function PalettePreview({
   modes,
@@ -33,19 +42,25 @@ function PalettePreview({
 }) {
   return (
     <View style={styles.preview}>
-      {modes.map((mode) => (
-        <View key={mode} style={styles.previewRow}>
-          {SWATCH_COLORS.map((key) => (
-            <View
-              key={key}
-              style={[
-                styles.swatch,
-                { backgroundColor: getThemePalette(mode, accentTheme)[key] },
-              ]}
-            />
-          ))}
-        </View>
-      ))}
+      {modes.map((mode) => {
+        const palette = getThemePalette(mode, accentTheme);
+        return (
+          <View key={mode} style={styles.previewRow}>
+            {SWATCH_COLORS.map((key) => (
+              <View
+                key={key}
+                style={[
+                  styles.swatch,
+                  {
+                    backgroundColor: palette[key],
+                    borderColor: withAlpha(palette.outline, "66"),
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -55,8 +70,8 @@ function AccentPreview({ accentTheme }: { accentTheme: AccentTheme }) {
   return (
     <View style={styles.accentPreview}>
       <View style={[styles.accentDot, { backgroundColor: accent.accent }]} />
-      <View style={[styles.accentAction, { backgroundColor: accent.accent }]}>
-        <Text style={{ color: accent.onAccent, fontSize: 11, fontWeight: "700" }}>
+      <View style={[styles.accentAction, { backgroundColor: accent.accentSurface }]}>
+        <Text style={{ color: accent.accentSurfaceText, fontSize: 11, fontWeight: "700" }}>
           Action
         </Text>
       </View>
@@ -199,7 +214,6 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#66666644",
   },
   accentPreview: {
     flexDirection: "row",

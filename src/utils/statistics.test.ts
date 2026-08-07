@@ -1,4 +1,14 @@
-import { monthlySavingsBreakdown, savingsByRule, totals } from "./statistics";
+import {
+  categoryChanges,
+  compareTotals,
+  getPeriodBounds,
+  getWeekBounds,
+  dailySeries,
+  monthlySavingsBreakdown,
+  parseWeekStartDay,
+  savingsByRule,
+  totals,
+} from "./statistics";
 import type { SavingsRule, Transaction } from "../types";
 
 function transaction(
@@ -166,5 +176,120 @@ describe("totals", () => {
       fees: 1_500,
       net: 58_500,
     });
+  });
+});
+
+describe("comparaisons", () => {
+  it("compare les totaux et conserve un pourcentage nul comme indéterminé", () => {
+    expect(
+      compareTotals(
+        { income: 120_000, expense: 30_000, fees: 2_000, net: 88_000 },
+        { income: 100_000, expense: 40_000, fees: 0, net: 60_000 },
+      ),
+    ).toEqual({
+      income: { current: 120_000, previous: 100_000, delta: 20_000, percent: 20 },
+      expense: { current: 30_000, previous: 40_000, delta: -10_000, percent: -25 },
+      fees: { current: 2_000, previous: 0, delta: 2_000, percent: null },
+      net: {
+        current: 88_000,
+        previous: 60_000,
+        delta: 28_000,
+        percent: expect.closeTo(46.666, 2),
+      },
+    });
+  });
+
+  it("fusionne les catégories nouvelles, supprimées et conservées", () => {
+    const changes = categoryChanges(
+      [
+        transaction(1, "expense", 60_000, AUGUST, 1, "Logement"),
+        transaction(2, "expense", 15_000, AUGUST, 2, "Transport"),
+      ],
+      [
+        transaction(3, "expense", 40_000, JULY, 1, "Logement"),
+        transaction(4, "expense", 25_000, JULY, 3, "Alimentation"),
+      ],
+      "expense",
+    );
+
+    expect(changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ categoryName: "Logement", delta: 20_000, percent: 50 }),
+        expect.objectContaining({ categoryName: "Transport", delta: 15_000, percent: null }),
+        expect.objectContaining({ categoryName: "Alimentation", delta: -25_000, percent: -100 }),
+      ]),
+    );
+  });
+});
+
+describe("getPeriodBounds", () => {
+  it("sélectionne le mois choisi", () => {
+    expect(getPeriodBounds("month", { year: 2026, month: 5 })).toEqual({
+      startMs: JUNE,
+      endMs: JULY,
+    });
+  });
+
+  it("sélectionne les trois mois du trimestre choisi", () => {
+    expect(getPeriodBounds("quarter", { year: 2026, month: 5 })).toEqual({
+      startMs: new Date(2026, 3, 1).getTime(),
+      endMs: JULY,
+    });
+  });
+
+  it("sélectionne toute l’année choisie", () => {
+    expect(getPeriodBounds("year", { year: 2026, month: 5 })).toEqual({
+      startMs: new Date(2026, 0, 1).getTime(),
+      endMs: new Date(2027, 0, 1).getTime(),
+    });
+  });
+
+  it("retourne une période ouverte pour Tout", () => {
+    expect(getPeriodBounds("all", { year: 2026, month: 5 })).toEqual({
+      startMs: null,
+      endMs: null,
+    });
+  });
+});
+
+describe("getWeekBounds", () => {
+  it("commence le lundi par défaut", () => {
+    expect(getWeekBounds(new Date(2026, 5, 3).getTime(), 1)).toEqual({
+      startMs: new Date(2026, 5, 1).getTime(),
+      endMs: new Date(2026, 5, 8).getTime(),
+    });
+  });
+
+  it("respecte un dimanche comme premier jour choisi", () => {
+    expect(getWeekBounds(new Date(2026, 5, 3).getTime(), 0)).toEqual({
+      startMs: new Date(2026, 4, 31).getTime(),
+      endMs: new Date(2026, 5, 7).getTime(),
+    });
+  });
+});
+
+describe("parseWeekStartDay", () => {
+  it("utilise lundi comme valeur par défaut", () => {
+    expect(parseWeekStartDay(null)).toBe(1);
+    expect(parseWeekStartDay("9")).toBe(1);
+  });
+});
+
+describe("dailySeries", () => {
+  it("crée un point pour chaque jour de la période", () => {
+    const result = dailySeries(
+      [
+        transaction(1, "income", 100_000, new Date(2026, 5, 1, 10).getTime()),
+        transaction(2, "expense", 25_000, new Date(2026, 5, 3, 12).getTime()),
+      ],
+      new Date(2026, 5, 1).getTime(),
+      new Date(2026, 5, 4).getTime(),
+    );
+
+    expect(result).toHaveLength(3);
+    expect(result.map((point) => point.day)).toEqual([1, 2, 3]);
+    expect(result[0].income).toBe(100_000);
+    expect(result[1].net).toBe(0);
+    expect(result[2].expense).toBe(25_000);
   });
 });

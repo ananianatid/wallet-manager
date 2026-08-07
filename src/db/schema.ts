@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 11;
+export const DATABASE_VERSION = 12;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -30,6 +30,7 @@ CREATE TABLE accounts (
   group_id           INTEGER REFERENCES account_groups(id),
   hidden             INTEGER NOT NULL DEFAULT 0,
   exclude_from_total INTEGER NOT NULL DEFAULT 0,
+  currency_code      TEXT NOT NULL DEFAULT 'XOF',
   description        TEXT,
   created_at         INTEGER NOT NULL,
   deleted_at         INTEGER
@@ -45,6 +46,10 @@ CREATE TABLE transactions (
   account_id             INTEGER NOT NULL REFERENCES accounts(id),
   destination_account_id INTEGER REFERENCES accounts(id),
   fee                    INTEGER CHECK (fee IS NULL OR fee > 0),
+  destination_amount     INTEGER,
+  exchange_rate          REAL,
+  exchange_rate_date     TEXT,
+  exchange_rate_provider TEXT,
   note                   TEXT,
   transaction_date       INTEGER NOT NULL,
   created_at             INTEGER NOT NULL
@@ -58,6 +63,7 @@ CREATE TABLE budgets (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
   amount      INTEGER NOT NULL CHECK (amount > 0),
+  currency_code TEXT NOT NULL DEFAULT 'XOF',
   created_at  INTEGER NOT NULL
 );
 
@@ -96,6 +102,7 @@ CREATE TABLE goals (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   name          TEXT NOT NULL,
   target_amount INTEGER NOT NULL CHECK (target_amount > 0),
+  currency_code TEXT NOT NULL DEFAULT 'XOF',
   target_date   INTEGER NOT NULL,
   status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
   created_at    INTEGER NOT NULL
@@ -106,6 +113,11 @@ CREATE TABLE goal_reservations (
   goal_id            INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
   source_account_id  INTEGER NOT NULL REFERENCES accounts(id),
   amount             INTEGER NOT NULL CHECK (amount > 0),
+  reference_amount   INTEGER NOT NULL DEFAULT 0,
+  reference_currency TEXT NOT NULL DEFAULT 'XOF',
+  exchange_rate      REAL NOT NULL DEFAULT 1,
+  exchange_rate_date TEXT,
+  exchange_rate_provider TEXT,
   note               TEXT,
   reservation_date   INTEGER NOT NULL,
   created_at         INTEGER NOT NULL,
@@ -114,6 +126,22 @@ CREATE TABLE goal_reservations (
 
 CREATE INDEX idx_goal_reservations_goal ON goal_reservations (goal_id);
 CREATE INDEX idx_goal_reservations_source ON goal_reservations (source_account_id);
+
+CREATE TABLE currencies (
+  iso_code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  symbol TEXT
+);
+
+CREATE TABLE fx_rates (
+  base_code TEXT NOT NULL,
+  quote_code TEXT NOT NULL,
+  rate REAL NOT NULL CHECK (rate > 0),
+  rate_date TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL,
+  PRIMARY KEY (base_code, quote_code)
+);
 `;
 
 export const SEED_CATEGORIES: Record<string, string[]> = {
@@ -343,6 +371,53 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
           );
         }
       }
+    }
+    if (currentDbVersion <= 11) {
+      await db.execAsync(`
+        ALTER TABLE accounts ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
+        ALTER TABLE transactions ADD COLUMN destination_amount INTEGER;
+        ALTER TABLE transactions ADD COLUMN exchange_rate REAL;
+        ALTER TABLE transactions ADD COLUMN exchange_rate_date TEXT;
+        ALTER TABLE transactions ADD COLUMN exchange_rate_provider TEXT;
+        ALTER TABLE budgets ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
+        ALTER TABLE goals ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
+        ALTER TABLE goal_reservations ADD COLUMN reference_amount INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE goal_reservations ADD COLUMN reference_currency TEXT NOT NULL DEFAULT 'XOF';
+        ALTER TABLE goal_reservations ADD COLUMN exchange_rate REAL NOT NULL DEFAULT 1;
+        ALTER TABLE goal_reservations ADD COLUMN exchange_rate_date TEXT;
+        ALTER TABLE goal_reservations ADD COLUMN exchange_rate_provider TEXT;
+
+        CREATE TABLE IF NOT EXISTS currencies (
+          iso_code TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          symbol TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS fx_rates (
+          base_code TEXT NOT NULL,
+          quote_code TEXT NOT NULL,
+          rate REAL NOT NULL CHECK (rate > 0),
+          rate_date TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          fetched_at INTEGER NOT NULL,
+          PRIMARY KEY (base_code, quote_code)
+        );
+
+        UPDATE transactions
+        SET destination_amount = amount,
+            exchange_rate = 1,
+            exchange_rate_date = date(transaction_date / 1000, 'unixepoch'),
+            exchange_rate_provider = 'migration'
+        WHERE type = 'transfer';
+
+        UPDATE goal_reservations
+        SET reference_amount = amount,
+            reference_currency = 'XOF',
+            exchange_rate = 1,
+            exchange_rate_date = date(reservation_date / 1000, 'unixepoch'),
+            exchange_rate_provider = 'migration'
+        WHERE reference_amount = 0;
+      `);
     }
   }
 

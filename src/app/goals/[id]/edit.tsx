@@ -13,6 +13,7 @@ import {
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { getGoal, updateGoal } from "@/db/goals";
+import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
@@ -34,7 +35,7 @@ export default function EditGoalScreen() {
     const goal = await getGoal(db, goalId);
     if (goal) {
       setName(goal.name);
-      setTargetAmount(String(goal.targetAmount));
+      setTargetAmount((goal.targetAmount / 10 ** currencyDigits(goal.currencyCode)).toString());
       setTargetDate(new Date(goal.targetDate));
     }
     return { goal };
@@ -43,6 +44,8 @@ export default function EditGoalScreen() {
   const resource = useAsyncResource(load);
   const reload = resource.reload;
   const goal = resource.data?.goal ?? null;
+  const goalCurrency = goal?.currencyCode ?? "XOF";
+  const previewAmount = parseMoneyInput(targetAmount, goalCurrency);
 
   useFocusEffect(
     useCallback(() => {
@@ -51,13 +54,13 @@ export default function EditGoalScreen() {
   );
 
   const save = async () => {
-    const amount = Number(targetAmount);
+    const amount = parseMoneyInput(targetAmount, goal?.currencyCode ?? "XOF");
     if (!name.trim()) {
       Alert.alert("Nom manquant", "Donnez un nom à votre objectif.");
       return;
     }
-    if (!Number.isInteger(amount) || amount <= 0) {
-      Alert.alert("Montant invalide", "Saisissez un montant entier positif en FCFA.");
+    if (amount == null || Number.isNaN(amount) || amount <= 0) {
+      Alert.alert("Montant invalide", `Saisissez un montant positif en ${goal?.currencyCode ?? "XOF"}.`);
       return;
     }
     const isOverdue = goal != null && goal.targetDate < Date.now();
@@ -73,6 +76,7 @@ export default function EditGoalScreen() {
       await updateGoal(db, goalId, {
         name,
         targetAmount: amount,
+        currencyCode: goal?.currencyCode ?? "XOF",
         targetDate: targetDate.getTime(),
       });
       router.back();
@@ -120,13 +124,13 @@ export default function EditGoalScreen() {
                 placeholderTextColor={theme.secondaryLabel}
                 keyboardType="number-pad"
                 inputMode="numeric"
-                accessibilityLabel="Montant cible en FCFA"
+                accessibilityLabel={`Montant cible en ${goalCurrency}`}
                 style={[styles.amountInput, { color: theme.label }]}
               />
-              <Text style={{ color: theme.secondaryLabel }}>FCFA à réserver</Text>
-              {Number(targetAmount) > 0 ? (
+              <Text style={{ color: theme.secondaryLabel }}>{goalCurrency} à réserver</Text>
+              {previewAmount != null && !Number.isNaN(previewAmount) && previewAmount > 0 ? (
                 <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                  Cible : {formatAmount(Number(targetAmount))}
+                  Cible : {formatAmount(previewAmount, goalCurrency)}
                 </Text>
               ) : null}
             </View>
@@ -165,7 +169,7 @@ export default function EditGoalScreen() {
           <View style={[styles.info, { backgroundColor: theme.surfaceElevated }]}>
             <Text style={{ color: theme.label, fontWeight: "700" }}>Comment ça marche</Text>
             <Text style={{ color: theme.secondaryLabel, lineHeight: 18 }}>
-              La modification ne touche pas aux réservations déjà effectuées. Déjà {formatAmount(goal.reservedAmount)} réservés sur {formatAmount(goal.targetAmount)}.
+              La modification ne touche pas aux réservations déjà effectuées. Déjà {formatAmount(goal.reservedAmount, goal.currencyCode)} réservés sur {formatAmount(goal.targetAmount, goal.currencyCode)}.
             </Text>
           </View>
 

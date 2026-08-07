@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
@@ -18,6 +19,8 @@ function capitalise(value: string): string {
 
 export default function SavingsHistoryScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -50,9 +53,9 @@ export default function SavingsHistoryScreen() {
   const breakdown = useMemo(
     () =>
       resource.data
-        ? monthlySavingsBreakdown(resource.data.transactions, resource.data.rules, months)
+        ? monthlySavingsBreakdown(resource.data.transactions, resource.data.rules, months, convert)
         : [],
-    [months, resource.data],
+    [convert, months, resource.data],
   );
   const total = breakdown.reduce((sum, month) => sum + month.total, 0);
   const subtractableTotal = breakdown.reduce(
@@ -85,7 +88,7 @@ export default function SavingsHistoryScreen() {
                 Total estimé
               </Text>
               <Text selectable style={[styles.summaryAmount, { color: theme.label }]}>
-                {formatAmount(total)}
+                {formatAmount(total, baseCurrency)}
               </Text>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
@@ -94,7 +97,7 @@ export default function SavingsHistoryScreen() {
                 Retiré du disponible
               </Text>
               <Text selectable style={[styles.summaryAmount, { color: theme.accent }]}>
-                {formatAmount(subtractableTotal)}
+                {formatAmount(subtractableTotal, baseCurrency)}
               </Text>
             </View>
           </View>
@@ -116,11 +119,11 @@ export default function SavingsHistoryScreen() {
                       {capitalise(formatMonthLabel(month.year, month.month))}
                     </Text>
                     <Text selectable style={[styles.monthAmount, { color: theme.accent }]}>
-                      {formatAmount(month.subtractableTotal)} retirés
+                      {formatAmount(month.subtractableTotal, baseCurrency)} retirés
                     </Text>
                   </View>
                   <Text style={[styles.monthTotal, { color: theme.secondaryLabel }]}>
-                    {formatAmount(month.total)} estimés au total
+                    {formatAmount(month.total, baseCurrency)} estimés au total
                   </Text>
 
                   {visibleContributions.length === 0 ? (
@@ -142,7 +145,7 @@ export default function SavingsHistoryScreen() {
                             </Text>
                           </View>
                           <Text selectable style={[styles.contributionAmount, { color: theme.label }]}>
-                            {formatAmount(amount)}
+                            {formatAmount(amount, baseCurrency)}
                           </Text>
                         </View>
                       ))}

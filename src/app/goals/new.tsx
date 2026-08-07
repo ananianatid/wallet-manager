@@ -13,11 +13,14 @@ import {
 import { ActionButton, FormField, KeyboardAwareScreen } from "@/components/ui";
 import { createGoal } from "@/db/goals";
 import { getDatabase } from "@/db/database";
+import { useCurrency } from "@/currency/context";
+import { parseMoneyInput } from "@/currency/currencies";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
 
 export default function NewGoalScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState(() => {
@@ -27,15 +30,16 @@ export default function NewGoalScreen() {
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const previewAmount = parseMoneyInput(targetAmount, baseCurrency);
 
   const save = async () => {
-    const amount = Number(targetAmount);
+    const amount = parseMoneyInput(targetAmount, baseCurrency);
     if (!name.trim()) {
       Alert.alert("Nom manquant", "Donnez un nom à votre objectif.");
       return;
     }
-    if (!Number.isInteger(amount) || amount <= 0) {
-      Alert.alert("Montant invalide", "Saisissez un montant entier positif en FCFA.");
+    if (amount == null || Number.isNaN(amount) || amount <= 0) {
+      Alert.alert("Montant invalide", `Saisissez un montant positif en ${baseCurrency}.`);
       return;
     }
     if (targetDate.getTime() <= Date.now()) {
@@ -49,6 +53,7 @@ export default function NewGoalScreen() {
       await createGoal(db, {
         name,
         targetAmount: amount,
+        currencyCode: baseCurrency,
         targetDate: targetDate.getTime(),
       });
       router.back();
@@ -89,13 +94,13 @@ export default function NewGoalScreen() {
             placeholderTextColor={theme.secondaryLabel}
             keyboardType="number-pad"
             inputMode="numeric"
-            accessibilityLabel="Montant cible en FCFA"
+            accessibilityLabel={`Montant cible en ${baseCurrency}`}
             style={[styles.amountInput, { color: theme.label }]}
           />
-          <Text style={{ color: theme.secondaryLabel }}>FCFA à réserver</Text>
-          {Number(targetAmount) > 0 ? (
+          <Text style={{ color: theme.secondaryLabel }}>{baseCurrency} à réserver</Text>
+          {previewAmount != null && !Number.isNaN(previewAmount) && previewAmount > 0 ? (
             <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-              Cible : {formatAmount(Number(targetAmount))}
+              Cible : {formatAmount(previewAmount, baseCurrency)}
             </Text>
           ) : null}
         </View>
@@ -182,10 +187,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: spacing.md + 2,
     borderRadius: radius.xl,
-  },
-  saveLabel: {
-    color: "#0A0A0B",
-    fontWeight: "700",
-    fontSize: 16,
   },
 });

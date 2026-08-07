@@ -5,6 +5,8 @@ import { MonthPicker } from "@/components/month-picker";
 import { spacing, useTheme } from "@/theme";
 import { formatMonthLabel } from "@/utils/format";
 
+const HEADER_HEIGHT = 35;
+
 interface Props {
   year: number;
   month: number;
@@ -26,6 +28,7 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
       <View style={styles.row}>
         <Pressable
           onPress={() => shift(-1)}
+          hitSlop={8}
           style={styles.arrow}
           accessibilityRole="button"
           accessibilityLabel="Mois précédent"
@@ -34,6 +37,7 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
         </Pressable>
         <Pressable
           onPress={() => setPickerOpen(true)}
+          hitSlop={8}
           style={styles.monthButton}
           accessibilityRole="button"
           accessibilityLabel="Choisir un mois"
@@ -44,6 +48,7 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
         </Pressable>
         <Pressable
           onPress={() => shift(1)}
+          hitSlop={8}
           style={styles.arrow}
           accessibilityRole="button"
           accessibilityLabel="Mois suivant"
@@ -73,12 +78,12 @@ const styles = StyleSheet.create({
   },
   arrow: {
     minWidth: 48,
-    minHeight: 48,
+    height: HEADER_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
   },
   monthButton: {
-    minHeight: 48,
+    height: HEADER_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.sm,

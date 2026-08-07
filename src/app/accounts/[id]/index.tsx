@@ -13,6 +13,7 @@ import { TransactionRow } from "@/components/transaction-row";
 import { ScreenState } from "@/components/ui";
 import { deleteAccount, getAccount } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listTransactionsByAccount } from "@/db/transactions";
 import { spacing, useTheme } from "@/theme";
@@ -20,6 +21,8 @@ import { formatAmount } from "@/utils/format";
 
 export default function AccountDetailScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const accountId = Number(id);
 
@@ -138,15 +141,22 @@ export default function AccountDetailScreen() {
                   fontVariant: ["tabular-nums"],
                 }}
               >
-                {account ? formatAmount(account.availableBalance) : "…"}
+                {account ? formatAmount(account.availableBalance, account.currencyCode) : "…"}
               </Text>
               <View style={{ gap: 2 }}>
                 <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                   Disponible après réservations
                 </Text>
+                {account.currencyCode !== baseCurrency ? (
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    ≈ {convert(account.availableBalance, account.currencyCode) == null
+                      ? `— ${baseCurrency}`
+                      : formatAmount(convert(account.availableBalance, account.currencyCode)!, baseCurrency)} · taux actuel
+                  </Text>
+                ) : null}
                 {account && account.reservedAmount > 0 ? (
                   <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                    Solde total : {formatAmount(account.balance)} · Réservé : {formatAmount(account.reservedAmount)}
+                    Solde total : {formatAmount(account.balance, account.currencyCode)} · Réservé : {formatAmount(account.reservedAmount, account.currencyCode)}
                   </Text>
                 ) : null}
               </View>

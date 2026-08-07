@@ -383,7 +383,7 @@ export default function AccountGroupsScreen() {
                     pressed && { opacity: 0.7 },
                   ]}
                 >
-                  <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Ajouter</Text>
+                  <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Ajouter</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -422,7 +422,7 @@ export default function AccountGroupsScreen() {
                         pressed && { opacity: 0.7 },
                       ]}
                     >
-                      <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>OK</Text>
+                      <Text style={{ color: theme.onAccent, fontWeight: "700" }}>OK</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -514,15 +514,19 @@ export default function AccountGroupsScreen() {
       <Modal
         visible={membershipGroup != null}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setMembershipGroup(null)}
       >
         <Pressable
-          style={styles.backdrop}
+          style={[styles.backdrop, { backgroundColor: theme.scrim }]}
           onPress={() => setMembershipGroup(null)}
           accessibilityLabel="Fermer"
         >
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            accessibilityViewIsModal
+            style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}
+          >
             <Text style={[styles.sheetTitle, { color: theme.label }]}>
               {membershipGroup?.name}
             </Text>
@@ -615,7 +619,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   sheet: {

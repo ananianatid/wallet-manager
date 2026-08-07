@@ -11,6 +11,7 @@ interface AccountRow {
   hidden: number;
   excludeFromTotal: number;
   description: string | null;
+  currencyCode: string;
   createdAt: number;
   balance: number;
   reservedAmount: number;
@@ -22,11 +23,11 @@ const balanceSum = (accountRef: string): string => `
     CASE
       WHEN type = 'income' THEN amount
       WHEN type = 'expense' THEN -amount
-      WHEN type = 'transfer' THEN
-        CASE
-          WHEN account_id = ${accountRef} THEN -(amount + COALESCE(fee, 0))
-          ELSE amount
-        END
+          WHEN type = 'transfer' THEN
+            CASE
+              WHEN account_id = ${accountRef} THEN -(amount + COALESCE(fee, 0))
+              ELSE COALESCE(destination_amount, amount)
+            END
     END
   )
 `;
@@ -40,6 +41,7 @@ function mapAccount(row: AccountRow): Account {
     hidden: row.hidden !== 0,
     excludeFromTotal: row.excludeFromTotal !== 0,
     description: row.description,
+    currencyCode: row.currencyCode,
     createdAt: row.createdAt,
     balance: row.balance,
     reservedAmount: row.reservedAmount,
@@ -68,6 +70,7 @@ const accountSelect = (where: string): string => `
          a.created_at AS createdAt,
          a.hidden AS hidden,
          a.exclude_from_total AS excludeFromTotal,
+         a.currency_code AS currencyCode,
          a.description AS description,
          ${reservedSum("a.id")} AS reservedAmount,
          COALESCE((
@@ -160,10 +163,11 @@ export async function createAccount(
   }
   const categoryId = await ensureCategory(db, "account", "Compte courant");
   const result = await db.runAsync(
-    "INSERT INTO accounts (name, category_id, group_id, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO accounts (name, category_id, group_id, currency_code, created_at) VALUES (?, ?, ?, ?, ?)",
     name,
     categoryId,
     input.groupId,
+    input.currencyCode ?? "XOF",
     Date.now(),
   );
   return Number(result.lastInsertRowId);

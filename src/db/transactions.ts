@@ -16,9 +16,15 @@ interface TransactionRow {
   categoryIcon: string | null;
   accountId: number;
   accountName: string;
+  accountCurrencyCode: string;
   destinationAccountId: number | null;
   destinationAccountName: string | null;
+  destinationCurrencyCode: string | null;
   fee: number | null;
+  destinationAmount: number | null;
+  exchangeRate: number | null;
+  exchangeRateDate: string | null;
+  exchangeRateProvider: string | null;
   note: string | null;
   transactionDate: number;
   createdAt: number;
@@ -31,9 +37,16 @@ const SELECT_FIELDS = `
   c.icon AS categoryIcon,
   t.account_id AS accountId,
   a.name AS accountName,
+  a.currency_code AS accountCurrencyCode,
   t.destination_account_id AS destinationAccountId,
   da.name AS destinationAccountName,
-  t.fee, t.note,
+  da.currency_code AS destinationCurrencyCode,
+  t.fee,
+  t.destination_amount AS destinationAmount,
+  t.exchange_rate AS exchangeRate,
+  t.exchange_rate_date AS exchangeRateDate,
+  t.exchange_rate_provider AS exchangeRateProvider,
+  t.note,
   t.transaction_date AS transactionDate,
   t.created_at AS createdAt
 `;
@@ -55,9 +68,16 @@ function mapTransaction(row: TransactionRow): Transaction {
     categoryIcon: row.categoryName ? normalizeCategoryIcon(row.categoryIcon) : null,
     accountId: row.accountId,
     accountName: row.accountName,
+    accountCurrencyCode: row.accountCurrencyCode,
     destinationAccountId: row.destinationAccountId,
     destinationAccountName: row.destinationAccountName,
+    destinationCurrencyCode: row.destinationCurrencyCode,
     fee: row.fee,
+    destinationAmount:
+      row.destinationAmount ?? (row.type === "transfer" ? row.amount : null),
+    exchangeRate: row.exchangeRate,
+    exchangeRateDate: row.exchangeRateDate,
+    exchangeRateProvider: row.exchangeRateProvider,
     note: row.note,
     transactionDate: row.transactionDate,
     createdAt: row.createdAt,
@@ -97,6 +117,10 @@ function validateInput(input: TransactionInput): TransactionInput {
         accountId: input.accountId,
         destinationAccountId: null,
         fee: null,
+        destinationAmount: null,
+        exchangeRate: null,
+        exchangeRateDate: null,
+        exchangeRateProvider: null,
         note: note || null,
         transactionDate: input.transactionDate,
       };
@@ -117,10 +141,58 @@ function validateInput(input: TransactionInput): TransactionInput {
         accountId: input.accountId,
         destinationAccountId: input.destinationAccountId,
         fee,
+        destinationAmount: input.destinationAmount ?? null,
+        exchangeRate: input.exchangeRate ?? null,
+        exchangeRateDate: input.exchangeRateDate ?? null,
+        exchangeRateProvider: input.exchangeRateProvider ?? null,
         note: note || null,
         transactionDate: input.transactionDate,
       };
   }
+}
+
+async function normalizeTransfer(
+  db: SQLiteDatabase,
+  input: TransactionInput,
+): Promise<TransactionInput> {
+  if (input.type !== "transfer") return input;
+  const accounts = await db.getAllAsync<{ id: number; currencyCode: string }>(
+    "SELECT id, currency_code AS currencyCode FROM accounts WHERE id IN (?, ?)",
+    input.accountId,
+    input.destinationAccountId!,
+  );
+  const source = accounts.find((account) => account.id === input.accountId);
+  const destination = accounts.find(
+    (account) => account.id === input.destinationAccountId,
+  );
+  if (!source || !destination) {
+    throw new Error("Le compte de transfert est introuvable.");
+  }
+  const sameCurrency = source.currencyCode === destination.currencyCode;
+  const destinationAmount =
+    input.destinationAmount ?? (sameCurrency ? input.amount : null);
+  if (
+    destinationAmount == null ||
+    !Number.isInteger(destinationAmount) ||
+    destinationAmount <= 0
+  ) {
+    throw new Error(
+      "Le montant crédité est requis pour un transfert multidevise.",
+    );
+  }
+  const exchangeRate = input.exchangeRate ?? (sameCurrency ? 1 : null);
+  if (exchangeRate == null || !Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+    throw new Error("Le taux de change est requis pour un transfert multidevise.");
+  }
+  return {
+    ...input,
+    destinationAmount,
+    exchangeRate,
+    exchangeRateDate:
+      input.exchangeRateDate ?? new Date().toISOString().slice(0, 10),
+    exchangeRateProvider:
+      input.exchangeRateProvider ?? (sameCurrency ? "same currency" : "manual"),
+  };
 }
 
 export interface TransactionFilter {
@@ -128,6 +200,7 @@ export interface TransactionFilter {
   startMs?: number | null;
   endMs?: number | null;
   order?: "asc" | "desc";
+  limit?: number | null;
 }
 
 export function listTransactions(
@@ -151,14 +224,23 @@ export function listTransactions(
   }
 
   const order = filter.order === "asc" ? "ASC" : "DESC";
+  if (
+    filter.limit != null &&
+    (!Number.isInteger(filter.limit) || filter.limit <= 0)
+  ) {
+    throw new Error("La limite de transactions doit être un entier positif.");
+  }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const limit = filter.limit != null ? "LIMIT ?" : "";
+  if (filter.limit != null) params.push(filter.limit);
 
   return db
     .getAllAsync<TransactionRow>(
       `SELECT ${SELECT_FIELDS}
        ${FROM_JOINS}
        ${where}
-       ORDER BY t.transaction_date ${order}, t.created_at ${order}, t.id ${order}`,
+       ORDER BY t.transaction_date ${order}, t.created_at ${order}, t.id ${order}
+       ${limit}`,
       params,
     )
     .then((rows) => rows.map(mapTransaction));
@@ -340,11 +422,13 @@ export async function createTransaction(
   db: SQLiteDatabase,
   input: TransactionInput,
 ): Promise<number> {
-  const valid = validateInput(input);
+  const valid = await normalizeTransfer(db, validateInput(input));
   const result = await db.runAsync(
     `INSERT INTO transactions
-       (type, amount, category_id, account_id, destination_account_id, fee, note, transaction_date, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (type, amount, category_id, account_id, destination_account_id, fee,
+        note, transaction_date, created_at, destination_amount, exchange_rate,
+        exchange_rate_date, exchange_rate_provider)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     valid.type,
     valid.amount,
     valid.categoryId,
@@ -354,6 +438,10 @@ export async function createTransaction(
     valid.note,
     valid.transactionDate,
     Date.now(),
+    valid.destinationAmount ?? null,
+    valid.exchangeRate ?? null,
+    valid.exchangeRateDate ?? null,
+    valid.exchangeRateProvider ?? null,
   );
   return Number(result.lastInsertRowId);
 }
@@ -363,7 +451,7 @@ export async function updateTransaction(
   id: number,
   input: TransactionInput,
 ): Promise<void> {
-  const valid = validateInput(input);
+  const valid = await normalizeTransfer(db, validateInput(input));
   await db.runAsync(
     `UPDATE transactions SET
        type = ?,
@@ -372,6 +460,10 @@ export async function updateTransaction(
        account_id = ?,
        destination_account_id = ?,
        fee = ?,
+       destination_amount = ?,
+       exchange_rate = ?,
+       exchange_rate_date = ?,
+       exchange_rate_provider = ?,
        note = ?,
        transaction_date = ?
      WHERE id = ?`,
@@ -381,6 +473,10 @@ export async function updateTransaction(
     valid.accountId,
     valid.destinationAccountId,
     valid.fee,
+    valid.destinationAmount ?? null,
+    valid.exchangeRate ?? null,
+    valid.exchangeRateDate ?? null,
+    valid.exchangeRateProvider ?? null,
     valid.note,
     valid.transactionDate,
     id,

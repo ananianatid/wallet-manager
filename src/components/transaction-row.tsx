@@ -28,7 +28,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
       : `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`,
   ];
   if (isTransfer && transaction.fee) {
-    details.push(`Frais : ${formatAmount(transaction.fee)}`);
+    details.push(`Frais : ${formatAmount(transaction.fee, transaction.accountCurrencyCode)}`);
   }
 
   const content = (
@@ -45,7 +45,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
       <View style={styles.body}>
         <Text
           style={[styles.title, { color: theme.label }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {title}
         </Text>
@@ -63,7 +63,9 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
         style={[styles.amount, { color }]}
       >
         {isIncome ? "+" : isExpense ? "−" : ""}
-        {formatAmount(transaction.amount)}
+        {isTransfer && transaction.destinationAmount != null && transaction.destinationCurrencyCode && transaction.destinationCurrencyCode !== transaction.accountCurrencyCode
+          ? `${formatAmount(transaction.amount, transaction.accountCurrencyCode)} → ${formatAmount(transaction.destinationAmount, transaction.destinationCurrencyCode)}`
+          : formatAmount(transaction.amount, transaction.accountCurrencyCode)}
       </Text>
     </>
   );

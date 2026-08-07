@@ -19,6 +19,7 @@ export interface ThemeColors {
   secondaryLabel: string;
   separator: string;
   outline: string;
+  scrim: string;
   accent: string;
   onAccent: string;
   warning: string;
@@ -37,7 +38,7 @@ export interface ThemeColors {
 }
 
 export type ThemeMode = "system" | "light" | "dark";
-export type AccentTheme = "blue" | "green";
+export type AccentTheme = "blue" | "midnight" | "green";
 
 export const palettes: Record<"dark" | "light", ThemeColors> = {
   dark: {
@@ -49,6 +50,7 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
     secondaryLabel: "#9B9BA3",
     separator: "#2A2A2E",
     outline: "#4A4A52",
+    scrim: "#00000080",
     accent: "#34D399",
     onAccent: "#0A0A0B",
     warning: "#F59E0B",
@@ -74,6 +76,7 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
     secondaryLabel: "#6E6E73",
     separator: "#E5E5EA",
     outline: "#B8B8C0",
+    scrim: "#00000080",
     accent: "#059669",
     onAccent: "#FFFFFF",
     warning: "#B45309",
@@ -92,7 +95,7 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
   },
 };
 
-export const ACCENT_THEME_VALUES: AccentTheme[] = ["blue", "green"];
+export const ACCENT_THEME_VALUES: AccentTheme[] = ["blue", "midnight", "green"];
 
 const ACCENT_PALETTES: Record<
   AccentTheme,
@@ -145,6 +148,36 @@ const ACCENT_PALETTES: Record<
       dangerSurfaceExpense: "#FFB0B0",
     },
   },
+  midnight: {
+    dark: {
+      accent: "#7CC2FF",
+      onAccent: "#07111F",
+      accentSurface: "#123A60",
+      accentSurfaceLabel: "#B7DBFF",
+      accentSurfaceText: "#FFFFFF",
+      dangerSurface: "#5A232B",
+      dangerSurfaceLabel: "#FFD0D6",
+      dangerSurfaceText: "#FFFFFF",
+      accentSurfaceIncome: "#86EFAC",
+      accentSurfaceExpense: "#FFB0B0",
+      dangerSurfaceIncome: "#86EFAC",
+      dangerSurfaceExpense: "#FFB0B0",
+    },
+    light: {
+      accent: "#123A60",
+      onAccent: "#FFFFFF",
+      accentSurface: "#123A60",
+      accentSurfaceLabel: "#B7DBFF",
+      accentSurfaceText: "#FFFFFF",
+      dangerSurface: "#5A232B",
+      dangerSurfaceLabel: "#FFD0D6",
+      dangerSurfaceText: "#FFFFFF",
+      accentSurfaceIncome: "#86EFAC",
+      accentSurfaceExpense: "#FFB0B0",
+      dangerSurfaceIncome: "#86EFAC",
+      dangerSurfaceExpense: "#FFB0B0",
+    },
+  },
   green: {
     dark: {
       accent: "#34D399",
@@ -162,7 +195,7 @@ const ACCENT_PALETTES: Record<
     },
     light: {
       accent: "#059669",
-      onAccent: "#FFFFFF",
+      onAccent: "#0A0A0B",
       accentSurface: "#0F3D2E",
       accentSurfaceLabel: "#B8F0D8",
       accentSurfaceText: "#FFFFFF",
@@ -177,6 +210,41 @@ const ACCENT_PALETTES: Record<
   },
 };
 
+type MidnightNeutralPalette = Pick<
+  ThemeColors,
+  | "background"
+  | "surface"
+  | "surfaceMuted"
+  | "surfaceElevated"
+  | "label"
+  | "secondaryLabel"
+  | "separator"
+  | "outline"
+>;
+
+const MIDNIGHT_NEUTRALS: Record<"dark" | "light", MidnightNeutralPalette> = {
+  dark: {
+    background: "#07111F",
+    surface: "#0C1C2B",
+    surfaceMuted: "#091622",
+    surfaceElevated: "#10283D",
+    label: "#F2F8FF",
+    secondaryLabel: "#9FB6CC",
+    separator: "#1D3952",
+    outline: "#3D607C",
+  },
+  light: {
+    background: "#F3F7FC",
+    surface: "#FFFFFF",
+    surfaceMuted: "#F8FBFF",
+    surfaceElevated: "#EAF3FC",
+    label: "#102B45",
+    secondaryLabel: "#55708B",
+    separator: "#D7E6F5",
+    outline: "#9DB8D0",
+  },
+};
+
 export function getThemePalette(
   scheme: "dark" | "light",
   accentTheme: AccentTheme = "blue",
@@ -184,6 +252,7 @@ export function getThemePalette(
   return {
     ...palettes[scheme],
     ...ACCENT_PALETTES[accentTheme][scheme],
+    ...(accentTheme === "midnight" ? MIDNIGHT_NEUTRALS[scheme] : {}),
   };
 }
 

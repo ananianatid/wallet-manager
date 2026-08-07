@@ -8,6 +8,7 @@ interface BudgetRow {
   categoryName: string | null;
   categoryIcon: string | null;
   amount: number;
+  currencyCode: string;
   createdAt: number;
 }
 
@@ -18,6 +19,7 @@ function mapBudget(row: BudgetRow): Budget {
     categoryName: row.categoryName,
     categoryIcon: row.categoryName ? normalizeCategoryIcon(row.categoryIcon) : null,
     amount: row.amount,
+    currencyCode: row.currencyCode,
     createdAt: row.createdAt,
   };
 }
@@ -29,6 +31,7 @@ export async function listBudgets(db: SQLiteDatabase): Promise<Budget[]> {
             c.name AS categoryName,
             c.icon AS categoryIcon,
             b.amount,
+            b.currency_code AS currencyCode,
             b.created_at AS createdAt
      FROM budgets b
      LEFT JOIN categories c ON c.id = b.category_id
@@ -41,6 +44,7 @@ export async function setBudget(
   db: SQLiteDatabase,
   categoryId: number | null,
   amount: number,
+  currencyCode = "XOF",
 ): Promise<void> {
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error("Le montant du budget doit être un entier positif.");
@@ -51,15 +55,17 @@ export async function setBudget(
     );
     if (existing) {
       await db.runAsync(
-        "UPDATE budgets SET amount = ? WHERE id = ?",
+        "UPDATE budgets SET amount = ?, currency_code = ? WHERE id = ?",
         amount,
+        currencyCode,
         existing.id,
       );
       return;
     }
     await db.runAsync(
-      "INSERT INTO budgets (category_id, amount, created_at) VALUES (NULL, ?, ?)",
+      "INSERT INTO budgets (category_id, amount, currency_code, created_at) VALUES (NULL, ?, ?, ?)",
       amount,
+      currencyCode,
       Date.now(),
     );
     return;
@@ -70,16 +76,18 @@ export async function setBudget(
   );
   if (existing) {
     await db.runAsync(
-      "UPDATE budgets SET amount = ? WHERE id = ?",
+      "UPDATE budgets SET amount = ?, currency_code = ? WHERE id = ?",
       amount,
+      currencyCode,
       existing.id,
     );
     return;
   }
   await db.runAsync(
-    "INSERT INTO budgets (category_id, amount, created_at) VALUES (?, ?, ?)",
+    "INSERT INTO budgets (category_id, amount, currency_code, created_at) VALUES (?, ?, ?, ?)",
     categoryId,
     amount,
+    currencyCode,
     Date.now(),
   );
 }

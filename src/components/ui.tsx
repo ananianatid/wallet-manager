@@ -13,6 +13,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 
 type ActionButtonVariant = "primary" | "secondary" | "destructive";
@@ -35,13 +36,13 @@ export function ActionButton({
   const theme = useTheme();
   const backgroundColor =
     variant === "primary"
-      ? theme.accent
+      ? theme.accentSurface
       : variant === "destructive"
         ? withAlpha(theme.expense, "18")
         : theme.surface;
   const labelColor =
     variant === "primary"
-      ? theme.onAccent
+      ? theme.accentSurfaceText
       : variant === "destructive"
         ? theme.expense
         : theme.label;
@@ -190,6 +191,22 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
   );
 }
 
+interface KeyboardAwareViewProps {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function KeyboardAwareView({ children, style }: KeyboardAwareViewProps) {
+  return (
+    <KeyboardAvoidingView
+      style={[styles.flex, style]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      {children}
+    </KeyboardAvoidingView>
+  );
+}
+
 interface KeyboardAwareScreenProps extends Omit<ScrollViewProps, "contentContainerStyle"> {
   children: ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
@@ -200,20 +217,25 @@ export function KeyboardAwareScreen({
   contentContainerStyle,
   ...scrollProps
 }: KeyboardAwareScreenProps) {
+  const insets = useSafeAreaInsets();
+  const { style, ...restScrollProps } = scrollProps;
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <KeyboardAwareView>
       <ScrollView
-        {...scrollProps}
-        style={styles.flex}
+        {...restScrollProps}
+        style={[styles.flex, style]}
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.keyboardContent, contentContainerStyle]}
+        contentContainerStyle={[
+          styles.keyboardContent,
+          contentContainerStyle,
+          { paddingBottom: spacing.xxl + insets.bottom },
+        ]}
       >
         {children}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareView>
   );
 }
 
@@ -262,7 +284,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   inlineErrorText: { flex: 1, lineHeight: 18 },
-  inlineRetry: { minHeight: 40, justifyContent: "center" },
+  inlineRetry: { minHeight: 48, justifyContent: "center" },
   inlineRetryText: { fontWeight: "800" },
   keyboardContent: { paddingBottom: spacing.xxl },
 });

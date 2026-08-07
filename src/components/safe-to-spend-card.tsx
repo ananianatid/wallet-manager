@@ -1,43 +1,81 @@
 import { ChevronRight } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { useCurrency } from "@/currency/context";
 import type { SafeToSpend } from "@/types";
 import { formatAmount } from "@/utils/format";
 import type { Totals } from "@/utils/statistics";
 
-export function MonthlySummaryCard({ totals }: { totals: Totals }) {
+export function MonthlySummaryCard({
+  totals,
+  totalLabel = "Total du mois",
+  fullWidth = false,
+  loading = false,
+}: {
+  totals: Totals;
+  totalLabel?: string;
+  fullWidth?: boolean;
+  loading?: boolean;
+}) {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const cardLabel = theme.accentSurfaceLabel;
 
   return (
-    <View style={[styles.summaryCard, { backgroundColor: theme.surface }]}>
+    <View
+      style={[
+        styles.summaryCard,
+        fullWidth && styles.fullWidthSummaryCard,
+        { backgroundColor: theme.accentSurface },
+      ]}
+    >
+      {loading ? (
+        <View
+          style={styles.summaryLoading}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Calcul de la période"
+        >
+          <ActivityIndicator color={cardLabel} />
+          <Text style={{ color: cardLabel, fontWeight: "600" }}>
+            Calcul de la période…
+          </Text>
+        </View>
+      ) : (
       <View style={styles.summaryFooter}>
         <View style={styles.footerItem}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Revenus</Text>
-          <Text selectable style={[styles.footerValue, { color: theme.income }]}>
-            + {formatAmount(totals.income)}
+          <Text style={{ color: cardLabel, fontSize: 11 }}>Revenus</Text>
+          <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceIncome }]}>
+            + {formatAmount(totals.income, baseCurrency)}
           </Text>
         </View>
         <View style={[styles.footerItem, styles.footerItemCenter]}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>Dépenses</Text>
-          <Text selectable style={[styles.footerValue, { color: theme.expense }]}>
-            −{formatAmount(totals.expense + totals.fees)}
+          <Text style={{ color: cardLabel, fontSize: 11 }}>Dépenses</Text>
+          <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceExpense }]}>
+            −{formatAmount(totals.expense + totals.fees, baseCurrency)}
           </Text>
         </View>
         <View style={[styles.footerItem, styles.footerItemRight]}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 11 }}>
-            Total du mois
+          <Text style={{ color: cardLabel, fontSize: 11 }}>
+            {totalLabel}
           </Text>
           <Text
             selectable
             style={[
               styles.footerValue,
-              { color: totals.net >= 0 ? theme.label : theme.expense },
+              {
+                color:
+                  totals.net >= 0
+                    ? theme.accentSurfaceText
+                    : theme.accentSurfaceExpense,
+              },
             ]}
           >
-            {formatAmount(totals.net)}
+            {formatAmount(totals.net, baseCurrency)}
           </Text>
         </View>
       </View>
+      )}
     </View>
   );
 }
@@ -58,6 +96,7 @@ export function SafeToSpendCard({
   compact = false,
 }: Props) {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
   const isNegative = data.amount < 0;
   const cardSurface = isNegative ? theme.dangerSurface : theme.accentSurface;
   const cardLabel = isNegative ? theme.dangerSurfaceLabel : theme.accentSurfaceLabel;
@@ -86,12 +125,12 @@ export function SafeToSpendCard({
         style={[styles.amount, compact && styles.compactAmount, { color: cardText }]}
         selectable
       >
-        {formatAmount(data.amount)}
+        {formatAmount(data.amount, baseCurrency)}
       </Text>
 
       {isNegative && !compact ? (
         <Text style={{ color: cardLabel, lineHeight: 18 }}>
-          Il manque {formatAmount(Math.abs(data.amount))} pour couvrir les échéances prévues.
+          Il manque {formatAmount(Math.abs(data.amount), baseCurrency)} pour couvrir les échéances prévues.
         </Text>
       ) : null}
 
@@ -106,13 +145,13 @@ export function SafeToSpendCard({
           <View style={styles.footerItem}>
             <Text style={{ color: cardLabel, fontSize: 11 }}>Revenus</Text>
             <Text style={[styles.footerValue, { color: incomeColor }]}>
-              + {formatAmount(monthTotals?.income ?? data.plannedIncome)}
+              + {formatAmount(monthTotals?.income ?? data.plannedIncome, baseCurrency)}
             </Text>
           </View>
           <View style={[styles.footerItem, styles.footerItemCenter]}>
             <Text style={{ color: cardLabel, fontSize: 11 }}>Dépenses</Text>
             <Text style={[styles.footerValue, { color: expenseColor }]}>
-              −{formatAmount(monthTotals?.expense ?? data.plannedOutflows)}
+              −{formatAmount(monthTotals?.expense ?? data.plannedOutflows, baseCurrency)}
             </Text>
           </View>
           <View style={[styles.footerItem, styles.footerItemRight]}>
@@ -130,7 +169,7 @@ export function SafeToSpendCard({
                 },
               ]}
             >
-              {formatAmount(monthTotals ? monthTotals.net : data.amount)}
+              {formatAmount(monthTotals ? monthTotals.net : data.amount, baseCurrency)}
             </Text>
           </View>
         </View>
@@ -170,6 +209,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.lg,
   },
+  fullWidthSummaryCard: {
+    marginHorizontal: 0,
+  },
   heading: {
     flexDirection: "row",
     alignItems: "center",
@@ -199,6 +241,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
+  },
+  summaryLoading: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
   },
   footerItem: {
     flex: 1,

@@ -26,7 +26,7 @@ export default function AboutScreen() {
             { backgroundColor: theme.accent },
           ]}
         >
-          <Text style={styles.logoText}>W</Text>
+        <Text style={[styles.logoText, { color: theme.onAccent }]}>W</Text>
         </View>
         <Text style={{ color: theme.label, fontSize: 22, fontWeight: "800" }}>
           {name}
@@ -61,7 +61,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   logoText: {
-    color: "#0A0A0B",
     fontSize: 36,
     fontWeight: "800",
   },

@@ -23,7 +23,7 @@ import {
   listSavingsRules,
   setSavingsRule,
 } from "@/db/savings";
-import { radius, spacing, useTheme, type ThemeColors } from "@/theme";
+import { radius, spacing, useTheme, withAlpha, type ThemeColors } from "@/theme";
 import type { Category, SavingsRule } from "@/types";
 import { formatDate } from "@/utils/format";
 
@@ -147,7 +147,7 @@ function EditRow({
           value={subtractFromAvailable}
           onValueChange={onSubtractFromAvailableChange}
           trackColor={{ true: theme.accent }}
-          thumbColor="#FFFFFF"
+          thumbColor={theme.accentSurfaceText}
           accessibilityLabel="Retirer cette règle du disponible estimé"
         />
       </View>
@@ -313,7 +313,7 @@ export default function SavingsScreen() {
           accessibilityLabel="Voir le suivi mensuel de l’épargne"
           style={({ pressed }) => [
             styles.historyButton,
-            { backgroundColor: theme.surface },
+            { backgroundColor: withAlpha(theme.accentSurface, "12") },
             pressed && { opacity: 0.7 },
           ]}
         >
@@ -373,7 +373,14 @@ export default function SavingsScreen() {
                     theme={theme}
                   />
                 ) : (
-                  <View style={styles.row}>
+                  <View
+                    style={[
+                      styles.row,
+                      rule.subtractFromAvailable && {
+                        backgroundColor: withAlpha(theme.accentSurface, "0C"),
+                      },
+                    ]}
+                  >
                     {rule.categoryIcon ? (
                       <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
                         <CategoryIcon name={rule.categoryIcon} size={19} color={theme.accent} />
@@ -398,7 +405,7 @@ export default function SavingsScreen() {
                       value={rule.subtractFromAvailable}
                       onValueChange={(next) => void toggleRuleSubtract(rule, next)}
                       trackColor={{ true: theme.accent }}
-                      thumbColor="#FFFFFF"
+                      thumbColor={theme.accentSurfaceText}
                       accessibilityLabel={`Retirer la règle ${rule.categoryName ?? "globale"} du disponible estimé`}
                     />
                     <IconButton
@@ -527,14 +534,14 @@ const styles = StyleSheet.create({
   },
   dateButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: "center",
     paddingHorizontal: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
   },
   clearButton: {
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: "center",
   },
   button: {

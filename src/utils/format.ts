@@ -1,6 +1,4 @@
-export function formatAmount(amount: number): string {
-  return `${amount.toLocaleString("fr-FR").replace("-", "−")} F`;
-}
+export { currencyDigits, formatAmount, parseMoneyInput } from "@/currency/currencies";
 
 export function formatMonthLabel(year: number, month: number): string {
   return new Date(year, month, 1).toLocaleDateString("fr-FR", {

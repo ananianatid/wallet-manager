@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { SelectField } from "@/components/select-field";
-import { IconButton, InlineError, ScreenState } from "@/components/ui";
+import { IconButton, InlineError, KeyboardAwareView, ScreenState } from "@/components/ui";
 import { listAccountGroups } from "@/db/account-groups";
 import {
   createAccount,
@@ -23,6 +23,8 @@ import {
   updateAccountFlags,
 } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
+import { currencyLabel } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account } from "@/types";
@@ -30,18 +32,23 @@ import { formatAmount } from "@/utils/format";
 
 export default function AccountsScreen() {
   const theme = useTheme();
+  const { baseCurrency, currencies } = useCurrency();
+  const convert = useCurrencyConverter();
+  const summaryLabel = theme.accentSurfaceLabel;
   const [formError, setFormError] = useState<string | null>(null);
   const listRef = useRef<SectionList>(null);
   const [showForm, setShowForm] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [name, setName] = useState("");
   const [groupId, setGroupId] = useState<number | null>(null);
+  const [currencyCode, setCurrencyCode] = useState(baseCurrency);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const longPressTriggered = useRef(false);
   const longPressResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openForm = () => {
     setShowForm(true);
+    setCurrencyCode(baseCurrency);
     try {
       listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: true });
     } catch {
@@ -72,6 +79,14 @@ export default function AccountsScreen() {
     ],
     [accountGroups],
   );
+  const currencyOptions = useMemo(
+    () => currencies.map((currency, index) => ({
+      id: index + 1,
+      label: currencyLabel(currency),
+      code: currency.code,
+    })),
+    [currencies],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -81,14 +96,16 @@ export default function AccountsScreen() {
 
   const submit = async () => {
     if (!name.trim()) {
+      setFormError("Saisissez un nom de compte.");
       return;
     }
     setFormError(null);
     try {
       const db = await getDatabase();
-      await createAccount(db, { name, groupId });
+      await createAccount(db, { name, groupId, currencyCode });
       setName("");
       setGroupId(null);
+      setCurrencyCode(baseCurrency);
       setShowForm(false);
       await resource.reload();
     } catch (error) {
@@ -223,15 +240,19 @@ export default function AccountsScreen() {
 
   const totals = useMemo(() => {
     const eligible = (accounts ?? []).filter((a) => !a.excludeFromTotal);
-    const actifs = eligible
+    const values = eligible.map((a) => ({
+      balance: convert(a.balance, a.currencyCode) ?? 0,
+      available: convert(a.availableBalance, a.currencyCode) ?? 0,
+    }));
+    const actifs = values
       .filter((a) => a.balance > 0)
       .reduce((sum, a) => sum + a.balance, 0);
-    const passifs = eligible
+    const passifs = values
       .filter((a) => a.balance < 0)
       .reduce((sum, a) => sum + a.balance, 0);
-    const available = eligible.reduce((sum, a) => sum + a.availableBalance, 0);
+    const available = values.reduce((sum, a) => sum + a.available, 0);
     return { actifs, passifs, solde: actifs + passifs, available };
-  }, [accounts]);
+  }, [accounts, convert]);
 
   return (
     <>
@@ -264,22 +285,25 @@ export default function AccountsScreen() {
           onRetry={() => void resource.reload()}
         />
       ) : (
-      <SectionList
-      ref={listRef}
-      style={{ flex: 1 }}
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
-      sections={sections}
-      keyExtractor={(a) => String(a.id)}
-      stickySectionHeadersEnabled={false}
-      renderSectionHeader={({ section }) => (
+      <KeyboardAwareView>
+        <SectionList
+        ref={listRef}
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        sections={sections}
+        keyExtractor={(a) => String(a.id)}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
         <View style={[styles.sectionHeader, { backgroundColor: theme.surface }]}>
           <Text style={[styles.sectionHeaderText, { color: theme.secondaryLabel }]}>
             {section.title}
           </Text>
         </View>
       )}
-      renderItem={({ item, index, section }) => {
+        renderItem={({ item, index, section }) => {
         const isLast = index === section.data.length - 1;
         return (
           <>
@@ -346,11 +370,21 @@ export default function AccountsScreen() {
                     },
                   ]}
                 >
-                  {formatAmount(item.availableBalance)}
+                  {formatAmount(item.availableBalance, item.currencyCode)}
                 </Text>
+                {item.currencyCode !== baseCurrency ? (
+                  <Text style={[styles.totalBalance, { color: theme.secondaryLabel }]}>
+                    {(() => {
+                      const equivalent = convert(item.availableBalance, item.currencyCode);
+                      return equivalent == null
+                        ? `— ${baseCurrency}`
+                        : `≈ ${formatAmount(equivalent, baseCurrency)}`;
+                    })()}
+                  </Text>
+                ) : null}
                 {item.reservedAmount > 0 ? (
                   <Text style={[styles.totalBalance, { color: theme.secondaryLabel }]}>
-                    total {formatAmount(item.balance)}
+                    total {formatAmount(item.balance, item.currencyCode)}
                   </Text>
                 ) : null}
               </View>
@@ -367,50 +401,53 @@ export default function AccountsScreen() {
             ) : null}
           </>
         );
-      }}
-      ListHeaderComponent={
+        }}
+        ListHeaderComponent={
         <View style={{ gap: spacing.lg }}>
           <View
             style={{
               marginHorizontal: spacing.lg,
-              backgroundColor: theme.surface,
+              backgroundColor: theme.accentSurface,
               borderRadius: radius.lg,
               padding: spacing.lg,
               gap: spacing.xs,
             }}
           >
-            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Patrimoine</Text>
+            <Text style={{ color: summaryLabel, fontSize: 13 }}>Patrimoine</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                <Text style={{ color: summaryLabel, fontSize: 13 }}>
                   Actifs
                 </Text>
                 <Text
                   selectable
-                  style={{ color: theme.income, fontWeight: "700", fontVariant: ["tabular-nums"] }}
+                  style={{ color: theme.accentSurfaceIncome, fontWeight: "700", fontVariant: ["tabular-nums"] }}
                 >
                   + {formatAmount(totals.actifs)}
                 </Text>
               </View>
               <View style={[styles.summaryItem, styles.summaryItemCenter]}>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                <Text style={{ color: summaryLabel, fontSize: 13 }}>
                   Passifs
                 </Text>
                 <Text
                   selectable
-                  style={{ color: theme.expense, fontWeight: "700", fontVariant: ["tabular-nums"] }}
+                  style={{ color: theme.accentSurfaceExpense, fontWeight: "700", fontVariant: ["tabular-nums"] }}
                 >
                   {formatAmount(totals.passifs)}
                 </Text>
               </View>
               <View style={[styles.summaryItem, styles.summaryItemRight]}>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                <Text style={{ color: summaryLabel, fontSize: 13 }}>
                   Solde
                 </Text>
                 <Text
                   selectable
                   style={{
-                    color: totals.solde >= 0 ? theme.label : theme.expense,
+                    color:
+                      totals.solde >= 0
+                        ? theme.accentSurfaceText
+                        : theme.accentSurfaceExpense,
                     fontWeight: "800",
                     fontVariant: ["tabular-nums"],
                   }}
@@ -419,27 +456,8 @@ export default function AccountsScreen() {
                 </Text>
               </View>
             </View>
-            <View style={[styles.availableSummary, { borderTopColor: theme.separator }]}>
-              <View>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Disponible</Text>
-                <Text
-                  selectable
-                  style={{
-                    color: totals.available >= 0 ? theme.label : theme.expense,
-                    fontWeight: "800",
-                    fontSize: 18,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {formatAmount(totals.available)}
-                </Text>
-              </View>
-              <Text style={{ color: theme.secondaryLabel, fontSize: 13, flex: 1, textAlign: "right" }}>
-                Après les réservations d&apos;objectifs
-              </Text>
-            </View>
             {(accounts ?? []).some((a) => a.excludeFromTotal) ? (
-              <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              <Text style={{ color: summaryLabel, fontSize: 13 }}>
                 {(accounts ?? []).filter((a) => a.excludeFromTotal).length} compte
                 {(accounts ?? []).filter((a) => a.excludeFromTotal).length > 1 ? "s" : ""}{" "}
                 exclu{(accounts ?? []).filter((a) => a.excludeFromTotal).length > 1 ? "s" : ""}{" "}
@@ -491,11 +509,12 @@ export default function AccountsScreen() {
             >
               <Text style={[styles.name, { color: theme.label }]}>Nouveau compte</Text>
               {formError ? <InlineError message={formError} onRetry={() => setFormError(null)} /> : null}
-              <TextInput
+                <TextInput
                 value={name}
                 onChangeText={setName}
                 placeholder="Nom du compte"
                 placeholderTextColor={theme.secondaryLabel}
+                accessibilityLabel="Nom du compte"
                 style={{
                   color: theme.label,
                   backgroundColor: theme.surfaceElevated,
@@ -504,6 +523,8 @@ export default function AccountsScreen() {
                   borderRadius: radius.md,
                 }}
                 autoFocus
+                returnKeyType="done"
+                onSubmitEditing={() => void submit()}
               />
               <SelectField
                 label="Groupe de comptes"
@@ -515,25 +536,35 @@ export default function AccountsScreen() {
                 options={groupOptions}
                 onChange={(id) => setGroupId(id === -1 ? null : id)}
               />
+              <SelectField
+                label="Devise du compte"
+                value={currencyOptions.find((option) => option.code === currencyCode)?.label ?? currencyCode}
+                options={currencyOptions}
+                onChange={(id) => setCurrencyCode(currencyOptions.find((option) => option.id === id)?.code ?? baseCurrency)}
+              />
               <View style={{ flexDirection: "row", gap: spacing.sm }}>
                 <Pressable
                   onPress={() => setShowForm(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Annuler la création du compte"
                   style={({ pressed }) => [styles.button, { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.separator }, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>Annuler</Text>
                 </Pressable>
                 <Pressable
                   onPress={submit}
+                  accessibilityRole="button"
+                  accessibilityLabel="Créer le compte"
                   style={({ pressed }) => [styles.button, { backgroundColor: theme.accent, flex: 1 }, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={{ color: "#0A0A0B", fontWeight: "700" }}>Créer</Text>
+                  <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Créer</Text>
                 </Pressable>
               </View>
             </View>
           ) : null}
         </View>
-      }
-      ListEmptyComponent={
+        }
+        ListEmptyComponent={
         (accounts ?? []).length === 0 ? (
           <EmptyState
             title="Aucun compte"
@@ -546,22 +577,27 @@ export default function AccountsScreen() {
             </Text>
           </View>
         )
-      }
-      />
+        }
+        />
+      </KeyboardAwareView>
       )}
 
       <Modal
         visible={selectedAccount != null}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={closeAccountActions}
       >
         <Pressable
-          style={styles.backdrop}
+          style={[styles.backdrop, { backgroundColor: theme.scrim }]}
           onPress={closeAccountActions}
           accessibilityLabel="Fermer"
         >
-          <Pressable style={[styles.actionSheet, { backgroundColor: theme.surfaceElevated }]}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            accessibilityViewIsModal
+            style={[styles.actionSheet, { backgroundColor: theme.surfaceElevated }]}
+          >
             <Text style={[styles.actionSheetTitle, { color: theme.label }]}>
               {selectedAccount?.name}
             </Text>
@@ -727,16 +763,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontVariant: ["tabular-nums"],
   },
-  availableSummary: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    marginTop: spacing.sm,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
   button: {
+    minHeight: 48,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,
@@ -755,7 +783,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   actionSheet: {

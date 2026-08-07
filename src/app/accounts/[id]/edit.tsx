@@ -22,14 +22,11 @@ import { getDatabase } from "@/db/database";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount } from "@/utils/format";
+import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 
-const parseAmount = (value: string): number | null => {
-  const trimmed = value.replace(/[\s\u00a0]/g, "");
-  if (trimmed === "") {
-    return null;
-  }
-  const parsed = Number(trimmed);
-  return Number.isInteger(parsed) ? parsed : NaN;
+const parseAmount = (value: string, currency: string): number | null => {
+  const parsed = parseMoneyInput(value, currency);
+  return parsed == null ? null : parsed;
 };
 
 export default function EditAccountScreen() {
@@ -56,7 +53,7 @@ export default function EditAccountScreen() {
     if (acc) {
       setName(acc.name);
       setGroupId(acc.groupId);
-      setAmount(String(acc.balance));
+      setAmount((acc.balance / 10 ** currencyDigits(acc.currencyCode)).toString());
       setDescription(acc.description ?? "");
       setHidden(acc.hidden);
       setExcludeFromTotal(acc.excludeFromTotal);
@@ -67,7 +64,10 @@ export default function EditAccountScreen() {
   const resource = useAsyncResource(load);
   const reload = resource.reload;
   const account = resource.data?.account ?? null;
-  const accountGroups = resource.data?.accountGroups ?? [];
+  const accountGroups = useMemo(
+    () => resource.data?.accountGroups ?? [],
+    [resource.data?.accountGroups],
+  );
   const groupOptions = useMemo(
     () => [
       { id: -1, label: "Sans groupe" },
@@ -82,7 +82,8 @@ export default function EditAccountScreen() {
     }, [reload]),
   );
 
-  const target = parseAmount(amount);
+  const accountCurrency = account?.currencyCode ?? "XOF";
+  const target = parseAmount(amount, accountCurrency);
   const balance = account?.balance ?? 0;
   const adjustment =
     target == null || Number.isNaN(target)
@@ -95,7 +96,7 @@ export default function EditAccountScreen() {
       nextErrors.name = "Saisissez un nom.";
     }
     if (Number.isNaN(target)) {
-      nextErrors.amount = "Saisissez un montant entier en FCFA.";
+      nextErrors.amount = `Saisissez un montant valide en ${accountCurrency}.`;
     }
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -207,7 +208,7 @@ export default function EditAccountScreen() {
                     minWidth: 160,
                   }}
                 />
-                <Text style={{ color: theme.secondaryLabel }}>FCFA</Text>
+                  <Text style={{ color: theme.secondaryLabel }}>{account?.currencyCode ?? "XOF"}</Text>
               </View>
               {adjustment ? (
                 <Text
@@ -220,7 +221,7 @@ export default function EditAccountScreen() {
                   accessibilityLiveRegion="polite"
                 >
                   {adjustment.type === "income" ? "+" : "−"}
-                  {formatAmount(adjustment.amount)} →{" "}
+                  {formatAmount(adjustment.amount, account?.currencyCode ?? "XOF")} →{" "}
                   {adjustment.type === "income" ? "revenu" : "dépense"} « Équilibre »
                 </Text>
               ) : (
@@ -230,6 +231,15 @@ export default function EditAccountScreen() {
                     : "Solde inchangé, aucune transaction créée."}
                 </Text>
               )}
+            </View>
+          </FormField>
+
+          <FormField label="Devise du compte">
+            <View style={{ backgroundColor: theme.surface, borderRadius: radius.md, padding: spacing.md }}>
+              <Text style={{ color: theme.label, fontWeight: "700" }}>{account?.currencyCode ?? "XOF"}</Text>
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13, marginTop: spacing.xs }}>
+                La devise est immuable après la création du compte.
+              </Text>
             </View>
           </FormField>
 
@@ -273,7 +283,7 @@ export default function EditAccountScreen() {
               value={hidden}
               onValueChange={setHidden}
               trackColor={{ true: theme.accent }}
-              thumbColor="#FFFFFF"
+              thumbColor={theme.accentSurfaceText}
             />
           </View>
           <View
@@ -295,7 +305,7 @@ export default function EditAccountScreen() {
               value={excludeFromTotal}
               onValueChange={setExcludeFromTotal}
               trackColor={{ true: theme.accent }}
-              thumbColor="#FFFFFF"
+              thumbColor={theme.accentSurfaceText}
             />
           </View>
         </View>

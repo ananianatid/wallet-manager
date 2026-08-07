@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  CalendarDays,
   ChevronRight,
   Info,
   Lock,
@@ -34,7 +35,9 @@ const ENTRIES: {
     | "/goals"
     | "/security"
     | "/appearance"
+    | "/calendar-settings"
     | "/about"
+    | "/currency-settings"
     | "/(tabs)/(settings)/accounts-settings";
   section: "Organisation" | "Planification" | "Sécurité" | "Préférences";
 }[] = [
@@ -47,6 +50,8 @@ const ENTRIES: {
   { label: "Objectifs", icon: Target, href: "/goals", section: "Planification" },
   { label: "Sécurité", icon: Lock, href: "/security", section: "Sécurité" },
   { label: "Apparence", icon: Sun, href: "/appearance", section: "Préférences" },
+  { label: "Calendrier", icon: CalendarDays, href: "/calendar-settings", section: "Préférences" },
+  { label: "Devises", icon: Wallet, href: "/currency-settings", section: "Préférences" },
   { label: "À propos", icon: Info, href: "/about", section: "Préférences" },
 ];
 
@@ -144,7 +149,7 @@ export default function SettingsScreen() {
     <ScrollView
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
+      contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.lg }}
     >
       <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
         {ENTRIES.map((entry, index) => (
@@ -154,7 +159,12 @@ export default function SettingsScreen() {
             ) : index > 0 ? (
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separator, marginLeft: spacing.lg }} />
             ) : null}
-            <Pressable onPress={() => router.push(entry.href)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
+            <Pressable
+              onPress={() => router.push(entry.href)}
+              accessibilityRole="button"
+              accessibilityLabel={entry.label}
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+            >
               <View style={{ width: 24 }}><entry.icon size={22} strokeWidth={2} color={theme.accent} /></View>
               <Text style={[styles.label, { color: theme.label }]}>{entry.label}</Text>
               <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />

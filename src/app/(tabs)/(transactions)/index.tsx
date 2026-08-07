@@ -15,11 +15,12 @@ import { MonthlySummaryCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { listAccounts } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { applyDueRecurring } from "@/db/recurring";
 import { getSetting, setSetting } from "@/db/settings";
 import { listTransactions } from "@/db/transactions";
 import { filterTransactions, setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Transaction } from "@/types";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import { useAsyncResource } from "@/hooks/use-async-resource";
@@ -50,6 +51,8 @@ type TransactionSection = DaySection | MonthSection;
 
 export default function TransactionsScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const insets = useSafeAreaInsets();
   const filters = useTransactionFilters();
   const [recurringError, setRecurringError] = useState<string | null>(null);
@@ -74,9 +77,9 @@ export default function TransactionsScreen() {
     return {
       transactions: filterTransactions(rows, filters),
       accounts: accs,
-      monthTotals: totals(rows),
+      monthTotals: totals(rows, convert),
     };
-  }, [filters]);
+  }, [filters, convert]);
 
   const resource = useAsyncResource(load);
   const reload = resource.reload;
@@ -161,13 +164,15 @@ export default function TransactionsScreen() {
           groups.set(key, section);
         }
         section.data.push(t);
+        const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+        const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
         section.total +=
           t.type === "income"
-            ? t.amount
+            ? amount
             : t.type === "expense"
-              ? -t.amount
-              : t.fee
-                ? -t.fee
+              ? -amount
+              : fee
+                ? -fee
                 : 0;
       }
       const sorted = [...groups.values()];
@@ -191,16 +196,18 @@ export default function TransactionsScreen() {
           groups.set(key, section);
         }
         section.data.push(t);
+        const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+        const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
         if (t.type === "income") {
-          section.income += t.amount;
+          section.income += amount;
         } else if (t.type === "expense") {
-          section.expense += t.amount;
-        } else if (t.fee) {
-          section.expense += t.fee;
+          section.expense += amount;
+        } else if (fee) {
+          section.expense += fee;
         }
     }
     return [...groups.values()];
-  }, [transactions, filters]);
+  }, [baseCurrency, convert, filters, transactions]);
 
   const monthRows = transactions ?? [];
 
@@ -307,12 +314,12 @@ export default function TransactionsScreen() {
               <View style={styles.daySummary}>
                 {section.income > 0 ? (
                   <Text style={[styles.dayAmount, { color: theme.income }]}>
-                    + {formatAmount(section.income)}
+                    + {formatAmount(section.income, baseCurrency)}
                   </Text>
                 ) : null}
                 {section.expense > 0 ? (
                   <Text style={[styles.dayAmount, { color: theme.expense }]}>
-                    −{formatAmount(section.expense)}
+                    −{formatAmount(section.expense, baseCurrency)}
                   </Text>
                 ) : null}
               </View>
@@ -326,21 +333,26 @@ export default function TransactionsScreen() {
                   },
                 ]}
               >
-                {formatAmount(section.total)}
+                {formatAmount(section.total, baseCurrency)}
               </Text>
             )}
           </View>
         )}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
-          <View style={{ gap: spacing.lg, paddingTop: spacing.lg }}>
+          <View style={{ gap: spacing.lg }}>
               {monthTotals && accounts.length > 0 ? (
                 <MonthlySummaryCard totals={monthTotals} />
               ) : null}
               {recurringNotice ? (
                 <View style={[styles.recurringNotice, { backgroundColor: `${theme.accent}18` }]}>
                   <Text style={{ color: theme.label, flex: 1 }}>{recurringNotice}</Text>
-                  <Pressable onPress={() => router.push("/recurring")} hitSlop={8}>
+                  <Pressable
+                    onPress={() => router.push("/recurring")}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Gérer les transactions récurrentes"
+                  >
                     <Text style={{ color: theme.accent, fontWeight: "700" }}>Gérer</Text>
                   </Pressable>
                 </View>
@@ -374,7 +386,11 @@ export default function TransactionsScreen() {
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.fab,
-            { backgroundColor: theme.accent, bottom: insets.bottom + spacing.lg },
+            {
+              backgroundColor: theme.accent,
+              bottom: insets.bottom + spacing.lg,
+              boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
+            },
             pressed && { opacity: 0.8 },
           ]}
         >
@@ -437,6 +453,5 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35)",
   },
 });

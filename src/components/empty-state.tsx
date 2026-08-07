@@ -28,7 +28,7 @@ export function EmptyState({ title, message, actionLabel, onAction }: Props) {
             pressed && { opacity: 0.7 },
           ]}
         >
-          <Text style={styles.buttonLabel}>{actionLabel}</Text>
+          <Text style={[styles.buttonLabel, { color: theme.onAccent }]}>{actionLabel}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -65,7 +65,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
   },
   buttonLabel: {
-    color: "#0A0A0B",
     fontWeight: "700",
   },
 });
