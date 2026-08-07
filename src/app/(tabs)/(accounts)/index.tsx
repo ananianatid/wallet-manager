@@ -174,7 +174,7 @@ export default function AccountsScreen() {
     closeAccountActions();
     Alert.alert(
       `Supprimer « ${account.name} » ?`,
-      "Le compte sera déplacé vers les comptes supprimés et pourra être restauré. Ses transactions seront masquées des listes.",
+      "Le compte sera déplacé vers les comptes supprimés et pourra être restauré. Ses transactions seront masquées des listes et ses transactions récurrentes seront désactivées.",
       [
         { text: "Annuler", style: "cancel" },
         {

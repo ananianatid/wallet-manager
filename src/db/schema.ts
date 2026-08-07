@@ -172,6 +172,176 @@ export const SEED_CATEGORIES: Record<string, string[]> = {
   ],
 };
 
+export const MIGRATION_V2 = `
+  ALTER TABLE accounts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE accounts ADD COLUMN exclude_from_total INTEGER NOT NULL DEFAULT 0;
+`;
+
+export const MIGRATION_V3 = `
+  CREATE TABLE budgets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+    amount      INTEGER NOT NULL CHECK (amount > 0),
+    created_at  INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX ux_budgets_category ON budgets (category_id) WHERE category_id IS NOT NULL;
+
+  CREATE TABLE recurring_transactions (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    type                   TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+    amount                 INTEGER NOT NULL CHECK (amount > 0),
+    category_id            INTEGER REFERENCES categories(id),
+    account_id             INTEGER NOT NULL REFERENCES accounts(id),
+    destination_account_id INTEGER REFERENCES accounts(id),
+    fee                    INTEGER CHECK (fee IS NULL OR fee > 0),
+    note                   TEXT,
+    frequency              TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly','yearly')),
+    interval               INTEGER NOT NULL DEFAULT 1 CHECK (interval > 0),
+    start_date             INTEGER NOT NULL,
+    next_date              INTEGER NOT NULL,
+    end_date               INTEGER,
+    is_active              INTEGER NOT NULL DEFAULT 1,
+    created_at             INTEGER NOT NULL
+  );
+`;
+
+export const MIGRATION_V4 = `
+  CREATE TABLE savings_rules (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+    percent     INTEGER NOT NULL CHECK (percent > 0 AND percent <= 100),
+    created_at  INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHERE category_id IS NOT NULL;
+`;
+
+export const MIGRATION_V5 = `
+  CREATE TABLE goals (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    target_amount INTEGER NOT NULL CHECK (target_amount > 0),
+    target_date   INTEGER NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+    created_at    INTEGER NOT NULL
+  );
+
+  CREATE TABLE goal_reservations (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id            INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    source_account_id  INTEGER NOT NULL REFERENCES accounts(id),
+    amount             INTEGER NOT NULL CHECK (amount > 0),
+    note               TEXT,
+    reservation_date   INTEGER NOT NULL,
+    created_at         INTEGER NOT NULL,
+    released_at        INTEGER
+  );
+
+  CREATE INDEX idx_goal_reservations_goal ON goal_reservations (goal_id);
+  CREATE INDEX idx_goal_reservations_source ON goal_reservations (source_account_id);
+`;
+
+export const MIGRATION_V6 = `
+  ALTER TABLE categories ADD COLUMN icon TEXT;
+  UPDATE categories SET icon = 'tag' WHERE type IN ('income', 'expense');
+`;
+
+export const MIGRATION_V7 = `
+  ALTER TABLE accounts ADD COLUMN description TEXT;
+`;
+
+export const MIGRATION_V8 = `
+  CREATE TABLE IF NOT EXISTS account_groups (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_account_groups_active_name
+    ON account_groups (name) WHERE deleted_at IS NULL;
+
+  ALTER TABLE accounts ADD COLUMN group_id INTEGER REFERENCES account_groups(id);
+  CREATE INDEX IF NOT EXISTS idx_accounts_group ON accounts (group_id);
+
+  INSERT INTO account_groups (name, sort_order, created_at)
+  SELECT c.name,
+         ROW_NUMBER() OVER (ORDER BY MIN(a.id)) AS sort_order,
+         MIN(a.created_at) AS created_at
+  FROM accounts a
+  JOIN categories c ON c.id = a.category_id
+  GROUP BY c.name;
+
+  UPDATE accounts
+  SET group_id = (
+    SELECT g.id FROM account_groups g
+    JOIN categories c ON c.id = accounts.category_id
+    WHERE g.name = c.name AND g.deleted_at IS NULL
+  )
+  WHERE group_id IS NULL;
+`;
+
+export const MIGRATION_V9 = `
+  ALTER TABLE accounts ADD COLUMN deleted_at INTEGER;
+`;
+
+export const MIGRATION_V10 = `
+  ALTER TABLE savings_rules ADD COLUMN start_date INTEGER;
+`;
+
+export const MIGRATION_V11 = `
+  ALTER TABLE savings_rules
+    ADD COLUMN subtract_from_available INTEGER NOT NULL DEFAULT 0;
+`;
+
+export const MIGRATION_V12 = `
+  ALTER TABLE accounts ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
+  ALTER TABLE transactions ADD COLUMN destination_amount INTEGER;
+  ALTER TABLE transactions ADD COLUMN exchange_rate REAL;
+  ALTER TABLE transactions ADD COLUMN exchange_rate_date TEXT;
+  ALTER TABLE transactions ADD COLUMN exchange_rate_provider TEXT;
+  ALTER TABLE budgets ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
+  ALTER TABLE goals ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
+  ALTER TABLE goal_reservations ADD COLUMN reference_amount INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE goal_reservations ADD COLUMN reference_currency TEXT NOT NULL DEFAULT 'XOF';
+  ALTER TABLE goal_reservations ADD COLUMN exchange_rate REAL NOT NULL DEFAULT 1;
+  ALTER TABLE goal_reservations ADD COLUMN exchange_rate_date TEXT;
+  ALTER TABLE goal_reservations ADD COLUMN exchange_rate_provider TEXT;
+
+  CREATE TABLE IF NOT EXISTS currencies (
+    iso_code TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    symbol TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS fx_rates (
+    base_code TEXT NOT NULL,
+    quote_code TEXT NOT NULL,
+    rate REAL NOT NULL CHECK (rate > 0),
+    rate_date TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (base_code, quote_code)
+  );
+
+  UPDATE transactions
+  SET destination_amount = amount,
+      exchange_rate = 1,
+      exchange_rate_date = date(transaction_date / 1000, 'unixepoch'),
+      exchange_rate_provider = 'migration'
+  WHERE type = 'transfer';
+
+  UPDATE goal_reservations
+  SET reference_amount = amount,
+      reference_currency = 'XOF',
+      exchange_rate = 1,
+      exchange_rate_date = date(reservation_date / 1000, 'unixepoch'),
+      exchange_rate_provider = 'migration'
+  WHERE reference_amount = 0;
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -226,138 +396,34 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     await seedAccountGroups(db);
   } else {
     if (currentDbVersion <= 1) {
-      await db.execAsync(`
-        ALTER TABLE accounts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE accounts ADD COLUMN exclude_from_total INTEGER NOT NULL DEFAULT 0;
-      `);
+      await db.execAsync(MIGRATION_V2);
     }
     if (currentDbVersion <= 2) {
-      await db.execAsync(`
-        CREATE TABLE budgets (
-          id          INTEGER PRIMARY KEY AUTOINCREMENT,
-          category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
-          amount      INTEGER NOT NULL CHECK (amount > 0),
-          created_at  INTEGER NOT NULL
-        );
-
-        CREATE UNIQUE INDEX ux_budgets_category ON budgets (category_id) WHERE category_id IS NOT NULL;
-
-        CREATE TABLE recurring_transactions (
-          id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-          type                   TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
-          amount                 INTEGER NOT NULL CHECK (amount > 0),
-          category_id            INTEGER REFERENCES categories(id),
-          account_id             INTEGER NOT NULL REFERENCES accounts(id),
-          destination_account_id INTEGER REFERENCES accounts(id),
-          fee                    INTEGER CHECK (fee IS NULL OR fee > 0),
-          note                   TEXT,
-          frequency              TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly','yearly')),
-          interval               INTEGER NOT NULL DEFAULT 1 CHECK (interval > 0),
-          start_date             INTEGER NOT NULL,
-          next_date              INTEGER NOT NULL,
-          end_date               INTEGER,
-          is_active              INTEGER NOT NULL DEFAULT 1,
-          created_at             INTEGER NOT NULL
-        );
-      `);
+      await db.execAsync(MIGRATION_V3);
     }
     if (currentDbVersion <= 3) {
-      await db.execAsync(`
-        CREATE TABLE savings_rules (
-          id          INTEGER PRIMARY KEY AUTOINCREMENT,
-          category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
-          percent     INTEGER NOT NULL CHECK (percent > 0 AND percent <= 100),
-          created_at  INTEGER NOT NULL
-        );
-
-        CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHERE category_id IS NOT NULL;
-      `);
+      await db.execAsync(MIGRATION_V4);
     }
     if (currentDbVersion <= 4) {
-      await db.execAsync(`
-        CREATE TABLE goals (
-          id            INTEGER PRIMARY KEY AUTOINCREMENT,
-          name          TEXT NOT NULL,
-          target_amount INTEGER NOT NULL CHECK (target_amount > 0),
-          target_date   INTEGER NOT NULL,
-          status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
-          created_at    INTEGER NOT NULL
-        );
-
-        CREATE TABLE goal_reservations (
-          id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-          goal_id            INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
-          source_account_id  INTEGER NOT NULL REFERENCES accounts(id),
-          amount             INTEGER NOT NULL CHECK (amount > 0),
-          note               TEXT,
-          reservation_date   INTEGER NOT NULL,
-          created_at         INTEGER NOT NULL,
-          released_at        INTEGER
-        );
-
-        CREATE INDEX idx_goal_reservations_goal ON goal_reservations (goal_id);
-        CREATE INDEX idx_goal_reservations_source ON goal_reservations (source_account_id);
-      `);
+      await db.execAsync(MIGRATION_V5);
     }
     if (currentDbVersion <= 5) {
-      await db.execAsync(`
-        ALTER TABLE categories ADD COLUMN icon TEXT;
-        UPDATE categories SET icon = 'tag' WHERE type IN ('income', 'expense');
-      `);
+      await db.execAsync(MIGRATION_V6);
     }
     if (currentDbVersion <= 6) {
-      await db.execAsync(`
-        ALTER TABLE accounts ADD COLUMN description TEXT;
-      `);
+      await db.execAsync(MIGRATION_V7);
     }
     if (currentDbVersion <= 7) {
-      await db.execAsync(`
-        CREATE TABLE IF NOT EXISTS account_groups (
-          id         INTEGER PRIMARY KEY AUTOINCREMENT,
-          name       TEXT NOT NULL,
-          sort_order INTEGER NOT NULL DEFAULT 0,
-          created_at INTEGER NOT NULL,
-          deleted_at INTEGER
-        );
-
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_account_groups_active_name
-          ON account_groups (name) WHERE deleted_at IS NULL;
-
-        ALTER TABLE accounts ADD COLUMN group_id INTEGER REFERENCES account_groups(id);
-        CREATE INDEX IF NOT EXISTS idx_accounts_group ON accounts (group_id);
-
-        INSERT INTO account_groups (name, sort_order, created_at)
-        SELECT c.name,
-               ROW_NUMBER() OVER (ORDER BY MIN(a.id)) AS sort_order,
-               MIN(a.created_at) AS created_at
-        FROM accounts a
-        JOIN categories c ON c.id = a.category_id
-        GROUP BY c.name;
-
-        UPDATE accounts
-        SET group_id = (
-          SELECT g.id FROM account_groups g
-          JOIN categories c ON c.id = accounts.category_id
-          WHERE g.name = c.name AND g.deleted_at IS NULL
-        )
-        WHERE group_id IS NULL;
-      `);
+      await db.execAsync(MIGRATION_V8);
     }
     if (currentDbVersion <= 8) {
-      await db.execAsync(`
-        ALTER TABLE accounts ADD COLUMN deleted_at INTEGER;
-      `);
+      await db.execAsync(MIGRATION_V9);
     }
     if (currentDbVersion <= 9) {
-      await db.execAsync(`
-        ALTER TABLE savings_rules ADD COLUMN start_date INTEGER;
-      `);
+      await db.execAsync(MIGRATION_V10);
     }
     if (currentDbVersion <= 10) {
-      await db.execAsync(`
-        ALTER TABLE savings_rules
-          ADD COLUMN subtract_from_available INTEGER NOT NULL DEFAULT 0;
-      `);
+      await db.execAsync(MIGRATION_V11);
       const settingsTable = await db.getFirstAsync<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
       );
@@ -373,51 +439,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
       }
     }
     if (currentDbVersion <= 11) {
-      await db.execAsync(`
-        ALTER TABLE accounts ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
-        ALTER TABLE transactions ADD COLUMN destination_amount INTEGER;
-        ALTER TABLE transactions ADD COLUMN exchange_rate REAL;
-        ALTER TABLE transactions ADD COLUMN exchange_rate_date TEXT;
-        ALTER TABLE transactions ADD COLUMN exchange_rate_provider TEXT;
-        ALTER TABLE budgets ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
-        ALTER TABLE goals ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'XOF';
-        ALTER TABLE goal_reservations ADD COLUMN reference_amount INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE goal_reservations ADD COLUMN reference_currency TEXT NOT NULL DEFAULT 'XOF';
-        ALTER TABLE goal_reservations ADD COLUMN exchange_rate REAL NOT NULL DEFAULT 1;
-        ALTER TABLE goal_reservations ADD COLUMN exchange_rate_date TEXT;
-        ALTER TABLE goal_reservations ADD COLUMN exchange_rate_provider TEXT;
-
-        CREATE TABLE IF NOT EXISTS currencies (
-          iso_code TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          symbol TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS fx_rates (
-          base_code TEXT NOT NULL,
-          quote_code TEXT NOT NULL,
-          rate REAL NOT NULL CHECK (rate > 0),
-          rate_date TEXT NOT NULL,
-          provider TEXT NOT NULL,
-          fetched_at INTEGER NOT NULL,
-          PRIMARY KEY (base_code, quote_code)
-        );
-
-        UPDATE transactions
-        SET destination_amount = amount,
-            exchange_rate = 1,
-            exchange_rate_date = date(transaction_date / 1000, 'unixepoch'),
-            exchange_rate_provider = 'migration'
-        WHERE type = 'transfer';
-
-        UPDATE goal_reservations
-        SET reference_amount = amount,
-            reference_currency = 'XOF',
-            exchange_rate = 1,
-            exchange_rate_date = date(reservation_date / 1000, 'unixepoch'),
-            exchange_rate_provider = 'migration'
-        WHERE reference_amount = 0;
-      `);
+      await db.execAsync(MIGRATION_V12);
     }
   }
 

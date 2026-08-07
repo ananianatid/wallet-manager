@@ -250,11 +250,25 @@ export async function deleteAccount(
   db: SQLiteDatabase,
   id: number,
 ): Promise<void> {
-  await db.runAsync(
-    "UPDATE accounts SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
-    Date.now(),
+  const activeReservations = await db.getFirstAsync<{ active: number }>(
+    "SELECT EXISTS(SELECT 1 FROM goal_reservations WHERE source_account_id = ? AND released_at IS NULL) AS active",
     id,
   );
+  if (activeReservations?.active) {
+    throw new Error("Libérez d'abord les réservations de cet objectif.");
+  }
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE recurring_transactions SET is_active = 0 WHERE account_id = ? OR destination_account_id = ?",
+      id,
+      id,
+    );
+    await db.runAsync(
+      "UPDATE accounts SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+      Date.now(),
+      id,
+    );
+  });
 }
 
 export async function restoreAccount(
