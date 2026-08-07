@@ -815,6 +815,7 @@ export default function NewTransactionScreen() {
             placeholder="Ex. : courses du marché"
             placeholderTextColor={theme.secondaryLabel}
             multiline
+            maxLength={200}
             returnKeyType="done"
             accessibilityLabel="Note optionnelle"
             style={[

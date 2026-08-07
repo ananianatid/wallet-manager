@@ -111,6 +111,7 @@ export default function EditGoalScreen() {
               placeholder="Ex. : PS5"
               placeholderTextColor={theme.secondaryLabel}
               accessibilityLabel="Nom de l'objectif"
+              maxLength={40}
               style={[styles.input, { backgroundColor: theme.surface, color: theme.label }]}
             />
           </FormField>

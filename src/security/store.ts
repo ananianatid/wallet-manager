@@ -8,6 +8,8 @@ const KEY_ENABLED = "lock.enabled";
 const KEY_DELAY_SECONDS = "lock.delaySeconds";
 const KEY_PIN_SALT = "lock.pinSalt";
 const KEY_PIN_HASH = "lock.pinHash";
+const KEY_FAILED_ATTEMPTS = "lock.failedAttempts";
+const KEY_LOCKOUT_UNTIL = "lock.lockoutUntil";
 
 function parseEnabled(value: string | null): boolean {
   return value === "1";
@@ -67,4 +69,33 @@ export async function getPinHash(): Promise<string | null> {
 export async function clearPinCredentials(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY_PIN_SALT);
   await SecureStore.deleteItemAsync(KEY_PIN_HASH);
+  await SecureStore.deleteItemAsync(KEY_FAILED_ATTEMPTS);
+  await SecureStore.deleteItemAsync(KEY_LOCKOUT_UNTIL);
+}
+
+export async function getFailedPinAttempts(): Promise<number> {
+  const value = await SecureStore.getItemAsync(KEY_FAILED_ATTEMPTS);
+  const parsed = value == null ? NaN : Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export async function setFailedPinAttempts(attempts: number): Promise<void> {
+  await SecureStore.setItemAsync(KEY_FAILED_ATTEMPTS, String(attempts));
+}
+
+export async function getPinLockoutUntil(): Promise<number | null> {
+  const value = await SecureStore.getItemAsync(KEY_LOCKOUT_UNTIL);
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export async function setPinLockoutUntil(until: number | null): Promise<void> {
+  if (until == null) {
+    await SecureStore.deleteItemAsync(KEY_LOCKOUT_UNTIL);
+  } else {
+    await SecureStore.setItemAsync(KEY_LOCKOUT_UNTIL, String(until));
+  }
 }

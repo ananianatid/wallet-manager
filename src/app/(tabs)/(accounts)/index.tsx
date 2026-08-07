@@ -515,6 +515,7 @@ export default function AccountsScreen() {
                 placeholder="Nom du compte"
                 placeholderTextColor={theme.secondaryLabel}
                 accessibilityLabel="Nom du compte"
+                maxLength={40}
                 style={{
                   color: theme.label,
                   backgroundColor: theme.surfaceElevated,

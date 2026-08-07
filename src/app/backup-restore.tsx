@@ -80,6 +80,7 @@ export default function BackupRestoreScreen() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            maxLength={256}
             accessibilityLabel="Mot de passe de la sauvegarde"
             style={{
               color: theme.label,

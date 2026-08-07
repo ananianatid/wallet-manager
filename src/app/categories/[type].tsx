@@ -169,6 +169,7 @@ export default function CategoriesByTypeScreen() {
                 placeholder="Nouvelle catégorie"
                 placeholderTextColor={theme.secondaryLabel}
                 accessibilityLabel="Nom de la nouvelle catégorie"
+                maxLength={40}
                 style={[
                   styles.input,
                   { backgroundColor: theme.surfaceElevated, color: theme.label },
@@ -225,6 +226,7 @@ export default function CategoriesByTypeScreen() {
                       { backgroundColor: theme.surfaceElevated, color: theme.label },
                     ]}
                     accessibilityLabel={`Nom de la catégorie ${category.name}`}
+                    maxLength={40}
                     autoFocus
                     onSubmitEditing={() => saveRename(category.id)}
                     returnKeyType="done"

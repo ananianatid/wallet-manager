@@ -3,10 +3,9 @@ import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import { PinDots, PinKeypad } from "@/components/pin-keypad";
-import { PIN_LENGTH, hashPin, verifyPin } from "@/security/pin";
+import { PIN_LENGTH, hashPin } from "@/security/pin";
+import { verifyPinGuarded } from "@/security/pin-attempts";
 import {
-  getPinHash,
-  getPinSalt,
   setLockEnabled,
   setPinCredentials,
 } from "@/security/store";
@@ -79,13 +78,14 @@ export default function PinSetupScreen() {
     setBusy(true);
     try {
       if (step === "verify") {
-        const [salt, expectedHash] = await Promise.all([
-          getPinSalt().catch(() => null),
-          getPinHash().catch(() => null),
-        ]);
-        if (!salt || !expectedHash || !verifyPin(candidate, salt, expectedHash)) {
+        const { ok, state } = await verifyPinGuarded(candidate);
+        if (!ok) {
           setPin("");
-          setError("Code actuel incorrect.");
+          setError(
+            state.lockedOut
+              ? `Code erroné. Réessayez dans ${Math.ceil(state.remainingMs / 1000)} s.`
+              : "Code actuel incorrect.",
+          );
           return;
         }
         setPin("");
@@ -106,7 +106,7 @@ export default function PinSetupScreen() {
         return;
       }
       const salt = Crypto.getRandomBytes(16);
-      await setPinCredentials(salt, hashPin(candidate, salt));
+      await setPinCredentials(salt, await hashPin(candidate, salt));
       if (mode === "create") {
         await setLockEnabled(true);
         await refreshLockConfig();

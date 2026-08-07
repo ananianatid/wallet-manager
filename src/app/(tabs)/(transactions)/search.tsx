@@ -381,6 +381,7 @@ export default function TransactionSearchScreen() {
               placeholder="Ex. salaire, Flooz, 50000…"
               placeholderTextColor={theme.secondaryLabel}
               accessibilityLabel="Recherche de transaction"
+              maxLength={100}
               style={[styles.searchInput, { color: theme.label }]}
               returnKeyType="search"
               onSubmitEditing={() => Keyboard.dismiss()}

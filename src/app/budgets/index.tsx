@@ -70,6 +70,7 @@ function EditRow({
           placeholderTextColor={theme.secondaryLabel}
           keyboardType="number-pad"
           inputMode="numeric"
+          maxLength={12}
           accessibilityLabel="Montant du budget par mois en FCFA"
           style={[
             styles.input,

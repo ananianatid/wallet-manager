@@ -9,8 +9,11 @@ import {
 } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { PinDots, PinKeypad } from "@/components/pin-keypad";
-import { PIN_LENGTH, PIN_MAX_ATTEMPTS, PIN_LOCKOUT_SECONDS, verifyPin } from "@/security/pin";
-import { getPinHash, getPinSalt } from "@/security/store";
+import { PIN_LENGTH } from "@/security/pin";
+import {
+  checkPinAttemptState,
+  verifyPinGuarded,
+} from "@/security/pin-attempts";
 import { unlock } from "@/state/lock";
 import { resetAppData } from "@/security/reset-app";
 import { radius, spacing, useTheme } from "@/theme";
@@ -23,11 +26,28 @@ export function LockScreen({ obscured }: LockScreenProps) {
   const theme = useTheme();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [attempts, setAttempts] = useState(0);
   const [lockoutLeft, setLockoutLeft] = useState(0);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const isLockedOut = lockoutLeft > 0;
+
+  useEffect(() => {
+    if (obscured) {
+      return;
+    }
+    let cancelled = false;
+    void checkPinAttemptState().then((state) => {
+      if (cancelled || !state.lockedOut) {
+        return;
+      }
+      const seconds = Math.ceil(state.remainingMs / 1000);
+      setLockoutLeft(seconds);
+      setError(`Code erroné. Réessayez dans ${seconds} s.`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [obscured]);
 
   useEffect(() => {
     if (obscured) {
@@ -101,25 +121,20 @@ export function LockScreen({ obscured }: LockScreenProps) {
   };
 
   const verify = async (candidate: string) => {
-    const [salt, expectedHash] = await Promise.all([
-      getPinSalt().catch(() => null),
-      getPinHash().catch(() => null),
-    ]);
-    if (salt && expectedHash && verifyPin(candidate, salt, expectedHash)) {
+    const { ok, state } = await verifyPinGuarded(candidate);
+    if (ok) {
       setPin("");
       unlock();
       return;
     }
     setPin("");
-    const nextAttempts = attempts + 1;
-    setAttempts(nextAttempts);
-    if (nextAttempts >= PIN_MAX_ATTEMPTS) {
-      setLockoutLeft(PIN_LOCKOUT_SECONDS);
-      setAttempts(0);
-      setError(`Code erroné. Réessayez dans ${PIN_LOCKOUT_SECONDS} s.`);
+    if (state.lockedOut) {
+      const seconds = Math.ceil(state.remainingMs / 1000);
+      setLockoutLeft(seconds);
+      setError(`Code erroné. Réessayez dans ${seconds} s.`);
     } else {
       setError(
-        `Code erroné. ${PIN_MAX_ATTEMPTS - nextAttempts} tentative${PIN_MAX_ATTEMPTS - nextAttempts > 1 ? "s" : ""} restante${PIN_MAX_ATTEMPTS - nextAttempts > 1 ? "s" : ""}.`,
+        `Code erroné. ${state.remainingAttempts} tentative${state.remainingAttempts > 1 ? "s" : ""} restante${state.remainingAttempts > 1 ? "s" : ""}.`,
       );
     }
   };

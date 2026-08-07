@@ -367,6 +367,7 @@ export default function AccountGroupsScreen() {
                   placeholder="Nouveau groupe"
                   placeholderTextColor={theme.secondaryLabel}
                   accessibilityLabel="Nom du nouveau groupe de comptes"
+                  maxLength={40}
                   style={[
                     styles.input,
                     { backgroundColor: theme.surfaceElevated, color: theme.label },
@@ -410,6 +411,7 @@ export default function AccountGroupsScreen() {
                         { backgroundColor: theme.surfaceElevated, color: theme.label },
                       ]}
                       accessibilityLabel={`Nom du groupe ${group.name}`}
+                      maxLength={40}
                       autoFocus
                       onSubmitEditing={() => saveRename(group.id)}
                       returnKeyType="done"

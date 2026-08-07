@@ -36,6 +36,7 @@ function PassphraseInput({
       secureTextEntry
       autoCapitalize="none"
       autoCorrect={false}
+      maxLength={256}
       accessibilityLabel={accessibilityLabel}
       style={{
         color: theme.label,

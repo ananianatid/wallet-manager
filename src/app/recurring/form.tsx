@@ -452,6 +452,7 @@ export default function RecurringFormScreen() {
             value={note}
             onChangeText={setNote}
             multiline
+            maxLength={200}
             placeholder="Ex. : loyer"
             placeholderTextColor={theme.secondaryLabel}
             accessibilityLabel="Note optionnelle"

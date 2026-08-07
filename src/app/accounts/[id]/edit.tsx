@@ -150,6 +150,7 @@ export default function EditAccountScreen() {
               }}
               placeholder="Nom du compte"
               placeholderTextColor={theme.secondaryLabel}
+              maxLength={40}
               style={{
                 color: theme.label,
                 backgroundColor: theme.surface,
@@ -250,6 +251,7 @@ export default function EditAccountScreen() {
               placeholder="Décrivez ce compte"
               placeholderTextColor={theme.secondaryLabel}
               multiline
+              maxLength={200}
               style={{
                 color: theme.label,
                 backgroundColor: theme.surface,

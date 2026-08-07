@@ -83,6 +83,7 @@ function EditRow({
           placeholderTextColor={theme.secondaryLabel}
           keyboardType="number-pad"
           inputMode="numeric"
+          maxLength={3}
           accessibilityLabel="Pourcentage de revenus à épargner"
           style={[
             styles.input,
