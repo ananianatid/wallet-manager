@@ -17,6 +17,8 @@ import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function EditGoalScreen() {
   const theme = useTheme();
@@ -41,7 +43,7 @@ export default function EditGoalScreen() {
     return { goal };
   }, [goalId]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "goals.edit");
   const reload = resource.reload;
   const goal = resource.data?.goal ?? null;
   const goalCurrency = goal?.currencyCode ?? "XOF";
@@ -81,7 +83,8 @@ export default function EditGoalScreen() {
       });
       router.back();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Impossible de modifier l'objectif.");
+      setSaveError(userMessage(e, "Impossible de modifier l'objectif."));
+      log.error("goals.update", "Échec de la modification de l'objectif", e);
       setSaving(false);
     }
   };
@@ -92,7 +95,7 @@ export default function EditGoalScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : !goal ? (

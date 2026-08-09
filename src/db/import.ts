@@ -4,6 +4,8 @@ import {
   type ImportPlan,
   type MoneyManagerData,
 } from "./money-manager";
+import { log } from "@/utils/logger";
+import { ErrorCodes, errorWithCode } from "@/utils/user-message";
 
 export { applyImportPlan, type ImportReport } from "./import-apply";
 
@@ -11,9 +13,6 @@ export interface BackupSummary {
   plan: ImportPlan;
   name: string;
 }
-
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
 
 async function dumpMoneyManager(
   db: SQLite.SQLiteDatabase,
@@ -70,7 +69,8 @@ export async function readMoneyManagerBackup(
   try {
     mm = await SQLite.openDatabaseAsync(fileName, undefined, directory);
   } catch (e) {
-    throw new Error(`Impossible d'ouvrir le fichier : ${errorMessage(e)}`);
+    log.error("import", "Impossible d'ouvrir le fichier .mmbak", e);
+    throw errorWithCode(ErrorCodes.BACKUP_INVALID, "Impossible d'ouvrir ce fichier.");
   }
 
   try {
@@ -78,8 +78,10 @@ export async function readMoneyManagerBackup(
     const plan = buildImportPlan(data);
     return { plan, name: displayName };
   } catch (e) {
-    throw new Error(
-      `Ce fichier n'est pas un backup Money Manager valide (${errorMessage(e)}).`,
+    log.error("import", "Fichier .mmbak invalide", e);
+    throw errorWithCode(
+      ErrorCodes.BACKUP_INVALID,
+      "Ce fichier n'est pas un backup Money Manager valide.",
     );
   } finally {
     await mm.closeAsync();

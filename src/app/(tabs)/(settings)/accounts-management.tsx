@@ -24,9 +24,8 @@ import { getDatabase } from "@/db/database";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account } from "@/types";
-
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 interface Section {
   title: string;
@@ -48,7 +47,7 @@ export default function AccountsManagementScreen() {
     return { groups, accounts, deletedAccounts };
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "accounts.management");
   const reload = resource.reload;
   const groups = useMemo(
     () => resource.data?.groups ?? [],
@@ -95,7 +94,8 @@ export default function AccountsManagementScreen() {
       await restoreAccount(db, account.id);
       await reload();
     } catch (e) {
-      Alert.alert("Restauration impossible", errorMessage(e));
+      log.error("accounts.restore", "Échec de la restauration du compte", e);
+      Alert.alert("Restauration impossible", userMessage(e));
     }
   };
 
@@ -108,7 +108,8 @@ export default function AccountsManagementScreen() {
       await assignAccountGroup(db, assigningAccount.id, groupId);
       await reload();
     } catch (e) {
-      Alert.alert("Impossible d'affecter", errorMessage(e));
+      log.error("accounts.assign-group", "Échec de l'affectation du groupe", e);
+      Alert.alert("Impossible d'affecter", userMessage(e));
     } finally {
       setAssigningAccount(null);
     }
@@ -120,7 +121,7 @@ export default function AccountsManagementScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

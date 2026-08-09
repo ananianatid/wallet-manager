@@ -23,6 +23,8 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount } from "@/utils/format";
 import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const parseAmount = (value: string, currency: string): number | null => {
   const parsed = parseMoneyInput(value, currency);
@@ -61,7 +63,7 @@ export default function EditAccountScreen() {
     return { account: acc, accountGroups: groups };
   }, [accountId]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "accounts.edit");
   const reload = resource.reload;
   const account = resource.data?.account ?? null;
   const accountGroups = useMemo(
@@ -119,7 +121,8 @@ export default function EditAccountScreen() {
       });
       router.back();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Impossible d'enregistrer.");
+      setSaveError(userMessage(e, "Impossible d'enregistrer."));
+      log.error("accounts.update", "Échec de la modification du compte", e);
       setSaving(false);
     }
   };
@@ -130,7 +133,7 @@ export default function EditAccountScreen() {
       {!resource.data?.account ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

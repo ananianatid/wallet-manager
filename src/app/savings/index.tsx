@@ -26,9 +26,8 @@ import {
 import { radius, spacing, useTheme, withAlpha, type ThemeColors } from "@/theme";
 import type { Category, SavingsRule } from "@/types";
 import { formatDate } from "@/utils/format";
-
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 interface EditRowProps {
   categories: Category[];
@@ -197,7 +196,7 @@ export default function SavingsScreen() {
     return { rules: r, incomeCategories: cats, firstIncomeDate: firstIncome };
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "savings.load");
   const reload = resource.reload;
   const rules = resource.data?.rules ?? [];
   const incomeCategories = resource.data?.incomeCategories ?? [];
@@ -250,7 +249,8 @@ export default function SavingsScreen() {
       cancelEdit();
       await resource.reload();
     } catch (e) {
-      Alert.alert("Impossible d'enregistrer", errorMessage(e));
+      Alert.alert("Impossible d'enregistrer", userMessage(e));
+      log.error("savings.save", "Échec de l'enregistrement de la règle d'épargne", e);
     }
   };
 
@@ -279,7 +279,8 @@ export default function SavingsScreen() {
         subtractFromAvailable: next,
       });
       await resource.reload();
-    } catch {
+    } catch (e) {
+      log.error("savings.toggle", "Échec de la mise à jour de la règle d'épargne", e);
       Alert.alert("Impossible d'enregistrer", "Le réglage de cette règle n'a pas pu être mis à jour.");
     }
   };
@@ -290,7 +291,7 @@ export default function SavingsScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

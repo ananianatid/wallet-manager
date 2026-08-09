@@ -39,6 +39,8 @@ import { getDatabase } from "@/db/database";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account, AccountGroup } from "@/types";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const countLabel = (count: number): string =>
   count === 0 ? "Aucun compte" : `${count} compte${count > 1 ? "s" : ""}`;
@@ -134,7 +136,7 @@ export default function AccountGroupsScreen() {
     return { groups, deletedGroups, accounts };
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "groups.load");
   const reload = resource.reload;
   const groups = resource.data?.groups ?? [];
   const deletedGroups = resource.data?.deletedGroups ?? [];
@@ -171,10 +173,8 @@ export default function AccountGroupsScreen() {
       setAdding(false);
       await reload();
     } catch (e) {
-      Alert.alert(
-        "Impossible d'ajouter",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("groups.add", "Échec de la création du groupe", e);
+      Alert.alert("Impossible d'ajouter", userMessage(e));
     }
   };
 
@@ -190,10 +190,8 @@ export default function AccountGroupsScreen() {
       setEditingId(null);
       await reload();
     } catch (e) {
-      Alert.alert(
-        "Impossible de renommer",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("groups.rename", "Échec du renommage du groupe", e);
+      Alert.alert("Impossible de renommer", userMessage(e));
     }
   };
 
@@ -216,10 +214,8 @@ export default function AccountGroupsScreen() {
               await softDeleteAccountGroup(db, group.id);
               await reload();
             } catch (e) {
-              Alert.alert(
-                "Suppression impossible",
-                e instanceof Error ? e.message : "Une erreur est survenue.",
-              );
+              log.error("groups.delete", "Échec de la suppression du groupe", e);
+              Alert.alert("Suppression impossible", userMessage(e));
             }
           },
         },
@@ -237,10 +233,8 @@ export default function AccountGroupsScreen() {
       const db = await getDatabase();
       await reorderAccountGroups(db, ids);
     } catch (e) {
-      Alert.alert(
-        "Réorganisation impossible",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("groups.reorder", "Échec de la réorganisation des groupes", e);
+      Alert.alert("Réorganisation impossible", userMessage(e));
       await reload();
     }
   };
@@ -251,10 +245,8 @@ export default function AccountGroupsScreen() {
       await restoreAccountGroup(db, group.id);
       await reload();
     } catch (e) {
-      Alert.alert(
-        "Restauration impossible",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("groups.restore", "Échec de la restauration du groupe", e);
+      Alert.alert("Restauration impossible", userMessage(e));
     }
   };
 
@@ -268,10 +260,8 @@ export default function AccountGroupsScreen() {
       await assignAccountGroup(db, account.id, groupId);
       await reload();
     } catch (e) {
-      Alert.alert(
-        "Impossible d'affecter",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("groups.assign", "Échec de l'affectation du compte au groupe", e);
+      Alert.alert("Impossible d'affecter", userMessage(e));
     }
   };
 
@@ -309,7 +299,7 @@ export default function AccountGroupsScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : reorderMode ? (

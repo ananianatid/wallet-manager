@@ -13,6 +13,11 @@ import { LockScreen } from "@/components/lock-screen";
 import { initLock, useLockState } from "@/state/lock";
 import { useDataEpoch } from "@/state/data-epoch";
 import { CurrencyProvider } from "@/currency/context";
+import { initObservability } from "@/services/observability";
+import { runStartupHealth } from "@/utils/diagnostics";
+export { default as ErrorBoundary } from "@/components/app-error-boundary";
+
+initObservability();
 
 function RootNavigator() {
   const theme = useTheme();
@@ -61,6 +66,8 @@ function RootNavigator() {
           <Stack.Screen name="appearance" options={{ title: "Apparence" }} />
           <Stack.Screen name="calendar-settings" options={{ title: "Calendrier" }} />
           <Stack.Screen name="about" options={{ title: "À propos" }} />
+          <Stack.Screen name="privacy-policy" options={{ title: "Confidentialité" }} />
+          <Stack.Screen name="diagnostics" options={{ title: "Diagnostics" }} />
           <Stack.Screen name="security" options={{ title: "Sécurité" }} />
           <Stack.Screen
             name="pin-setup"
@@ -86,6 +93,7 @@ function RootNavigator() {
 export default function RootLayout() {
   useEffect(() => {
     initLock();
+    void runStartupHealth();
   }, []);
 
   return (

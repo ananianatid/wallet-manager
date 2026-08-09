@@ -1,11 +1,24 @@
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import * as SQLite from "expo-sqlite";
 import { getDatabase } from "@/db/database";
 import { setSetting } from "@/db/settings";
 import { DEFAULT_KDF_ITERATIONS } from "@/security/kdf";
 import { encryptBackup } from "@/security/cipher";
 
 export const BACKUP_FILE_EXTENSION = "wlbak";
+
+export async function serializeDatabaseForBackup(): Promise<Uint8Array> {
+  const db = await getDatabase();
+  const snapshot = await db.serializeAsync();
+  const backupDb = await SQLite.deserializeDatabaseAsync(snapshot);
+  try {
+    await backupDb.runAsync("DELETE FROM app_logs");
+    return await backupDb.serializeAsync();
+  } finally {
+    await backupDb.closeAsync();
+  }
+}
 
 function dateStamp(date: Date): string {
   const year = date.getFullYear();
@@ -18,7 +31,7 @@ export async function exportEncryptedBackup(
   passphrase: string,
 ): Promise<string> {
   const db = await getDatabase();
-  const plaintext = await db.serializeAsync();
+  const plaintext = await serializeDatabaseForBackup();
   const encrypted = await encryptBackup(
     plaintext,
     passphrase,

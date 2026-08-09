@@ -5,6 +5,7 @@ import {
   MIGRATION_V10,
   MIGRATION_V11,
   MIGRATION_V12,
+  MIGRATION_V13,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -65,6 +66,7 @@ const MIGRATIONS: Record<number, string> = {
   10: MIGRATION_V10,
   11: MIGRATION_V11,
   12: MIGRATION_V12,
+  13: MIGRATION_V13,
 };
 
 class SqliteDb {

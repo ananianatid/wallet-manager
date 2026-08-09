@@ -10,6 +10,7 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { enumerateMonths, monthlySavingsBreakdown } from "@/utils/statistics";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
 import { radius, spacing, useTheme } from "@/theme";
+import { userMessage } from "@/utils/user-message";
 
 const MONTH_COUNT = 12;
 
@@ -31,7 +32,7 @@ export default function SavingsHistoryScreen() {
     return { rules, transactions };
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "savings.history");
   const reload = resource.reload;
 
   useFocusEffect(
@@ -69,7 +70,7 @@ export default function SavingsHistoryScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

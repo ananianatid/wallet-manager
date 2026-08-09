@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { log } from "@/utils/logger";
 
 export type AsyncResourceStatus = "loading" | "ready" | "error";
 
@@ -9,7 +10,10 @@ export interface AsyncResource<T> {
   reload: () => Promise<void>;
 }
 
-export function useAsyncResource<T>(loader: () => Promise<T>): AsyncResource<T> {
+export function useAsyncResource<T>(
+  loader: () => Promise<T>,
+  context = "data.load",
+): AsyncResource<T> {
   const requestId = useRef(0);
   const [state, setState] = useState<{
     data: T | null;
@@ -35,13 +39,14 @@ export function useAsyncResource<T>(loader: () => Promise<T>): AsyncResource<T> 
       if (requestId.current !== currentRequest) {
         return;
       }
+      log.error(context, "Échec du chargement des données", cause);
       setState((current) => ({
         data: current.data,
         status: "error",
         error: cause instanceof Error ? cause : new Error("Une erreur est survenue."),
       }));
     }
-  }, [loader]);
+  }, [loader, context]);
 
   return { ...state, reload };
 }

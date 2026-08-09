@@ -31,6 +31,8 @@ import type {
   TransactionType,
 } from "@/types";
 import { formatDate } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const TYPES: { value: TransactionType; label: string }[] = [
   { value: "income", label: "Revenu" },
@@ -44,9 +46,6 @@ const FREQUENCIES: { value: Frequency; label: string }[] = [
   { value: "monthly", label: "Tous les mois" },
   { value: "yearly", label: "Tous les ans" },
 ];
-
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
 
 export default function RecurringFormScreen() {
   const theme = useTheme();
@@ -107,7 +106,8 @@ export default function RecurringFormScreen() {
         try {
           await load();
         } catch (error) {
-          setLoadError(error instanceof Error ? error.message : "Impossible de charger les comptes.");
+          setLoadError(userMessage(error, "Impossible de charger les comptes."));
+          log.error("recurring.load", "Échec du chargement des options", error);
         } finally {
           setLoadingOptions(false);
         }
@@ -200,7 +200,8 @@ export default function RecurringFormScreen() {
       }
       router.back();
     } catch (e) {
-      Alert.alert("Impossible d'enregistrer", errorMessage(e));
+      Alert.alert("Impossible d'enregistrer", userMessage(e));
+      log.error("recurring.save", "Échec de l'enregistrement de la récurrence", e);
       setSaving(false);
     }
   };

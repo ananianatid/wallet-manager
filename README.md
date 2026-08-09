@@ -2,6 +2,12 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Monitoring & logs
+
+- **Sentry optionnel** : copiez `.env.example` vers `.env.local` et renseignez `EXPO_PUBLIC_SENTRY_DSN`. Pour les builds natifs avec source maps, renseignez aussi `SENTRY_ORG`, `SENTRY_PROJECT` et le secret `SENTRY_AUTH_TOKEN`. Sans DSN, l'app fonctionne normalement (journalisation locale uniquement). Les erreurs techniques sont alors envoyées à Sentry selon sa configuration.
+- **Journal structuré** : `src/utils/logger.ts` (niveaux, contexte, session, erreurs). Les entrées warn/error sont persistées dans SQLite (`app_logs`) et visibles dans **Réglages → Préférences → Diagnostics**, avec l'état de chaque sous-système.
+- **Erreurs utilisateur** : aucun message technique n'est affiché à l'écran ; `userMessage()` (`src/utils/user-message.ts`) mappe les erreurs vers un texte français sûr.
+
 ## Get started
 
 1. Install dependencies

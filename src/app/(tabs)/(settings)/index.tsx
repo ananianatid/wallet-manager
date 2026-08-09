@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowDown,
   ArrowUp,
   CalendarDays,
@@ -7,6 +8,7 @@ import {
   Lock,
   PiggyBank,
   RefreshCcw,
+  ShieldCheck,
   Sun,
   Target,
   Wallet,
@@ -22,6 +24,8 @@ import type { ImportPlan } from "@/db/money-manager";
 import { ActionButton, InlineError } from "@/components/ui";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatDate } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const ENTRIES: {
   label: string;
@@ -37,7 +41,9 @@ const ENTRIES: {
     | "/appearance"
     | "/calendar-settings"
     | "/about"
+    | "/privacy-policy"
     | "/currency-settings"
+    | "/diagnostics"
     | "/(tabs)/(settings)/accounts-settings";
   section: "Organisation" | "Planification" | "Sécurité" | "Préférences";
 }[] = [
@@ -52,11 +58,10 @@ const ENTRIES: {
   { label: "Apparence", icon: Sun, href: "/appearance", section: "Préférences" },
   { label: "Calendrier", icon: CalendarDays, href: "/calendar-settings", section: "Préférences" },
   { label: "Devises", icon: Wallet, href: "/currency-settings", section: "Préférences" },
+  { label: "Confidentialité", icon: ShieldCheck, href: "/privacy-policy", section: "Préférences" },
   { label: "À propos", icon: Info, href: "/about", section: "Préférences" },
+  { label: "Diagnostics", icon: Activity, href: "/diagnostics", section: "Préférences" },
 ];
-
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -97,7 +102,8 @@ export default function SettingsScreen() {
       );
     } catch (error) {
       setImportStatus("error");
-      setImportError(errorMessage(error));
+      setImportError(userMessage(error));
+      log.error("settings.import", "Échec de l'application du plan d'import", error);
     }
   };
 
@@ -128,7 +134,8 @@ export default function SettingsScreen() {
       );
     } catch (e) {
       setImportStatus("error");
-      setImportError(errorMessage(e));
+      setImportError(userMessage(e));
+      log.error("settings.import", "Échec de la lecture du fichier Money Manager", e);
     }
   };
 
@@ -141,7 +148,8 @@ export default function SettingsScreen() {
       const asset = result.assets[0];
       router.push({ pathname: "/backup-restore", params: { uri: asset.uri } });
     } catch (e) {
-      Alert.alert("Impossible d'ouvrir le fichier", errorMessage(e));
+      Alert.alert("Impossible d'ouvrir le fichier", userMessage(e));
+      log.error("settings.restore", "Échec de l'ouverture du fichier de sauvegarde", e);
     }
   };
 

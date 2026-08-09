@@ -17,6 +17,8 @@ import { useCurrency } from "@/currency/context";
 import { parseMoneyInput } from "@/currency/currencies";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function NewGoalScreen() {
   const theme = useTheme();
@@ -58,10 +60,8 @@ export default function NewGoalScreen() {
       });
       router.back();
     } catch (e) {
-      Alert.alert(
-        "Impossible de créer l'objectif",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("goals.create", "Échec de la création de l'objectif", e);
+      Alert.alert("Impossible de créer l'objectif", userMessage(e));
       setSaving(false);
     }
   };

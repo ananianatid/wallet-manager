@@ -13,6 +13,8 @@ export class BackupFormatError extends Error {
     super(message);
     this.name = "BackupFormatError";
   }
+  /** Messages are written in French for the user; safe to display as-is. */
+  userFacing = true;
 }
 
 export interface BackupHeader {

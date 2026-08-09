@@ -1,6 +1,6 @@
-const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // expo-sqlite's SDK 57 web worker imports its SQLite WASM binary.
 config.resolver.assetExts.push("wasm");

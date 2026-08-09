@@ -11,6 +11,7 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Goal } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
+import { userMessage } from "@/utils/user-message";
 
 function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
   const theme = useTheme();
@@ -95,7 +96,7 @@ export default function GoalsScreen() {
     return listGoals(db);
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "goals.load");
   const reload = resource.reload;
   const goals = resource.data;
 
@@ -122,7 +123,7 @@ export default function GoalsScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

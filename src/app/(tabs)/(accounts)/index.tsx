@@ -29,6 +29,8 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account } from "@/types";
 import { formatAmount } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function AccountsScreen() {
   const theme = useTheme();
@@ -65,7 +67,7 @@ export default function AccountsScreen() {
     return { accounts: accs, accountGroups: groups };
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "accounts.list");
   const reload = resource.reload;
   const accounts = useMemo(() => resource.data?.accounts ?? [], [resource.data?.accounts]);
   const accountGroups = useMemo(
@@ -109,7 +111,8 @@ export default function AccountsScreen() {
       setShowForm(false);
       await resource.reload();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Impossible de créer le compte.");
+      setFormError(userMessage(error, "Impossible de créer le compte."));
+      log.error("accounts.create", "Échec de la création du compte", error);
     }
   };
 
@@ -124,10 +127,8 @@ export default function AccountsScreen() {
       await updateAccountFlags(db, accountId, flags);
       await resource.reload();
     } catch (error) {
-      Alert.alert(
-        "Modification impossible",
-        error instanceof Error ? error.message : "Une erreur est survenue.",
-      );
+      log.error("accounts.flags", "Échec de la modification du compte", error);
+      Alert.alert("Modification impossible", userMessage(error));
     }
   };
 
@@ -186,10 +187,8 @@ export default function AccountsScreen() {
               await deleteAccount(db, account.id);
               await resource.reload();
             } catch (error) {
-              Alert.alert(
-                "Suppression impossible",
-                error instanceof Error ? error.message : "Une erreur est survenue.",
-              );
+              log.error("accounts.delete", "Échec de la suppression du compte", error);
+              Alert.alert("Suppression impossible", userMessage(error));
             }
           },
         },
@@ -281,7 +280,7 @@ export default function AccountsScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

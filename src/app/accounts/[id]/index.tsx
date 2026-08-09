@@ -18,6 +18,8 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listTransactionsByAccount } from "@/db/transactions";
 import { spacing, useTheme } from "@/theme";
 import { formatAmount } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function AccountDetailScreen() {
   const theme = useTheme();
@@ -35,7 +37,7 @@ export default function AccountDetailScreen() {
     return { account: acc, transactions: rows };
   }, [accountId]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "accounts.detail");
   const reload = resource.reload;
   const account = resource.data?.account ?? null;
   const transactions = resource.data?.transactions ?? [];
@@ -64,10 +66,8 @@ export default function AccountDetailScreen() {
               await deleteAccount(db, accountId);
               router.back();
             } catch (e) {
-              Alert.alert(
-                "Suppression impossible",
-                e instanceof Error ? e.message : "Une erreur est survenue.",
-              );
+              log.error("accounts.delete", "Échec de la suppression du compte", e);
+              Alert.alert("Suppression impossible", userMessage(e));
             }
           },
         },
@@ -102,7 +102,7 @@ export default function AccountDetailScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : !account ? (

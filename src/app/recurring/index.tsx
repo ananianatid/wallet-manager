@@ -21,6 +21,8 @@ import { radius, spacing, useTheme } from "@/theme";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import type { RecurringTransaction } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: "Tous les jours",
@@ -35,9 +37,6 @@ const TYPE_LABELS: Record<string, string> = {
   transfer: "Transfert",
 };
 
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
-
 export default function RecurringScreen() {
   const theme = useTheme();
   const [generating, setGenerating] = useState(false);
@@ -48,7 +47,7 @@ export default function RecurringScreen() {
     return listRecurring(db);
   }, []);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "recurring.load");
   const reload = resource.reload;
   const items = resource.data ?? [];
 
@@ -81,7 +80,8 @@ export default function RecurringScreen() {
       await applyDueRecurring(db);
       await resource.reload();
     } catch (e) {
-      setActionError(errorMessage(e));
+      setActionError(userMessage(e));
+      log.error("recurring.generate", "Échec de la génération des échéances", e);
     } finally {
       setGenerating(false);
     }
@@ -104,7 +104,7 @@ export default function RecurringScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

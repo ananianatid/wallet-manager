@@ -54,6 +54,8 @@ import type {
   TransactionType,
 } from "@/types";
 import { formatAmount, formatDate, formatDayLabel } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const TYPE_OPTIONS: {
   value: TransactionType;
@@ -204,7 +206,7 @@ export default function TransactionSearchScreen() {
     };
   }, []);
 
-  const optionsResource = useAsyncResource(loadOptions);
+  const optionsResource = useAsyncResource(loadOptions, "search.options");
   const reloadOptions = optionsResource.reload;
   const accounts = useMemo(
     () => optionsResource.data?.accounts ?? [],
@@ -266,11 +268,8 @@ export default function TransactionSearchScreen() {
           if (!cancelled) {
             setResults(null);
             setStatus("error");
-            setError(
-              reason instanceof Error
-                ? reason.message
-                : "La recherche n'a pas pu aboutir.",
-            );
+            log.error("search.run", "Échec de la recherche", reason);
+            setError(userMessage(reason, "La recherche n'a pas pu aboutir."));
           }
         });
     }, 250);
@@ -608,7 +607,7 @@ export default function TransactionSearchScreen() {
       {!optionsResource.data ? (
         <ScreenState
           status={optionsResource.status === "error" ? "error" : "loading"}
-          message={optionsResource.error?.message}
+          message={userMessage(optionsResource.error)}
           onRetry={() => void reloadOptions()}
         />
       ) : (

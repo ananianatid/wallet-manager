@@ -30,6 +30,8 @@ import { radius, spacing, useTheme } from "@/theme";
 import type { Account, Category, Goal, TransactionType } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 import { calculateTransferFee } from "@/utils/transfer-fees";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const TYPES: { value: TransactionType; label: string }[] = [
   { value: "income", label: "Revenu" },
@@ -135,7 +137,8 @@ export default function NewTransactionScreen() {
         try {
           await load();
         } catch (error) {
-          setLoadError(error instanceof Error ? error.message : "Impossible de charger les comptes.");
+          setLoadError(userMessage(error, "Impossible de charger les comptes."));
+          log.error("transaction.load", "Échec du chargement du formulaire", error);
         } finally {
           setLoadingOptions(false);
         }
@@ -308,7 +311,7 @@ export default function NewTransactionScreen() {
       } catch (error) {
         setErrors({
           debitedAmount:
-            error instanceof Error
+            error instanceof Error && /Saisissez|positif/.test(error.message)
               ? error.message
               : "Le total débité est invalide.",
         });
@@ -407,10 +410,8 @@ export default function NewTransactionScreen() {
       }
       router.back();
     } catch (e) {
-      Alert.alert(
-        "Impossible d'enregistrer",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("transaction.save", "Échec de l'enregistrement de la transaction", e);
+      Alert.alert("Impossible d'enregistrer", userMessage(e));
       setSaving(false);
     }
   };

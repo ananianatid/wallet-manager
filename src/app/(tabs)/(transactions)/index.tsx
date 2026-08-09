@@ -31,6 +31,8 @@ import {
   formatMonthLabel,
 } from "@/utils/format";
 import { totals } from "@/utils/statistics";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 interface DaySection {
   key: string;
@@ -81,7 +83,7 @@ export default function TransactionsScreen() {
     };
   }, [filters, convert]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "transactions.list");
   const reload = resource.reload;
   const transactions = resource.data?.transactions ?? null;
   const accounts = resource.data?.accounts ?? [];
@@ -120,8 +122,9 @@ export default function TransactionsScreen() {
             );
           }
         } catch (error) {
+          log.error("recurring.apply", "Échec de la vérification des récurrences", error);
           setRecurringError(
-            error instanceof Error ? error.message : "Les récurrences n'ont pas pu être vérifiées.",
+            userMessage(error, "Les récurrences n'ont pas pu être vérifiées."),
           );
         }
         await reload();
@@ -252,7 +255,7 @@ export default function TransactionsScreen() {
       {resource.status === "error" && resource.data ? (
         <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
           <InlineError
-            message={resource.error?.message ?? "Les données n'ont pas pu être actualisées."}
+            message={userMessage(resource.error, "Les données n'ont pas pu être actualisées.")}
             onRetry={() => void reload()}
           />
         </View>
@@ -262,7 +265,7 @@ export default function TransactionsScreen() {
       ) : !resource.data && resource.status === "error" ? (
         <ScreenState
           status="error"
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

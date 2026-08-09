@@ -6,6 +6,8 @@ import {
   type CurrencyDefinition,
 } from "./currencies";
 import { getSetting, setSetting } from "@/db/settings";
+import { log } from "@/utils/logger";
+import { ErrorCodes, errorWithCode } from "@/utils/user-message";
 
 const API_BASE = "https://api.frankfurter.dev/v2";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -177,7 +179,11 @@ export async function ensureCurrentRates(
   try {
     const rates = await refreshLatestRates(db, base, options.signal);
     return { rates, stale: false, refreshed: true };
-  } catch {
+  } catch (cause) {
+    log.warn("currency", "Actualisation des taux impossible, cache utilisé", cause, {
+      base,
+      cachedCount: cached.length,
+    });
     return { rates: cached, stale: cached.length > 0, refreshed: false };
   }
 }
@@ -254,7 +260,8 @@ export async function getRateForPair(
       rate.fetchedAt,
     );
     return rate;
-  } catch {
+  } catch (cause) {
+    log.warn("currency", "Taux direct indisponible", cause, { from, to });
     return null;
   }
 }
@@ -267,7 +274,7 @@ export async function setReferenceCurrency(
   if (current === nextCurrency) return;
   const rate = await getRateForPair(db, current, nextCurrency, { force: true });
   if (!rate) {
-    throw new Error(`Taux indisponible pour ${current}/${nextCurrency}.`);
+    throw errorWithCode(ErrorCodes.RATE_UNAVAILABLE, `Taux indisponible pour ${current}/${nextCurrency}.`);
   }
   await db.withTransactionAsync(async () => {
     const budgets = await db.getAllAsync<{

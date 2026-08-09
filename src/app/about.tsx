@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
-import { Stack } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { router, Stack } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { spacing, useTheme } from "@/theme";
 
 export default function AboutScreen() {
@@ -46,6 +46,18 @@ export default function AboutScreen() {
             Créé avec Expo · SDK 57
           </Text>
         </View>
+        <Pressable
+          onPress={() => router.push("/diagnostics")}
+          accessibilityRole="button"
+          accessibilityLabel="Ouvrir les diagnostics"
+          style={({ pressed }) => [
+            styles.diagnosticsLink,
+            { borderColor: theme.outline },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <Text style={{ color: theme.accent, fontWeight: "700" }}>Diagnostics</Text>
+        </Pressable>
       </View>
     </>
   );
@@ -63,5 +75,14 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 36,
     fontWeight: "800",
+  },
+  diagnosticsLink: {
+    marginTop: spacing.xl,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });

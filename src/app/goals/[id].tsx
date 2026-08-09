@@ -23,6 +23,8 @@ import {
 import { radius, spacing, useTheme } from "@/theme";
 import type { GoalReservation } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function GoalDetailScreen() {
   const theme = useTheme();
@@ -39,7 +41,7 @@ export default function GoalDetailScreen() {
     return { goal: nextGoal, reservations: rows };
   }, [goalId]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "goals.detail");
   const reload = resource.reload;
   const goal = resource.data?.goal ?? null;
   const reservations = resource.data?.reservations ?? [];
@@ -64,7 +66,8 @@ export default function GoalDetailScreen() {
               await releaseGoalReservation(db, reservation.id);
               await resource.reload();
             } catch (error) {
-              setActionError(error instanceof Error ? error.message : "Impossible de libérer la réservation.");
+              setActionError(userMessage(error, "Impossible de libérer la réservation."));
+              log.error("goals.release", "Échec de la libération de la réservation", error);
             }
           },
         },
@@ -84,7 +87,8 @@ export default function GoalDetailScreen() {
             await closeGoal(db, goal.id);
             await resource.reload();
           } catch (error) {
-            setActionError(error instanceof Error ? error.message : "Impossible de clôturer l'objectif.");
+            setActionError(userMessage(error, "Impossible de clôturer l'objectif."));
+            log.error("goals.close", "Échec de la clôture de l'objectif", error);
           }
         },
       },
@@ -104,7 +108,8 @@ export default function GoalDetailScreen() {
             await deleteGoal(db, goal.id);
             router.back();
           } catch (e) {
-            Alert.alert("Suppression impossible", e instanceof Error ? e.message : "Une erreur est survenue.");
+            log.error("goals.delete", "Échec de la suppression de l'objectif", e);
+            Alert.alert("Suppression impossible", userMessage(e));
           }
         },
       },
@@ -141,7 +146,7 @@ export default function GoalDetailScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : !goal ? (

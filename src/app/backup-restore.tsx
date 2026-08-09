@@ -14,6 +14,8 @@ import {
 } from "@/backup/restore";
 import { ActionButton, FormField, InlineError } from "@/components/ui";
 import { radius, spacing, useTheme } from "@/theme";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function BackupRestoreScreen() {
   const theme = useTheme();
@@ -43,7 +45,8 @@ export default function BackupRestoreScreen() {
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "La restauration a échoué.");
+      log.error("backup.restore", "Échec de la restauration de la sauvegarde", e);
+      setError(userMessage(e, "La restauration a échoué."));
     } finally {
       setBusy(false);
     }

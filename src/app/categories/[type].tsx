@@ -26,6 +26,8 @@ import { getDatabase } from "@/db/database";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Category, CategoryType } from "@/types";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const TITLES: Record<CategoryType, string> = {
   account: "Catégories de comptes",
@@ -54,7 +56,7 @@ export default function CategoriesByTypeScreen() {
     return listCategories(db, categoryType);
   }, [categoryType]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "categories.load");
   const reload = resource.reload;
   const categories = resource.data ?? [];
 
@@ -80,10 +82,8 @@ export default function CategoriesByTypeScreen() {
       setAdding(false);
       await reload();
     } catch (e) {
-      Alert.alert(
-        "Impossible d'ajouter",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("categories.add", "Échec de la création de la catégorie", e);
+      Alert.alert("Impossible d'ajouter", userMessage(e));
     }
   };
 
@@ -103,10 +103,8 @@ export default function CategoriesByTypeScreen() {
       setEditingId(null);
       await reload();
     } catch (e) {
-      Alert.alert(
-        "Impossible de renommer",
-        e instanceof Error ? e.message : "Une erreur est survenue.",
-      );
+      log.error("categories.rename", "Échec du renommage de la catégorie", e);
+      Alert.alert("Impossible de renommer", userMessage(e));
     }
   };
 
@@ -125,10 +123,8 @@ export default function CategoriesByTypeScreen() {
               await deleteCategory(db, category.id);
               await reload();
             } catch (e) {
-              Alert.alert(
-                "Suppression impossible",
-                e instanceof Error ? e.message : "Une erreur est survenue.",
-              );
+              log.error("categories.delete", "Échec de la suppression de la catégorie", e);
+              Alert.alert("Suppression impossible", userMessage(e));
             }
           },
         },
@@ -142,7 +138,7 @@ export default function CategoriesByTypeScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

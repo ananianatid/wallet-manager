@@ -9,6 +9,8 @@ import { changeReferenceCurrency } from "@/currency/service";
 import { getDatabase } from "@/db/database";
 import { spacing, useTheme } from "@/theme";
 import { formatDate, formatTime } from "@/utils/format";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 export default function CurrencySettingsScreen() {
   const theme = useTheme();
@@ -29,7 +31,8 @@ export default function CurrencySettingsScreen() {
       await refresh(true);
       Alert.alert("Devise modifiée", `Les budgets et objectifs sont maintenant en ${selected}.`);
     } catch (error) {
-      Alert.alert("Changement impossible", error instanceof Error ? error.message : "Taux indisponible.");
+      log.error("currency.change", "Échec du changement de devise de référence", error);
+      Alert.alert("Changement impossible", userMessage(error, "Taux indisponible."));
     } finally {
       setSaving(false);
     }

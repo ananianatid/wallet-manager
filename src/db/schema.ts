@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 12;
+export const DATABASE_VERSION = 13;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -142,6 +142,19 @@ CREATE TABLE fx_rates (
   fetched_at INTEGER NOT NULL,
   PRIMARY KEY (base_code, quote_code)
 );
+
+CREATE TABLE app_logs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts         TEXT NOT NULL,
+  level      TEXT NOT NULL,
+  context    TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  session_id TEXT,
+  error      TEXT,
+  data       TEXT
+);
+
+CREATE INDEX idx_app_logs_ts ON app_logs (ts DESC);
 `;
 
 export const SEED_CATEGORIES: Record<string, string[]> = {
@@ -342,6 +355,21 @@ export const MIGRATION_V12 = `
   WHERE reference_amount = 0;
 `;
 
+export const MIGRATION_V13 = `
+  CREATE TABLE IF NOT EXISTS app_logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT NOT NULL,
+    level      TEXT NOT NULL,
+    context    TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    session_id TEXT,
+    error      TEXT,
+    data       TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -440,6 +468,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 11) {
       await db.execAsync(MIGRATION_V12);
+    }
+    if (currentDbVersion <= 12) {
+      await db.execAsync(MIGRATION_V13);
     }
   }
 

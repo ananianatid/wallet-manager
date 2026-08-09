@@ -26,6 +26,7 @@ import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatDate, formatMonthLabel } from "@/utils/format";
+import { userMessage } from "@/utils/user-message";
 import { savingsByRule, totals } from "@/utils/statistics";
 
 function SectionCard({
@@ -122,7 +123,7 @@ export default function DashboardScreen() {
     };
   }, [currentMonth.startMs]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "dashboard.load");
   const reload = resource.reload;
 
   useFocusEffect(
@@ -227,7 +228,7 @@ export default function DashboardScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

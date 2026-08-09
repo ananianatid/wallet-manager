@@ -10,6 +10,8 @@ import {
 import { exportEncryptedBackup } from "@/backup/export";
 import { ActionButton, FormField, InlineError } from "@/components/ui";
 import { radius, spacing, useTheme } from "@/theme";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 const MIN_PASSPHRASE_LENGTH = 8;
 
@@ -82,7 +84,8 @@ export default function BackupExportScreen() {
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "L'export a échoué.");
+      log.error("backup.export", "Échec de l'export de la sauvegarde", e);
+      setError(userMessage(e, "L'export a échoué."));
     } finally {
       setBusy(false);
     }

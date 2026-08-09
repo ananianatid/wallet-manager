@@ -19,6 +19,8 @@ export class RestoreError extends Error {
     super(message);
     this.name = "RestoreError";
   }
+  /** Messages are written in French for the user; safe to display as-is. */
+  userFacing = true;
 }
 
 export interface RestoredBackupInfo {

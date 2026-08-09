@@ -22,9 +22,8 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, type ThemeColors } from "@/theme";
 import type { Budget, Category } from "@/types";
 import { formatAmount } from "@/utils/format";
-
-const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : "Une erreur est survenue.";
+import { log } from "@/utils/logger";
+import { userMessage } from "@/utils/user-message";
 
 interface EditRowProps {
   categories: Category[];
@@ -139,7 +138,7 @@ export default function BudgetsScreen() {
     return { budgets: b, expenseCategories: cats, spentByCategory, totalExpense };
   }, [baseCurrency, convert]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "budgets.load");
   const reload = resource.reload;
   const budgets = resource.data?.budgets ?? [];
   const expenseCategories = resource.data?.expenseCategories ?? [];
@@ -191,7 +190,8 @@ export default function BudgetsScreen() {
       cancelEdit();
       await resource.reload();
     } catch (e) {
-      Alert.alert("Impossible d'enregistrer", errorMessage(e));
+      Alert.alert("Impossible d'enregistrer", userMessage(e));
+      log.error("budgets.save", "Échec de l'enregistrement du budget", e);
     }
   };
 
@@ -216,7 +216,7 @@ export default function BudgetsScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (

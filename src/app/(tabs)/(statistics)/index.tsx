@@ -20,6 +20,7 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listTransactions, listTransactionsByRange } from "@/db/transactions";
 import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
+import { userMessage } from "@/utils/user-message";
 import {
   categoryChanges,
   categoryBreakdown,
@@ -272,7 +273,7 @@ export default function StatisticsScreen() {
     };
   }, [periodBounds, periodKey, previousPeriodBounds]);
 
-  const resource = useAsyncResource(load);
+  const resource = useAsyncResource(load, "statistics.load");
   const reload = resource.reload;
   const reloadRef = useRef(reload);
   const previousPeriodKey = useRef(periodKey);
@@ -581,7 +582,7 @@ export default function StatisticsScreen() {
       {!resource.data ? (
         <ScreenState
           status={resource.status === "error" ? "error" : "loading"}
-          message={resource.error?.message}
+          message={userMessage(resource.error)}
           onRetry={() => void resource.reload()}
         />
       ) : (
