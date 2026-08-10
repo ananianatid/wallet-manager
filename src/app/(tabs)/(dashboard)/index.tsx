@@ -236,6 +236,7 @@ export default function DashboardScreen() {
           style={{ flex: 1 }}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{
+            paddingTop: insets.top + spacing.md,
             paddingHorizontal: spacing.lg,
             paddingBottom: spacing.xxl + 56 + insets.bottom + spacing.lg,
             gap: spacing.lg,
@@ -395,37 +396,54 @@ export default function DashboardScreen() {
                           pressed && styles.pressed,
                         ]}
                       >
-                        <View style={styles.budgetRow}>
-                          <Text
-                            style={[styles.legendName, { color: theme.label }]}
-                            numberOfLines={2}
+                        <Text
+                          style={[styles.legendName, { color: theme.label }]}
+                          numberOfLines={1}
+                        >
+                          {goal.name}
+                        </Text>
+                        <View style={styles.goalBarRow}>
+                          <View
+                            style={[
+                              styles.goalTrack,
+                              { backgroundColor: theme.surfaceElevated },
+                            ]}
                           >
-                            {goal.name}
-                          </Text>
-                          <Text style={{ color: statusColor, fontWeight: "800" }}>
+                            <View
+                              style={{
+                                width: `${goal.progressPercent}%`,
+                                height: "100%",
+                                borderRadius: radius.md,
+                                backgroundColor: statusColor,
+                              }}
+                            />
+                          </View>
+                          <Text
+                            style={[styles.goalPercent, { color: statusColor }]}
+                          >
                             {goal.progressPercent}%
                           </Text>
                         </View>
-                        <View
-                          style={[
-                            styles.track,
-                            { backgroundColor: theme.surfaceElevated },
-                          ]}
-                        >
-                          <View
+                        <View style={styles.goalAmountRow}>
+                          <Text
+                            numberOfLines={1}
                             style={{
-                              width: `${goal.progressPercent}%`,
-                              height: "100%",
-                              borderRadius: radius.md,
-                              backgroundColor: statusColor,
+                              color: theme.label,
+                              fontWeight: "700",
+                              fontVariant: ["tabular-nums"],
                             }}
-                          />
+                          >
+                            {formatAmount(goal.reservedAmount, goal.currencyCode)} /{" "}
+                            {formatAmount(goal.targetAmount, goal.currencyCode)}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: theme.secondaryLabel, fontSize: 12 }}
+                          >
+                            {" · reste "}
+                            {formatAmount(goal.remainingAmount, goal.currencyCode)}
+                          </Text>
                         </View>
-                        <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                          {formatAmount(goal.reservedAmount, goal.currencyCode)} sur{" "}
-                          {formatAmount(goal.targetAmount, goal.currencyCode)} · reste{" "}
-                          {formatAmount(goal.remainingAmount, goal.currencyCode)}
-                        </Text>
                       </Pressable>
                     );
                   })}
@@ -544,6 +562,28 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: radius.md,
     overflow: "hidden",
+  },
+  goalBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  goalTrack: {
+    flex: 1,
+    height: 12,
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  goalPercent: {
+    width: 44,
+    textAlign: "right",
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  goalAmountRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.xs,
   },
   savingsTotal: {
     flexDirection: "row",
