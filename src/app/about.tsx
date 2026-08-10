@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import { router, Stack } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { spacing, useTheme } from "@/theme";
 
 export default function AboutScreen() {
@@ -20,14 +20,12 @@ export default function AboutScreen() {
           padding: spacing.xl,
         }}
       >
-        <View
-          style={[
-            styles.logo,
-            { backgroundColor: theme.accent },
-          ]}
-        >
-        <Text style={[styles.logoText, { color: theme.onAccent }]}>W</Text>
-        </View>
+        <Image
+          source={require("../../assets/images/wallet-logo-square.png")}
+          accessibilityLabel="Logo Wallet"
+          resizeMode="contain"
+          style={styles.logo}
+        />
         <Text style={{ color: theme.label, fontSize: 22, fontWeight: "800" }}>
           {name}
         </Text>
@@ -65,16 +63,10 @@ export default function AboutScreen() {
 
 const styles = StyleSheet.create({
   logo: {
-    width: 72,
-    height: 72,
+    width: 96,
+    height: 96,
     borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: spacing.sm,
-  },
-  logoText: {
-    fontSize: 36,
-    fontWeight: "800",
   },
   diagnosticsLink: {
     marginTop: spacing.xl,
