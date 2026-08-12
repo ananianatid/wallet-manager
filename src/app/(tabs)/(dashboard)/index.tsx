@@ -11,6 +11,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmptyState } from "@/components/empty-state";
+import { CategoryIcon } from "@/components/category-icons";
+import { MiniDonut } from "@/components/mini-donut";
+import { ProgressRing } from "@/components/progress-ring";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { ScreenState } from "@/components/ui";
@@ -18,13 +21,15 @@ import { listAccounts } from "@/db/accounts";
 import { listBudgets } from "@/db/budgets";
 import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
-import { useCurrency } from "@/currency/context";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { listGoals } from "@/db/goals";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme, withAlpha } from "@/theme";
-import { formatDate } from "@/utils/format";
+import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
+import { budgetProgress, topCategorySlices, urgentGoals } from "@/utils/dashboard";
+import { formatAmount, formatDate } from "@/utils/format";
+import { categoryBreakdown } from "@/utils/statistics";
 import { userMessage } from "@/utils/user-message";
 
 function SectionCard({
@@ -77,19 +82,25 @@ function SectionCard({
 
 export default function DashboardScreen() {
   const theme = useTheme();
-  const { lastRefresh, stale } = useCurrency();
+  const { lastRefresh, stale, baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const insets = useSafeAreaInsets();
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [forecast, accounts, goals, budgets, savingsRules] = await Promise.all([
-      calculateSafeToSpend(db),
-      listAccounts(db),
-      listGoals(db),
-      listBudgets(db),
-      listSavingsRules(db),
-    ]);
-    const recent = await listTransactions(db, { order: "desc", limit: 5 });
+    const now = new Date();
+    const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+    const [forecast, accounts, goals, budgets, savingsRules, monthTx, recent] =
+      await Promise.all([
+        calculateSafeToSpend(db),
+        listAccounts(db),
+        listGoals(db),
+        listBudgets(db),
+        listSavingsRules(db),
+        listTransactions(db, { startMs, endMs, order: "asc" }),
+        listTransactions(db, { order: "desc", limit: 5 }),
+      ]);
 
     return {
       safeToSpend: forecast,
@@ -97,6 +108,7 @@ export default function DashboardScreen() {
       goals,
       budgets,
       savingsRules,
+      monthTx,
       recent,
     };
   }, []);
@@ -121,14 +133,40 @@ export default function DashboardScreen() {
     [data?.savingsRules],
   );
   const recent = useMemo(() => data?.recent ?? [], [data?.recent]);
-  const activeGoalsCount = useMemo(
-    () => goals.filter((goal) => !goal.isAchieved).length,
-    [goals],
+  const monthTx = useMemo(() => data?.monthTx ?? [], [data?.monthTx]);
+
+  const { spentByCategory, totalExpense } = useMemo(() => {
+    const map = new Map<number, number>();
+    let total = 0;
+    for (const t of monthTx) {
+      if (t.type !== "expense") {
+        continue;
+      }
+      const converted = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+      total += converted;
+      if (t.categoryId != null) {
+        map.set(t.categoryId, (map.get(t.categoryId) ?? 0) + converted);
+      }
+    }
+    return { spentByCategory: map, totalExpense: total };
+  }, [monthTx, convert, baseCurrency]);
+
+  const budgetRows = useMemo(
+    () => budgetProgress(budgets, spentByCategory, totalExpense),
+    [budgets, spentByCategory, totalExpense],
+  );
+  const topGoals = useMemo(() => urgentGoals(goals), [goals]);
+  const topSlices = useMemo(
+    () => topCategorySlices(categoryBreakdown(monthTx, "expense", convert)),
+    [monthTx, convert],
   );
 
   const openNew = () => router.push("/new-transaction");
   const openEdit = (id: number) =>
     router.push({ pathname: "/new-transaction", params: { id: String(id) } });
+
+  const sliceColor = (index: number) =>
+    index < 4 ? chartColors[index] : theme.secondaryLabel;
 
   return (
     <View style={{ flex: 1 }}>
@@ -175,59 +213,203 @@ export default function DashboardScreen() {
                 </View>
               ) : null}
 
-              <SectionCard title="Planifier">
-                <Pressable
-                  onPress={() => router.push("/budgets")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Budgets"
-                  accessibilityHint="Ouvrir les budgets"
-                  style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+              {budgetRows.length > 0 ? (
+                <SectionCard
+                  title="Budgets"
+                  action={{
+                    label: "Tout voir",
+                    onPress: () => router.push("/budgets"),
+                  }}
                 >
-                  <View style={styles.planningCopy}>
-                    <Text style={[styles.planningTitle, { color: theme.label }]}>Budgets</Text>
-                    <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
-                      {budgets.length > 0
-                        ? `${budgets.length} budget${budgets.length > 1 ? "s" : ""} configuré${budgets.length > 1 ? "s" : ""}`
-                        : "Fixer des limites de dépenses"}
-                    </Text>
-                  </View>
-                  <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
-                </Pressable>
-                <Pressable
-                  onPress={() => router.push("/savings")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Épargne"
-                  accessibilityHint="Ouvrir les règles d’épargne"
-                  style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+                  {budgetRows.map((row) => (
+                    <View key={row.budget.id} style={styles.budgetRow}>
+                      {row.budget.categoryIcon ? (
+                        <View
+                          style={[
+                            styles.budgetIcon,
+                            { backgroundColor: theme.surfaceElevated },
+                          ]}
+                        >
+                          <CategoryIcon
+                            name={row.budget.categoryIcon}
+                            size={18}
+                            color={theme.accent}
+                          />
+                        </View>
+                      ) : null}
+                      <View style={styles.budgetBody}>
+                        <View style={styles.budgetHeader}>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.budgetTitle, { color: theme.label }]}
+                          >
+                            {row.budget.categoryName ?? "Toutes les dépenses"}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.budgetAmount,
+                              { color: theme.secondaryLabel },
+                            ]}
+                          >
+                            {formatAmount(row.spent, baseCurrency)} /{" "}
+                            {formatAmount(row.budget.amount, row.budget.currencyCode)}
+                          </Text>
+                        </View>
+                        <View
+                          accessible
+                          accessibilityRole="progressbar"
+                          accessibilityLabel={`${formatAmount(row.spent, baseCurrency)} dépensés sur ${formatAmount(row.budget.amount, row.budget.currencyCode)}`}
+                          style={[
+                            styles.budgetTrack,
+                            { backgroundColor: theme.surfaceElevated },
+                          ]}
+                        >
+                          <View
+                            style={{
+                              width: `${row.pct}%`,
+                              height: "100%",
+                              borderRadius: radius.md,
+                              backgroundColor: row.over ? theme.expense : theme.accent,
+                            }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </SectionCard>
+              ) : null}
+
+              {topGoals.length > 0 || savingsRules.length > 0 ? (
+                <SectionCard
+                  title="Objectifs"
+                  action={{
+                    label: "Tout voir",
+                    onPress: () => router.push("/goals"),
+                  }}
                 >
-                  <View style={styles.planningCopy}>
-                    <Text style={[styles.planningTitle, { color: theme.label }]}>Épargne</Text>
-                    <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
-                      {savingsRules.length > 0
-                        ? `${savingsRules.length} règle${savingsRules.length > 1 ? "s" : ""} active${savingsRules.length > 1 ? "s" : ""}`
-                        : "Mettre automatiquement de côté"}
-                    </Text>
-                  </View>
-                  <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
-                </Pressable>
-                <Pressable
-                  onPress={() => router.push("/goals")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Objectifs"
-                  accessibilityHint="Ouvrir les objectifs"
-                  style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+                  {topGoals.length > 0 ? (
+                    <View style={styles.goalsRow}>
+                      {topGoals.map((goal) => {
+                        const overdue = goal.isOverdue;
+                        const ringColor = overdue ? theme.expense : theme.accent;
+                        const cardSurface = overdue
+                          ? withAlpha(theme.expense, "12")
+                          : withAlpha(theme.accentSurface, "12");
+                        return (
+                          <Pressable
+                            key={goal.id}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/goals/[id]",
+                                params: { id: String(goal.id) },
+                              })
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`${goal.name}. ${Math.round(goal.progressPercent)} % atteints.`}
+                            accessibilityHint="Ouvre le détail de l’objectif."
+                            style={({ pressed }) => [
+                              styles.goalCard,
+                              { backgroundColor: cardSurface },
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <ProgressRing
+                              progress={goal.progressPercent}
+                              color={ringColor}
+                              trackColor={withAlpha(theme.label, "16")}
+                              labelColor={theme.label}
+                              accessibilityLabel={`${goal.name} : ${Math.round(goal.progressPercent)} %`}
+                            />
+                            <Text
+                              numberOfLines={1}
+                              style={[styles.goalName, { color: theme.label }]}
+                            >
+                              {goal.name}
+                            </Text>
+                            <Text style={[styles.goalDetail, { color: theme.secondaryLabel }]}>
+                              Cible le {formatDate(goal.targetDate)}
+                            </Text>
+                            <Text
+                              numberOfLines={1}
+                              style={[styles.goalAmount, { color: theme.label }]}
+                            >
+                              {formatAmount(goal.reservedAmount, goal.currencyCode)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                  <Pressable
+                    onPress={() => router.push("/savings")}
+                    accessibilityRole="button"
+                    accessibilityLabel="Épargne"
+                    accessibilityHint="Ouvrir les règles d’épargne"
+                    style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+                  >
+                    <View style={styles.planningCopy}>
+                      <Text style={[styles.planningTitle, { color: theme.label }]}>
+                        Épargne
+                      </Text>
+                      <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
+                        {savingsRules.length > 0
+                          ? `${savingsRules.length} règle${savingsRules.length > 1 ? "s" : ""} active${savingsRules.length > 1 ? "s" : ""}`
+                          : "Mettre automatiquement de côté"}
+                      </Text>
+                    </View>
+                    <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                  </Pressable>
+                </SectionCard>
+              ) : null}
+
+              {topSlices.length > 0 ? (
+                <SectionCard
+                  title="Top catégories"
+                  action={{
+                    label: "Statistiques",
+                    onPress: () => router.push("/(tabs)/(statistics)"),
+                  }}
                 >
-                  <View style={styles.planningCopy}>
-                    <Text style={[styles.planningTitle, { color: theme.label }]}>Objectifs</Text>
-                    <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
-                      {activeGoalsCount > 0
-                        ? `${activeGoalsCount} objectif${activeGoalsCount > 1 ? "s" : ""} en cours`
-                        : "Préparer un projet à financer"}
-                    </Text>
+                  <View style={styles.topCategoriesRow}>
+                    <MiniDonut
+                      slices={topSlices.map((s, index) => ({
+                        value: s.total,
+                        color: sliceColor(index),
+                      }))}
+                      trackColor={theme.surfaceElevated}
+                    />
+                    <View style={styles.topCategoriesLegend}>
+                      {topSlices.map((s, index) => (
+                        <View key={s.categoryName} style={styles.topCategoryLine}>
+                          <CategoryIcon
+                            name={s.categoryIcon}
+                            size={16}
+                            color={sliceColor(index)}
+                          />
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.topCategoryName, { color: theme.label }]}
+                          >
+                            {s.categoryName}
+                          </Text>
+                          <Text
+                            style={[styles.topCategoryPct, { color: theme.secondaryLabel }]}
+                          >
+                            {Math.round(s.pct)} %
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.topCategoryAmount, { color: theme.label }]}
+                          >
+                            {formatAmount(s.total, baseCurrency)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                  <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
-                </Pressable>
-              </SectionCard>
+                </SectionCard>
+              ) : null}
 
               {recent.length > 0 ? (
                 <View
@@ -339,6 +521,95 @@ const styles = StyleSheet.create({
   },
   planningDetail: {
     fontSize: 13,
+  },
+  budgetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  budgetIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  budgetBody: {
+    flex: 1,
+    gap: 6,
+  },
+  budgetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  budgetTitle: {
+    flex: 1,
+    fontWeight: "600",
+  },
+  budgetAmount: {
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+  },
+  budgetTrack: {
+    height: 6,
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  goalsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  goalCard: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    padding: spacing.sm,
+  },
+  goalName: {
+    fontWeight: "700",
+    fontSize: 13,
+    maxWidth: "100%",
+  },
+  goalDetail: {
+    fontSize: 11,
+  },
+  goalAmount: {
+    fontWeight: "800",
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+    maxWidth: "100%",
+  },
+  topCategoriesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+  },
+  topCategoriesLegend: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  topCategoryLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  topCategoryName: {
+    flex: 1,
+    fontSize: 13,
+  },
+  topCategoryPct: {
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+  },
+  topCategoryAmount: {
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   recentHeader: {
     flexDirection: "row",
