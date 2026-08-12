@@ -1,41 +1,30 @@
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { Tabs } from "expo-router";
+import { WalletTabBar } from "@/components/wallet-tab-bar";
 import { useTheme } from "@/theme";
+
+export const unstable_settings = {
+  initialRouteName: "(dashboard)",
+};
 
 export default function TabsLayout() {
   const theme = useTheme();
   return (
-    <NativeTabs
-      tintColor={theme.accent}
-      backgroundColor={theme.background}
-      iconColor={{ default: theme.secondaryLabel, selected: theme.accent }}
-      labelStyle={{
-        default: { color: theme.secondaryLabel, fontWeight: "600" },
-        selected: { color: theme.accent, fontWeight: "700" },
+    <Tabs
+      initialRouteName="(dashboard)"
+      tabBar={(props) => <WalletTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+        tabBarHideOnKeyboard: true,
+        tabBarStyle: { backgroundColor: "transparent" },
+        sceneStyle: { backgroundColor: theme.background },
+        popToTopOnBlur: true,
       }}
-      labelVisibilityMode="labeled"
-      indicatorColor={`${theme.accent}33`}
-      rippleColor={`${theme.accent}1F`}
     >
-      <NativeTabs.Trigger name="(dashboard)">
-        <NativeTabs.Trigger.Icon sf="square.grid.2x2" md="dashboard" />
-        <NativeTabs.Trigger.Label>Accueil</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(transactions)">
-        <NativeTabs.Trigger.Icon sf="list.dash" md="receipt_long" />
-        <NativeTabs.Trigger.Label>Transactions</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(statistics)">
-        <NativeTabs.Trigger.Icon sf="chart.bar" md="bar_chart" />
-        <NativeTabs.Trigger.Label>Statistiques</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(accounts)">
-        <NativeTabs.Trigger.Icon sf="creditcard" md="account_balance_wallet" />
-        <NativeTabs.Trigger.Label>Comptes</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(settings)">
-        <NativeTabs.Trigger.Icon sf="gearshape" md="settings" />
-        <NativeTabs.Trigger.Label>Paramètres</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+      <Tabs.Screen name="(dashboard)" options={{ title: "Accueil", tabBarAccessibilityLabel: "Accueil" }} />
+      <Tabs.Screen name="(transactions)" options={{ title: "Transactions", tabBarAccessibilityLabel: "Transactions" }} />
+      <Tabs.Screen name="(statistics)" options={{ title: "Statistiques", tabBarAccessibilityLabel: "Statistiques" }} />
+      <Tabs.Screen name="(accounts)" options={{ title: "Comptes", tabBarAccessibilityLabel: "Comptes" }} />
+      <Tabs.Screen name="(settings)" options={{ title: "Paramètres", tabBarAccessibilityLabel: "Paramètres" }} />
+    </Tabs>
   );
 }
