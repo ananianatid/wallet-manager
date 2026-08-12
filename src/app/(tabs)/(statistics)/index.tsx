@@ -217,6 +217,7 @@ export default function StatisticsScreen() {
   const [granularityOpen, setGranularityOpen] = useState(false);
   const [type, setType] = useState<"income" | "expense">("expense");
   const [selectedEvolutionIndex, setSelectedEvolutionIndex] = useState<number | null>(null);
+  const [showEvolutionData, setShowEvolutionData] = useState(false);
 
   const periodBounds = useMemo(
     () =>
@@ -297,6 +298,7 @@ export default function StatisticsScreen() {
     }
     previousPeriodKey.current = periodKey;
     setSelectedEvolutionIndex(null);
+    setShowEvolutionData(false);
     void reloadRef.current();
   }, [periodKey]);
 
@@ -504,6 +506,14 @@ export default function StatisticsScreen() {
   const topIncreases = changes.filter((change) => change.delta > 0).slice(0, 2);
   const topDecreases = changes.filter((change) => change.delta < 0).slice(0, 2);
   const hasComparisonActivity = (comparisonTransactions?.length ?? 0) > 0;
+  const categoryTotal = slices.reduce((sum, slice) => sum + slice.total, 0);
+  const categorySummary =
+    slices.length === 0
+      ? `${type === "expense" ? "Dépenses" : "Revenus"} : aucune donnée sur la période.`
+      : `${type === "expense" ? "Dépenses" : "Revenus"} : ${formatAmount(categoryTotal, baseCurrency)} au total. Catégorie principale : ${slices[0].categoryName}, ${Math.round(slices[0].pct)} pour cent, ${formatAmount(slices[0].total, baseCurrency)}.`;
+  const evolutionSummary = hasActivity
+    ? `Évolution ${displayPeriodLabel} : revenus ${formatAmount(t.income, baseCurrency)}, dépenses ${formatAmount(t.expense + t.fees, baseCurrency)}, total net ${formatAmount(t.net, baseCurrency)}. ${evolutionSeries.length} points disponibles.`
+    : `Évolution ${displayPeriodLabel} : aucune donnée sur la période.`;
   const openSearchForCategory = (categoryId: number | null) => {
     const base = resetTransactionSearch();
     setTransactionSearch({
@@ -707,10 +717,19 @@ export default function StatisticsScreen() {
           <View
             style={[styles.card, { backgroundColor: theme.accentSurface, gap: spacing.md }]}
           >
-            <Text style={{ color: theme.accentSurfaceLabel, fontSize: 13 }}>
+            <Text
+              accessibilityRole="header"
+              style={{ color: theme.accentSurfaceLabel, fontSize: 13, fontWeight: "700" }}
+            >
               {type === "expense"
                 ? "Dépenses par catégorie"
                 : "Revenus par catégorie"}
+            </Text>
+            <Text
+              accessibilityRole="summary"
+              style={[styles.chartSummary, { color: theme.accentSurfaceLabel }]}
+            >
+              {categorySummary}
             </Text>
             {slices.length === 0 ? (
               <Text
@@ -757,6 +776,12 @@ export default function StatisticsScreen() {
                     marginVertical: spacing.sm,
                   }}
                 />
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.dataHeading, { color: theme.accentSurfaceLabel }]}
+                >
+                  Données détaillées
+                </Text>
                 <View style={{ gap: spacing.xs }}>
                   {slices.map((slice, index) => (
                     <Pressable
@@ -873,8 +898,17 @@ export default function StatisticsScreen() {
           <View
             style={[styles.card, { backgroundColor: theme.surface, gap: spacing.md }]}
           >
-              <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              <Text
+                accessibilityRole="header"
+                style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}
+              >
                 Évolution · {displayPeriodLabel}
+              </Text>
+              <Text
+                accessibilityRole="summary"
+                style={[styles.chartSummary, { color: theme.secondaryLabel }]}
+              >
+                {evolutionSummary}
               </Text>
               {!hasActivity ? (
                 <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.lg }}>
@@ -893,6 +927,55 @@ export default function StatisticsScreen() {
                     </View>
                     <Text style={[styles.evolutionUnit, { color: theme.secondaryLabel }]}>Devise : {baseCurrency} · frais inclus</Text>
                   </View>
+                  <Pressable
+                    onPress={() => setShowEvolutionData((visible) => !visible)}
+                    accessibilityRole="button"
+                    accessibilityLabel={showEvolutionData ? "Masquer les données détaillées" : "Voir les données détaillées"}
+                    accessibilityState={{ expanded: showEvolutionData }}
+                    style={({ pressed }) => [styles.dataToggle, pressed && styles.pressed]}
+                  >
+                    <Text style={[styles.dataToggleText, { color: theme.accent }]}>
+                      {showEvolutionData ? "Masquer les données" : "Voir les données"}
+                    </Text>
+                    <ChevronDown
+                      size={16}
+                      strokeWidth={2.4}
+                      color={theme.accent}
+                      style={showEvolutionData ? { transform: [{ rotate: "180deg" }] } : undefined}
+                    />
+                  </Pressable>
+                  {showEvolutionData ? (
+                    <ScrollView
+                      style={styles.dataTable}
+                      nestedScrollEnabled
+                      accessibilityLabel="Données détaillées de l’évolution"
+                    >
+                      {evolutionSeries.map((point, index) => (
+                        <View
+                          key={`data-${point.year}-${point.month}-${"day" in point ? point.day : "month"}`}
+                          accessible
+                          accessibilityRole="text"
+                          accessibilityLabel={`${evolutionPointAccessibleLabel(point)}. Revenus ${formatAmount(point.income, baseCurrency)}. Dépenses ${formatAmount(point.expense + point.fees, baseCurrency)}. Total ${formatAmount(point.net, baseCurrency)}.`}
+                          style={[styles.dataRow, { borderBottomColor: theme.separator }]}
+                        >
+                          <Text style={[styles.dataRowTitle, { color: theme.label }]}>
+                            {evolutionPointAccessibleLabel(point)}
+                          </Text>
+                          <View style={styles.dataRowValues}>
+                            <Text style={{ color: theme.income, fontSize: 12 }}>
+                              Revenus {formatAmount(point.income, baseCurrency)}
+                            </Text>
+                            <Text style={{ color: theme.expense, fontSize: 12 }}>
+                              Dépenses {formatAmount(point.expense + point.fees, baseCurrency)}
+                            </Text>
+                            <Text style={{ color: theme.label, fontSize: 12, fontWeight: "700" }}>
+                              Total {formatAmount(point.net, baseCurrency)}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : null}
                   {selectedEvolutionPoint && selectedEvolutionLabel ? (
                     <View
                       style={[styles.evolutionDetail, { backgroundColor: theme.surfaceElevated }]}
@@ -1170,6 +1253,40 @@ const styles = StyleSheet.create({
   legendAmount: {
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
+  },
+  chartSummary: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  dataHeading: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  dataToggle: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.xs,
+  },
+  dataToggleText: {
+    fontWeight: "700",
+  },
+  dataTable: {
+    maxHeight: 300,
+  },
+  dataRow: {
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dataRowTitle: {
+    fontWeight: "700",
+  },
+  dataRowValues: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
   },
   barsRow: {
     flexDirection: "row",
