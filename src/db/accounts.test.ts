@@ -6,6 +6,7 @@ import {
   planBalanceAdjustment,
   restoreAccount,
   setAccountBalance,
+  updateAccountForOnboarding,
 } from "./accounts";
 import { SCHEMA_VERSION_1 } from "./schema";
 
@@ -181,6 +182,48 @@ describe("setAccountBalance", () => {
       c.sql.startsWith("INSERT INTO transactions"),
     );
     expect(insert!.params[2]).toBe(101);
+  });
+});
+
+describe("updateAccountForOnboarding", () => {
+  it("permet de corriger le nom et la devise avant le premier mouvement", async () => {
+    const db = new SqliteDb();
+    db.db.exec(SCHEMA_VERSION_1);
+    db.db.exec(`
+      INSERT INTO categories (id, type, name, is_seed) VALUES (1, 'account', 'Compte', 1);
+      INSERT INTO accounts (id, name, category_id, created_at) VALUES (1, 'Ancien nom', 1, 1);
+    `);
+
+    await updateAccountForOnboarding(db as unknown as SQLiteDatabase, 1, {
+      name: "  Compte principal  ",
+      currencyCode: "usd",
+    });
+
+    expect(db.db.prepare("SELECT name, currency_code AS currencyCode FROM accounts WHERE id = 1").get()).toEqual({
+      name: "Compte principal",
+      currencyCode: "USD",
+    });
+  });
+
+  it("refuse de changer la devise après une transaction", async () => {
+    const db = new SqliteDb();
+    db.db.exec(SCHEMA_VERSION_1);
+    db.db.exec(`
+      INSERT INTO categories (id, type, name, is_seed) VALUES (1, 'account', 'Compte', 1);
+      INSERT INTO accounts (id, name, category_id, created_at) VALUES (1, 'Compte principal', 1, 1);
+      INSERT INTO transactions (type, amount, account_id, transaction_date, created_at)
+        VALUES ('income', 100, 1, 1, 1);
+    `);
+
+    await expect(
+      updateAccountForOnboarding(db as unknown as SQLiteDatabase, 1, {
+        name: "Compte principal",
+        currencyCode: "USD",
+      }),
+    ).rejects.toThrow("ne peut plus être modifiée");
+    expect(db.db.prepare("SELECT currency_code AS currencyCode FROM accounts WHERE id = 1").get()).toEqual({
+      currencyCode: "XOF",
+    });
   });
 });
 

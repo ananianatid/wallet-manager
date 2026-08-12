@@ -8,7 +8,13 @@ export type SettingKey =
   | "backup_last_date"
   | "savings_subtract_from_available"
   | "base_currency"
-  | "currency_last_refresh";
+  | "currency_last_refresh"
+  | "onboarding_completed"
+  | "onboarding_started"
+  | "onboarding_account_id"
+  | "onboarding_account_name"
+  | "onboarding_currency"
+  | "onboarding_step";
 
 export async function getSetting(
   db: SQLiteDatabase,

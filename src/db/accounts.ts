@@ -173,6 +173,37 @@ export async function createAccount(
   return Number(result.lastInsertRowId);
 }
 
+export async function updateAccountForOnboarding(
+  db: SQLiteDatabase,
+  id: number,
+  details: { name: string; currencyCode: string },
+): Promise<void> {
+  const name = details.name.trim();
+  const currencyCode = details.currencyCode.trim().toUpperCase();
+  if (!name) {
+    throw new Error("Le nom du compte ne peut pas être vide.");
+  }
+  if (!currencyCode) {
+    throw new Error("La devise du compte ne peut pas être vide.");
+  }
+
+  const usage = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM transactions WHERE account_id = ? OR destination_account_id = ?",
+    id,
+    id,
+  );
+  if ((usage?.count ?? 0) > 0) {
+    throw new Error("La devise du compte ne peut plus être modifiée après une transaction.");
+  }
+
+  await db.runAsync(
+    "UPDATE accounts SET name = ?, currency_code = ? WHERE id = ? AND deleted_at IS NULL",
+    name,
+    currencyCode,
+    id,
+  );
+}
+
 export async function updateAccountFlags(
   db: SQLiteDatabase,
   id: number,

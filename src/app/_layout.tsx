@@ -1,4 +1,5 @@
 import { Stack } from "expo-router/stack";
+import * as SplashScreen from "expo-splash-screen";
 import {
   DarkTheme,
   DefaultTheme,
@@ -6,20 +7,23 @@ import {
 } from "expo-router/react-navigation";
 import { ThemeProvider as AppThemeProvider, useTheme, useThemeControl } from "@/theme";
 import { StatusBar } from "react-native";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CompactStackHeader } from "@/components/compact-stack-header";
 import { LockScreen } from "@/components/lock-screen";
 import { initLock, useLockState } from "@/state/lock";
 import { useDataEpoch } from "@/state/data-epoch";
 import { CurrencyProvider } from "@/currency/context";
+import { getDatabase } from "@/db/database";
+import { getSetting, setSetting } from "@/db/settings";
 import { initObservability } from "@/services/observability";
 import { runStartupHealth } from "@/utils/diagnostics";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
 
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 initObservability();
 
-function RootNavigator() {
+function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onboarding" }) {
   const theme = useTheme();
   const { scheme } = useThemeControl();
   const lock = useLockState();
@@ -33,6 +37,7 @@ function RootNavigator() {
       />
       <ThemeProvider value={scheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack
+          initialRouteName={initialRouteName}
           key={epoch}
           screenOptions={{
             headerStyle: {
@@ -47,6 +52,7 @@ function RootNavigator() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen
             name="new-transaction"
             options={{ presentation: "modal", title: "Nouvelle transaction" }}
@@ -91,16 +97,58 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [isReady, setIsReady] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
   useEffect(() => {
+    let active = true;
     initLock();
-    void runStartupHealth();
+
+    void (async () => {
+      let shouldOnboard = false;
+      try {
+        const db = await getDatabase();
+        const accountCount = await db.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) AS count FROM accounts WHERE deleted_at IS NULL",
+        );
+        const completed = await getSetting(db, "onboarding_completed");
+        const started = await getSetting(db, "onboarding_started");
+        const hasAccounts = (accountCount?.count ?? 0) > 0;
+        if (hasAccounts && completed !== "1" && started !== "1") {
+          await setSetting(db, "onboarding_completed", "1");
+        }
+        shouldOnboard = completed !== "1" && (!hasAccounts || started === "1");
+      } catch {
+        // The regular app shell remains available if the startup check fails.
+      }
+      if (!active) {
+        return;
+      }
+      setNeedsOnboarding(shouldOnboard);
+      setIsReady(true);
+      void runStartupHealth();
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (isReady) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isReady]);
+
+  if (!isReady) {
+    return null;
+  }
 
   return (
     <SafeAreaProvider>
       <AppThemeProvider>
         <CurrencyProvider>
-          <RootNavigator />
+          <RootNavigator initialRouteName={needsOnboarding ? "onboarding" : "(tabs)"} />
         </CurrencyProvider>
       </AppThemeProvider>
     </SafeAreaProvider>
