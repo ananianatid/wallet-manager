@@ -16,6 +16,7 @@ interface AccountRowLike {
   balance: number;
   reservedAmount: number;
   availableBalance: number;
+  currencyCode: string;
 }
 
 function account(overrides: Partial<AccountRowLike> = {}): AccountRowLike {
@@ -31,6 +32,7 @@ function account(overrides: Partial<AccountRowLike> = {}): AccountRowLike {
     balance: 0,
     reservedAmount: 0,
     availableBalance: 0,
+    currencyCode: "XOF",
     ...overrides,
   };
 }
@@ -174,5 +176,49 @@ describe("calculateSafeToSpend", () => {
     const result = await calculateSafeToSpend(db, NOW);
     expect(result.savings).toBe(0);
     expect(result.amount).toBe(100_000);
+  });
+
+  it("expose la somme des soldes négatifs des comptes inclus", async () => {
+    const { db } = mockDb({
+      accounts: [
+        account({ id: 1, name: "Courant", balance: -25_000 }),
+        account({ id: 2, name: "Épargne", balance: 100_000 }),
+      ],
+      transactions: [],
+    });
+    const result = await calculateSafeToSpend(db, NOW);
+    expect(result.overdraft).toBe(-25_000);
+    expect(result.overdraftAccountCount).toBe(1);
+    expect(result.amount).toBe(0);
+  });
+
+  it("calcule le solde avant calcul : comptes positifs moins revenus futurs", async () => {
+    const { db } = mockDb({
+      accounts: [
+        account({ id: 1, name: "Courant", balance: 100_000 }),
+        account({ id: 2, name: "Découvert", balance: -25_000 }),
+        account({ id: 3, name: "Exclu", balance: 50_000, excludeFromTotal: 1 }),
+      ],
+      transactions: [
+        transaction({ id: 1, type: "income", amount: 60_000, transactionDate: NOW + 3_600_000 }),
+      ],
+    });
+    const result = await calculateSafeToSpend(db, NOW);
+    expect(result.balanceBeforeCalculation).toBe(100_000 - 60_000);
+  });
+
+  it("ignore les comptes exclus et à solde positif dans le découvert", async () => {
+    const { db } = mockDb({
+      accounts: [
+        account({ id: 1, name: "Courant", balance: -25_000 }),
+        account({ id: 2, name: "Exclu", balance: -10_000, excludeFromTotal: 1 }),
+        account({ id: 3, name: "Sain", balance: 50_000 }),
+      ],
+      transactions: [],
+    });
+    const result = await calculateSafeToSpend(db, NOW);
+    expect(result.overdraft).toBe(-25_000);
+    expect(result.overdraftAccountCount).toBe(1);
+    expect(result.amount).toBe(0);
   });
 });

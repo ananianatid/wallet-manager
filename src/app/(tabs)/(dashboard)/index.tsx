@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from "react";
-import { Plus } from "lucide-react-native";
+import { ChevronRight, Plus } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
@@ -10,7 +10,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CategoryIcon } from "@/components/category-icons";
 import { EmptyState } from "@/components/empty-state";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
@@ -19,15 +18,14 @@ import { listAccounts } from "@/db/accounts";
 import { listBudgets } from "@/db/budgets";
 import { calculateSafeToSpend } from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
-import { useCurrency, useCurrencyConverter } from "@/currency/context";
+import { useCurrency } from "@/currency/context";
 import { listGoals } from "@/db/goals";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
-import { formatAmount, formatDate, formatMonthLabel } from "@/utils/format";
+import { formatDate } from "@/utils/format";
 import { userMessage } from "@/utils/user-message";
-import { savingsByRule, totals } from "@/utils/statistics";
 
 function SectionCard({
   title,
@@ -53,7 +51,10 @@ function SectionCard({
       ]}
     >
       <View style={styles.cardHeader}>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+        <Text
+          accessibilityRole="header"
+          style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}
+        >
           {title}
         </Text>
         {action ? (
@@ -76,20 +77,8 @@ function SectionCard({
 
 export default function DashboardScreen() {
   const theme = useTheme();
-  const { baseCurrency, lastRefresh, stale } = useCurrency();
-  const convert = useCurrencyConverter();
+  const { lastRefresh, stale } = useCurrency();
   const insets = useSafeAreaInsets();
-
-  const currentMonth = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return {
-      label: start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
-      startMs: start.getTime(),
-      endMs: end.getTime(),
-    };
-  }, []);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -100,17 +89,7 @@ export default function DashboardScreen() {
       listBudgets(db),
       listSavingsRules(db),
     ]);
-    const ruleStarts = savingsRules
-      .map((rule) => rule.startDate)
-      .filter((date): date is number => date != null);
-    const transactionStartMs =
-      ruleStarts.length > 0
-        ? Math.min(currentMonth.startMs, ...ruleStarts)
-        : currentMonth.startMs;
-    const [transactions, recent] = await Promise.all([
-      listTransactions(db, { startMs: transactionStartMs, order: "asc" }),
-      listTransactions(db, { order: "desc", limit: 5 }),
-    ]);
+    const recent = await listTransactions(db, { order: "desc", limit: 5 });
 
     return {
       safeToSpend: forecast,
@@ -118,10 +97,9 @@ export default function DashboardScreen() {
       goals,
       budgets,
       savingsRules,
-      transactions,
       recent,
     };
-  }, [currentMonth.startMs]);
+  }, []);
 
   const resource = useAsyncResource(load, "dashboard.load");
   const reload = resource.reload;
@@ -142,86 +120,15 @@ export default function DashboardScreen() {
     () => data?.savingsRules ?? [],
     [data?.savingsRules],
   );
-  const transactions = useMemo(
-    () => data?.transactions ?? [],
-    [data?.transactions],
-  );
   const recent = useMemo(() => data?.recent ?? [], [data?.recent]);
-
-  const monthTransactions = useMemo(
-    () =>
-      transactions.filter(
-        (transaction) =>
-          transaction.transactionDate >= currentMonth.startMs &&
-          transaction.transactionDate < currentMonth.endMs,
-      ),
-    [transactions, currentMonth],
-  );
-  const monthTotals = useMemo(() => totals(monthTransactions, convert), [monthTransactions, convert]);
-  const spentByCategory = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const transaction of monthTransactions) {
-      if (transaction.type === "expense" && transaction.categoryId != null) {
-        map.set(
-          transaction.categoryId,
-          (map.get(transaction.categoryId) ?? 0) +
-            (convert(transaction.amount, transaction.accountCurrencyCode ?? baseCurrency) ?? 0),
-        );
-      }
-    }
-    return map;
-  }, [baseCurrency, convert, monthTransactions]);
-  const budgetRows = useMemo(
-    () =>
-      budgets.map((budget) => ({
-        budget,
-        spent:
-          budget.categoryId == null
-            ? monthTotals.expense
-            : (spentByCategory.get(budget.categoryId) ?? 0),
-      })),
-    [budgets, monthTotals.expense, spentByCategory],
-  );
-  const earliestSavingsStartMs = useMemo(() => {
-    const ruleStarts = savingsRules
-      .map((rule) => rule.startDate)
-      .filter((date): date is number => date != null);
-    return ruleStarts.length > 0
-      ? Math.min(currentMonth.startMs, ...ruleStarts)
-      : currentMonth.startMs;
-  }, [savingsRules, currentMonth.startMs]);
-  const savingsTransactions = useMemo(
-    () =>
-      transactions.filter(
-        (transaction) => transaction.transactionDate >= earliestSavingsStartMs,
-      ),
-    [transactions, earliestSavingsStartMs],
-  );
-  const savings = useMemo(
-    () => savingsByRule(savingsTransactions, savingsRules, currentMonth.startMs, convert),
-    [savingsTransactions, savingsRules, currentMonth.startMs, convert],
-  );
-  const savingsTitle = useMemo(
-    () =>
-      earliestSavingsStartMs < currentMonth.startMs
-        ? `Épargne · depuis ${formatMonthLabel(
-            new Date(earliestSavingsStartMs).getFullYear(),
-            new Date(earliestSavingsStartMs).getMonth(),
-          )}`
-        : `Épargne · ${currentMonth.label}`,
-    [earliestSavingsStartMs, currentMonth],
-  );
-  const savingsTotal = useMemo(
-    () => savings.reduce((sum, contribution) => sum + contribution.amount, 0),
-    [savings],
-  );
-
-  const activeGoals = useMemo(
-    () => goals.filter((goal) => !goal.isAchieved).slice(0, 3),
+  const activeGoalsCount = useMemo(
+    () => goals.filter((goal) => !goal.isAchieved).length,
     [goals],
   );
 
   const openNew = () => router.push("/new-transaction");
+  const openEdit = (id: number) =>
+    router.push({ pathname: "/new-transaction", params: { id: String(id) } });
 
   return (
     <View style={{ flex: 1 }}>
@@ -268,187 +175,59 @@ export default function DashboardScreen() {
                 </View>
               ) : null}
 
-              {budgetRows.length > 0 ? (
-                <SectionCard
-                  title={`Budgets · ${formatAmount(monthTotals.expense, baseCurrency)} dépensés`}
-                  action={{
-                    label: "Gérer",
-                    onPress: () => router.push("/budgets"),
-                  }}
+              <SectionCard title="Planifier">
+                <Pressable
+                  onPress={() => router.push("/budgets")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Budgets"
+                  accessibilityHint="Ouvrir les budgets"
+                  style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
                 >
-                  {budgetRows.map(({ budget, spent }) => {
-                    const pct = Math.min((spent / budget.amount) * 100, 100);
-                    const over = spent > budget.amount;
-                    const color = over
-                      ? theme.expense
-                      : spent >= budget.amount * 0.8
-                        ? theme.warning
-                        : theme.accent;
-                    return (
-                      <View key={budget.id} style={{ gap: spacing.xs }}>
-                        <View style={styles.budgetRow}>
-                          {budget.categoryIcon ? (
-                            <CategoryIcon name={budget.categoryIcon} size={17} color={theme.accent} />
-                          ) : null}
-                          <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={2}>
-                            {budget.categoryName ?? "Toutes les dépenses"}
-                          </Text>
-                          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                            {Math.round((spent / budget.amount) * 100)}%
-                          </Text>
-                          <Text style={{ color: theme.label, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
-                            {formatAmount(spent, baseCurrency)} / {formatAmount(budget.amount, budget.currencyCode)}
-                          </Text>
-                        </View>
-                        <View style={[styles.track, { backgroundColor: theme.surfaceElevated }]}>
-                          <View
-                            style={{
-                              width: `${pct}%`,
-                              height: "100%",
-                              borderRadius: radius.md,
-                              backgroundColor: color,
-                            }}
-                          />
-                        </View>
-                      </View>
-                    );
-                  })}
-                </SectionCard>
-              ) : null}
-
-              <SectionCard
-                title={savingsTitle}
-                tone="accent"
-                action={{
-                  label: "Gérer",
-                  onPress: () => router.push("/savings"),
-                }}
-              >
-                {savings.length === 0 ? (
-                  <Text style={{ color: theme.secondaryLabel, lineHeight: 20 }}>
-                    Aucune règle d&apos;épargne configurée pour le moment.
-                  </Text>
-                ) : (
-                  <>
-                    <View style={{ gap: spacing.sm }}>
-                      {savings.map(({ rule, amount }) => (
-                        <View key={rule.id} style={styles.legendRow}>
-                          {rule.categoryIcon ? (
-                            <CategoryIcon name={rule.categoryIcon} size={17} color={theme.accent} />
-                          ) : null}
-                          <Text style={[styles.legendName, { color: theme.label }]} numberOfLines={2}>
-                            {rule.categoryName ?? "Tous les revenus"}
-                          </Text>
-                          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                            {rule.percent} %
-                          </Text>
-                          <Text style={[styles.legendAmount, { color: theme.label }]}>
-                            {formatAmount(amount, baseCurrency)}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                    <View style={[styles.savingsTotal, { borderTopColor: theme.separator }]}>
-                      <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>
-                        À épargner
-                      </Text>
-                      <Text
-                        selectable
-                        style={{
-                          color: theme.accent,
-                          fontWeight: "800",
-                          fontSize: 17,
-                          fontVariant: ["tabular-nums"],
-                        }}
-                      >
-                        {formatAmount(savingsTotal, baseCurrency)}
-                      </Text>
-                    </View>
-                  </>
-                )}
+                  <View style={styles.planningCopy}>
+                    <Text style={[styles.planningTitle, { color: theme.label }]}>Budgets</Text>
+                    <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
+                      {budgets.length > 0
+                        ? `${budgets.length} budget${budgets.length > 1 ? "s" : ""} configuré${budgets.length > 1 ? "s" : ""}`
+                        : "Fixer des limites de dépenses"}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push("/savings")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Épargne"
+                  accessibilityHint="Ouvrir les règles d’épargne"
+                  style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+                >
+                  <View style={styles.planningCopy}>
+                    <Text style={[styles.planningTitle, { color: theme.label }]}>Épargne</Text>
+                    <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
+                      {savingsRules.length > 0
+                        ? `${savingsRules.length} règle${savingsRules.length > 1 ? "s" : ""} active${savingsRules.length > 1 ? "s" : ""}`
+                        : "Mettre automatiquement de côté"}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push("/goals")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Objectifs"
+                  accessibilityHint="Ouvrir les objectifs"
+                  style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+                >
+                  <View style={styles.planningCopy}>
+                    <Text style={[styles.planningTitle, { color: theme.label }]}>Objectifs</Text>
+                    <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
+                      {activeGoalsCount > 0
+                        ? `${activeGoalsCount} objectif${activeGoalsCount > 1 ? "s" : ""} en cours`
+                        : "Préparer un projet à financer"}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                </Pressable>
               </SectionCard>
-
-              {activeGoals.length > 0 ? (
-              <SectionCard
-                title="Objectifs en cours"
-                tone="accent"
-                action={{
-                    label: "Tout voir",
-                    onPress: () => router.push("/goals"),
-                  }}
-                >
-                  {activeGoals.map((goal) => {
-                    const statusColor = goal.isOverdue
-                      ? theme.expense
-                      : theme.accent;
-                    return (
-                      <Pressable
-                        key={goal.id}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/goals/[id]",
-                            params: { id: String(goal.id) },
-                          })
-                        }
-                        accessibilityRole="button"
-                        style={({ pressed }) => [
-                          { gap: spacing.xs },
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text
-                          style={[styles.legendName, { color: theme.label }]}
-                          numberOfLines={1}
-                        >
-                          {goal.name}
-                        </Text>
-                        <View style={styles.goalBarRow}>
-                          <View
-                            style={[
-                              styles.goalTrack,
-                              { backgroundColor: theme.surfaceElevated },
-                            ]}
-                          >
-                            <View
-                              style={{
-                                width: `${goal.progressPercent}%`,
-                                height: "100%",
-                                borderRadius: radius.md,
-                                backgroundColor: statusColor,
-                              }}
-                            />
-                          </View>
-                          <Text
-                            style={[styles.goalPercent, { color: statusColor }]}
-                          >
-                            {goal.progressPercent}%
-                          </Text>
-                        </View>
-                        <View style={styles.goalAmountRow}>
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: theme.label,
-                              fontWeight: "700",
-                              fontVariant: ["tabular-nums"],
-                            }}
-                          >
-                            {formatAmount(goal.reservedAmount, goal.currencyCode)} /{" "}
-                            {formatAmount(goal.targetAmount, goal.currencyCode)}
-                          </Text>
-                          <Text
-                            numberOfLines={1}
-                            style={{ color: theme.secondaryLabel, fontSize: 12 }}
-                          >
-                            {" · reste "}
-                            {formatAmount(goal.remainingAmount, goal.currencyCode)}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </SectionCard>
-              ) : null}
 
               {recent.length > 0 ? (
                 <View
@@ -459,7 +238,10 @@ export default function DashboardScreen() {
                   }}
                 >
                   <View style={styles.recentHeader}>
-                    <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    <Text
+                      accessibilityRole="header"
+                      style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}
+                    >
                       Transactions récentes
                     </Text>
                     <Pressable
@@ -479,6 +261,7 @@ export default function DashboardScreen() {
                       <TransactionRow
                         transaction={t}
                         hideDate
+                        onPress={() => openEdit(t.id)}
                       />
                       {index < recent.length - 1 ? (
                         <View
@@ -511,7 +294,7 @@ export default function DashboardScreen() {
               bottom: insets.bottom + spacing.lg,
               boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
             },
-            pressed && { opacity: 0.8 },
+            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
           ]}
         >
           <Plus size={30} strokeWidth={2.5} color={theme.onAccent} />
@@ -539,58 +322,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  legendName: {
-    flex: 1,
-    fontWeight: "600",
-  },
-  legendRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    minHeight: 36,
-  },
-  legendAmount: {
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-  },
-  budgetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  track: {
-    height: 8,
-    borderRadius: radius.md,
-    overflow: "hidden",
-  },
-  goalBarRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  goalTrack: {
-    flex: 1,
-    height: 12,
-    borderRadius: radius.md,
-    overflow: "hidden",
-  },
-  goalPercent: {
-    width: 44,
-    textAlign: "right",
-    fontWeight: "800",
-    fontVariant: ["tabular-nums"],
-  },
-  goalAmountRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: spacing.xs,
-  },
-  savingsTotal: {
+  planningRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing.md,
+    gap: spacing.md,
+    minHeight: 56,
+    paddingVertical: spacing.xs,
+  },
+  planningCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  planningTitle: {
+    fontWeight: "700",
+  },
+  planningDetail: {
+    fontSize: 13,
   },
   recentHeader: {
     flexDirection: "row",

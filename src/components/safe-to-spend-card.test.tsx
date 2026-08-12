@@ -12,7 +12,10 @@ jest.mock("lucide-react-native", () => ({
 function makeData(amount: number): SafeToSpend {
   return {
     amount,
+    balanceBeforeCalculation: amount,
     currentAvailable: amount,
+    includedAccountCount: 1,
+    excludedAccountCount: 0,
     horizonDate: Date.now(),
     nextIncomeDate: null,
     usesFallbackHorizon: true,
@@ -22,6 +25,8 @@ function makeData(amount: number): SafeToSpend {
     recurringEventCount: 1,
     futureTransactionCount: 1,
     savings: 0,
+    overdraft: 0,
+    overdraftAccountCount: 0,
     suggestion: null,
   };
 }
@@ -77,8 +82,7 @@ describe("SafeToSpendCard", () => {
     ).toBeTruthy();
   });
 
-  it("preserves the compact presentation without the detailed footer", async () => {
-    const { getByText, queryByText } = await render(
+  it("keeps the compact presentation focused on the amount", async () => {    const { getByText, queryByText } = await render(
       <SafeToSpendCard
         data={makeData(30_000)}
         compact
@@ -86,10 +90,32 @@ describe("SafeToSpendCard", () => {
       />,
     );
 
-    expect(getByText("Appuyez pour voir le calcul détaillé.")).toBeTruthy();
+    expect(queryByText("Ce que vous pouvez dépenser après les sommes réservées et les échéances prévues.")).toBeNull();
+    expect(queryByText("Voir le détail du calcul.")).toBeNull();
+    expect(queryByText(/Horizon/)).toBeNull();
+    expect(queryByText(/compte.*inclus/)).toBeNull();
     expect(queryByText("Revenus")).toBeNull();
     expect(getByText(formatAmount(30_000, "XOF")).props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
     );
+  });
+
+  it("shows the balance before calculation when provided", async () => {
+    const data = makeData(75_000);
+    const { getByText } = await render(
+      <SafeToSpendCard data={data} interactive={false} />,
+    );
+
+    expect(getByText(`Solde avant calcul : ${formatAmount(data.balanceBeforeCalculation, "XOF")}`)).toBeTruthy();
+  });
+
+  it("hides the balance before calculation when missing", async () => {
+    const data = makeData(75_000) as SafeToSpend & { balanceBeforeCalculation?: number };
+    delete (data as { balanceBeforeCalculation?: number }).balanceBeforeCalculation;
+    const { queryByText } = await render(
+      <SafeToSpendCard data={data} interactive={false} />,
+    );
+
+    expect(queryByText(/Solde avant calcul/)).toBeNull();
   });
 });

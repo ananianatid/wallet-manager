@@ -239,7 +239,10 @@ export interface SafeToSpendSuggestion {
 
 export interface SafeToSpend {
   amount: number;
+  balanceBeforeCalculation: number;
   currentAvailable: number;
+  includedAccountCount: number;
+  excludedAccountCount: number;
   horizonDate: number;
   nextIncomeDate: number | null;
   usesFallbackHorizon: boolean;
@@ -249,5 +252,7 @@ export interface SafeToSpend {
   recurringEventCount: number;
   futureTransactionCount: number;
   savings: number;
+  overdraft: number;
+  overdraftAccountCount: number;
   suggestion: SafeToSpendSuggestion | null;
 }

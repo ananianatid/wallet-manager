@@ -42,39 +42,37 @@ export function MonthlySummaryCard({
           </Text>
         </View>
       ) : (
-      <View style={styles.summaryFooter}>
-        <View style={styles.footerItem}>
-          <Text style={{ color: cardLabel, fontSize: 11 }}>Revenus</Text>
-          <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceIncome }]}>
-            + {formatAmount(totals.income, baseCurrency)}
-          </Text>
+        <View style={styles.summaryFooter}>
+          <View style={styles.footerItem}>
+            <Text style={{ color: cardLabel, fontSize: 11 }}>Revenus</Text>
+            <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceIncome }]}>
+              + {formatAmount(totals.income, baseCurrency)}
+            </Text>
+          </View>
+          <View style={[styles.footerItem, styles.footerItemCenter]}>
+            <Text style={{ color: cardLabel, fontSize: 11 }}>Dépenses</Text>
+            <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceExpense }]}>
+              −{formatAmount(totals.expense + totals.fees, baseCurrency)}
+            </Text>
+          </View>
+          <View style={[styles.footerItem, styles.footerItemRight]}>
+            <Text style={{ color: cardLabel, fontSize: 11 }}>{totalLabel}</Text>
+            <Text
+              selectable
+              style={[
+                styles.footerValue,
+                {
+                  color:
+                    totals.net >= 0
+                      ? theme.accentSurfaceText
+                      : theme.accentSurfaceExpense,
+                },
+              ]}
+            >
+              {formatAmount(totals.net, baseCurrency)}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.footerItem, styles.footerItemCenter]}>
-          <Text style={{ color: cardLabel, fontSize: 11 }}>Dépenses</Text>
-          <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceExpense }]}>
-            −{formatAmount(totals.expense + totals.fees, baseCurrency)}
-          </Text>
-        </View>
-        <View style={[styles.footerItem, styles.footerItemRight]}>
-          <Text style={{ color: cardLabel, fontSize: 11 }}>
-            {totalLabel}
-          </Text>
-          <Text
-            selectable
-            style={[
-              styles.footerValue,
-              {
-                color:
-                  totals.net >= 0
-                    ? theme.accentSurfaceText
-                    : theme.accentSurfaceExpense,
-              },
-            ]}
-          >
-            {formatAmount(totals.net, baseCurrency)}
-          </Text>
-        </View>
-      </View>
       )}
     </View>
   );
@@ -128,15 +126,15 @@ export function SafeToSpendCard({
         {formatAmount(data.amount, baseCurrency)}
       </Text>
 
-      {isNegative && !compact ? (
-        <Text style={{ color: cardLabel, lineHeight: 18 }}>
-          Il manque {formatAmount(Math.abs(data.amount), baseCurrency)} pour couvrir les échéances prévues.
+      {data.balanceBeforeCalculation != null ? (
+        <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
+          Solde avant calcul : {formatAmount(data.balanceBeforeCalculation, baseCurrency)}
         </Text>
       ) : null}
 
-      {compact ? (
-        <Text style={{ color: cardLabel, fontSize: 12 }}>
-          Appuyez pour voir le calcul détaillé.
+      {isNegative && !compact ? (
+        <Text style={{ color: cardLabel, lineHeight: 18 }}>
+          Il manque {formatAmount(Math.abs(data.amount), baseCurrency)} pour couvrir les échéances prévues.
         </Text>
       ) : null}
 
@@ -182,7 +180,8 @@ export function SafeToSpendCard({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel="Voir le calcul détaillé du disponible estimé"
+        accessibilityLabel={`Disponible estimé : ${formatAmount(data.amount, baseCurrency)}`}
+        accessibilityHint="Ouvre le détail du calcul du solde disponible."
         style={({ pressed }) => [
           styles.card,
           { backgroundColor: cardSurface },
@@ -203,11 +202,13 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     padding: spacing.md,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
   },
   summaryCard: {
     marginHorizontal: spacing.lg,
     padding: spacing.md,
     borderRadius: radius.lg,
+    borderCurve: "continuous",
   },
   fullWidthSummaryCard: {
     marginHorizontal: 0,
@@ -264,5 +265,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
+    maxWidth: "100%",
   },
 });

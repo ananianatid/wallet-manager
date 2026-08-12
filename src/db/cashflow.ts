@@ -224,6 +224,20 @@ export async function calculateSafeToSpend(
       const rate = rates.get(account.currencyCode) ?? 1;
       return sum + convertMinorAmount(account.reservedAmount, account.currencyCode, referenceCurrency, rate);
     }, 0);
+  let overdraft = 0;
+  let overdraftAccountCount = 0;
+  for (const account of accountsRows) {
+    if (account.excludeFromTotal || account.balance >= 0) continue;
+    const rate = rates.get(account.currencyCode) ?? 1;
+    overdraft += convertMinorAmount(account.balance, account.currencyCode, referenceCurrency, rate);
+    overdraftAccountCount += 1;
+  }
+  const positiveBalanceTotal = accountsRows
+    .filter((account) => !account.excludeFromTotal && account.balance > 0)
+    .reduce((sum, account) => {
+      const rate = rates.get(account.currencyCode) ?? 1;
+      return sum + convertMinorAmount(account.balance, account.currencyCode, referenceCurrency, rate);
+    }, 0);
   const currentAvailable = currentBalance - reserved;
 
   const manualEvents = transactions
@@ -290,13 +304,18 @@ export async function calculateSafeToSpend(
 
   return {
     amount,
+    balanceBeforeCalculation: positiveBalanceTotal - plannedIncome,
     currentAvailable,
+    includedAccountCount: accountsRows.filter((account) => !account.excludeFromTotal).length,
+    excludedAccountCount: accountsRows.filter((account) => account.excludeFromTotal).length,
     horizonDate,
     nextIncomeDate,
     usesFallbackHorizon,
     plannedIncome,
     plannedOutflows,
     savings,
+    overdraft,
+    overdraftAccountCount,
     eventCount: events.length,
     recurringEventCount: futureRecurringEvents.length,
     futureTransactionCount: manualEvents.length,
