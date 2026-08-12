@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, router } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import { PinDots, PinKeypad } from "@/components/pin-keypad";
 import { PIN_LENGTH, hashPin } from "@/security/pin";
@@ -124,7 +124,21 @@ export default function PinSetupScreen() {
       <Stack.Screen options={{ title: TITLES[mode] }} />
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <StepMessage step={step} mode={mode} error={error} />
+        <View
+          style={styles.progress}
+          accessible
+          accessibilityLabel={`Étape ${step === "verify" ? 1 : step === "enter" ? 1 : 2} sur ${mode === "change" ? 3 : 2}`}
+        >
+          <View style={[styles.progressSegment, { backgroundColor: theme.accent }]} />
+          <View style={[styles.progressSegment, { backgroundColor: step === "confirm" ? theme.accent : theme.separator }]} />
+        </View>
         <PinDots length={pin.length} total={PIN_LENGTH} />
+        {busy ? (
+          <View style={styles.busy} accessibilityLiveRegion="polite">
+            <ActivityIndicator size="small" color={theme.accent} />
+            <Text style={{ color: theme.secondaryLabel }}>Vérification…</Text>
+          </View>
+        ) : null}
         <PinKeypad
           onKey={onKey}
           onDelete={() => setPin((p) => p.slice(0, -1))}
@@ -146,6 +160,23 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 14,
     textAlign: "center",
+    minHeight: 20,
+  },
+  progress: {
+    flexDirection: "row",
+    width: "100%",
+    maxWidth: 240,
+    gap: spacing.xs,
+  },
+  progressSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  busy: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     minHeight: 20,
   },
 });

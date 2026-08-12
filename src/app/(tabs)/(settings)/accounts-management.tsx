@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { LegacySectionHeader, LegacyTextRow } from "@/components/legacy-money-manager";
 import { ScreenState } from "@/components/ui";
+import { EmptyState } from "@/components/empty-state";
 import { assignAccountGroup, listAccountGroups } from "@/db/account-groups";
 import {
   listAccounts,
@@ -130,6 +131,12 @@ export default function AccountsManagementScreen() {
           style={[styles.screen, { backgroundColor: theme.background }]}
           contentContainerStyle={[styles.content, { backgroundColor: theme.background }]}
         >
+          {accounts.length === 0 && deletedAccounts.length === 0 ? (
+            <EmptyState
+              title="Aucun compte"
+              message="Créez un compte pour le gérer ici."
+            />
+          ) : null}
           {sections.map((section) => (
             <View
               key={section.title}
@@ -152,19 +159,25 @@ export default function AccountsManagementScreen() {
                         <Pressable
                           onPress={() => setAssigningAccount(account)}
                           hitSlop={8}
+                          style={styles.actionTouchTarget}
+                          accessibilityRole="button"
                           accessibilityLabel={`Changer le groupe de ${account.name}`}
+                          accessibilityHint="Choisir un autre groupe"
                         >
                           <Tag size={20} color={theme.secondaryLabel} strokeWidth={2} />
                         </Pressable>
-                        <Pressable
+                          <Pressable
                           onPress={() =>
                             router.push({
                               pathname: "/accounts/[id]/edit",
                               params: { id: String(account.id) },
                             })
                           }
-                          hitSlop={8}
-                          accessibilityLabel={`Modifier ${account.name}`}
+                            hitSlop={8}
+                            style={styles.actionTouchTarget}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Modifier ${account.name}`}
+                            accessibilityHint="Modifier les informations du compte"
                         >
                           <Pencil size={20} color={theme.secondaryLabel} strokeWidth={2} />
                         </Pressable>
@@ -190,6 +203,8 @@ export default function AccountsManagementScreen() {
                       <Pressable
                         onPress={() => restore(account)}
                         hitSlop={8}
+                        style={styles.restoreTouchTarget}
+                        accessibilityRole="button"
                         accessibilityLabel={`Restaurer ${account.name}`}
                       >
                         <Text style={{ color: theme.accent, fontSize: 14, fontWeight: "600" }}>
@@ -267,6 +282,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.lg,
+  },
+  actionTouchTarget: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  restoreTouchTarget: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
   },
   backdrop: {
     flex: 1,

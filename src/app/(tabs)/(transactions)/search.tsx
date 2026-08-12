@@ -155,7 +155,13 @@ function ChoiceRow({
         </View>
       ) : null}
       <View style={styles.choiceText}>
-        <Text style={[styles.choiceLabel, { color: theme.label }]}>{label}</Text>
+        <Text
+          style={[styles.choiceLabel, { color: theme.label }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {label}
+        </Text>
         {detail ? (
           <Text style={[styles.choiceDetail, { color: theme.secondaryLabel }]}>
             {detail}
@@ -372,7 +378,15 @@ export default function TransactionSearchScreen() {
           label="Recherche"
           hint="Note, catégorie, compte ou montant"
         >
-          <View style={[styles.searchInputWrap, { backgroundColor: theme.surface }]}>
+          <View
+            style={[
+              styles.searchInputWrap,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.separator,
+              },
+            ]}
+          >
             <Search size={18} strokeWidth={2.2} color={theme.secondaryLabel} />
             <TextInput
               value={criteria.query}
@@ -426,6 +440,7 @@ export default function TransactionSearchScreen() {
             onPress={() => update({ startDate: null, endDate: null })}
             accessibilityRole="button"
             accessibilityLabel="Effacer la période"
+            accessibilityHint="Supprime les dates sélectionnées."
           >
             <Text style={[styles.clearLink, { color: theme.accent }]}>Effacer la période</Text>
           </Pressable>
@@ -599,6 +614,7 @@ export default function TransactionSearchScreen() {
             <IconButton
               label="Réinitialiser la recherche et les filtres"
               onPress={reset}
+              hint="Efface tous les critères de recherche."
               icon={<RotateCcw size={19} strokeWidth={2.2} color={theme.accent} />}
             />
           ),
@@ -708,7 +724,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.xs,
   },
-  searchInputWrap: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, paddingHorizontal: spacing.md, minHeight: 52 },
+  searchInputWrap: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, minHeight: 52 },
   searchInput: { flex: 1, fontSize: 16, paddingVertical: spacing.md },
   dateRow: { flexDirection: "row", gap: spacing.sm },
   dateButton: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: spacing.md, minHeight: 62 },

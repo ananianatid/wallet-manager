@@ -11,7 +11,7 @@ export default function TransactionsLayout() {
           backgroundColor: theme.background,
         },
         header: CompactStackHeader,
-        headerTitleStyle: { color: theme.label },
+        headerTitleStyle: { color: theme.label, fontSize: 17, fontWeight: "700" },
         headerShadowVisible: false,
         headerTintColor: theme.accent,
         contentStyle: { backgroundColor: theme.background },

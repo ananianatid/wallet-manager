@@ -272,7 +272,7 @@ export default function TransactionsScreen() {
       <SectionList<Transaction, TransactionSection>
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
+        contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl, flexGrow: 1 }}
         sections={sections}
         keyExtractor={(t) => String(t.id)}
         renderItem={({ item, index, section }) => {
@@ -310,7 +310,10 @@ export default function TransactionsScreen() {
               { backgroundColor: theme.surface },
             ]}
           >
-            <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "600" }}>
+            <Text
+              accessibilityRole="header"
+              style={{ color: theme.label, fontSize: 14, fontWeight: "700" }}
+            >
               {section.title}
             </Text>
             {"income" in section ? (
@@ -355,6 +358,7 @@ export default function TransactionsScreen() {
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel="Gérer les transactions récurrentes"
+                    accessibilityHint="Ouvre la gestion des transactions récurrentes."
                   >
                     <Text style={{ color: theme.accent, fontWeight: "700" }}>Gérer</Text>
                   </Pressable>
@@ -394,7 +398,7 @@ export default function TransactionsScreen() {
               bottom: insets.bottom + spacing.lg,
               boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
             },
-            pressed && { opacity: 0.8 },
+            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
           ]}
         >
           <Plus size={30} strokeWidth={2.5} color={theme.onAccent} />

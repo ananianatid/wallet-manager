@@ -119,10 +119,13 @@ export default function RecurringScreen() {
             onPress={() =>
               router.push({ pathname: "/recurring/form", params: { id: String(item.id) } })
             }
+            accessibilityRole="button"
+            accessibilityLabel={`${TYPE_LABELS[item.type]} de ${formatAmount(item.amount, item.sourceCurrencyCode)}`}
+            accessibilityHint="Ouvre cette règle pour la modifier."
             style={({ pressed }) => [
               styles.row,
               !item.isActive && { opacity: 0.45 },
-              pressed && { opacity: 0.6 },
+              pressed && { opacity: 0.6, transform: [{ scale: 0.99 }] },
             ]}
           >
             {item.categoryIcon ? (
@@ -146,11 +149,11 @@ export default function RecurringScreen() {
               />
             )}
             <View style={styles.body}>
-              <Text style={[styles.title, { color: theme.label }]} numberOfLines={1}>
+              <Text style={[styles.title, { color: theme.label }]} numberOfLines={2}>
                 {TYPE_LABELS[item.type]} · {formatAmount(item.amount, item.sourceCurrencyCode)}
                 {item.fee ? ` + frais ${formatAmount(item.fee, item.sourceCurrencyCode)}` : ""}
               </Text>
-              <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
+              <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={2}>
                 {item.accountName}
                 {item.destinationAccountName
                   ? ` → ${item.destinationAccountName}`
@@ -158,7 +161,7 @@ export default function RecurringScreen() {
                     ? ` · ${item.categoryName}`
                     : ""}
               </Text>
-              <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
+              <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={2}>
                 {item.interval > 1
                   ? `Tous les ${item.interval} ${
                       item.frequency === "daily"
@@ -175,6 +178,7 @@ export default function RecurringScreen() {
             </View>
             <IconButton
               label="Supprimer cette récurrence"
+              hint="Supprime cette règle après confirmation."
               onPress={() => confirmDelete(item)}
               icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
             />
@@ -190,9 +194,10 @@ export default function RecurringScreen() {
           />
         )}
         ListHeaderComponent={
-          items.length > 0 ? (
-            <View style={{ padding: spacing.lg }}>
-              {actionError ? <InlineError message={actionError} onRetry={() => setActionError(null)} /> : null}
+          <View style={{ padding: spacing.lg, gap: spacing.md }}>
+              {actionError ? <InlineError message={actionError} onRetry={() => void generateNow()} /> : null}
+              {items.length > 0 ? (
+                <>
               <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18, marginBottom: spacing.sm }}>
                 Les échéances dues sont aussi vérifiées automatiquement à l’ouverture de Transactions.
               </Text>
@@ -209,17 +214,27 @@ export default function RecurringScreen() {
                   {generating ? "Génération…" : "Générer les échéances dues"}
                 </Text>
               </Pressable>
+                </>
+              ) : null}
             </View>
-          ) : null
         }
         ListEmptyComponent={
-          <View style={{ padding: spacing.xl, alignItems: "center", gap: spacing.md }}>
+          <View style={styles.emptyState}>
             <Text style={{ color: theme.secondaryLabel, textAlign: "center" }}>
-              Aucune transaction récurrente.
+              Aucune transaction récurrente
             </Text>
             <Text style={{ color: theme.secondaryLabel, fontSize: 13, textAlign: "center" }}>
-              Utilisez le bouton + en haut pour créer votre première règle.
+              Programmez un revenu, une dépense ou un transfert pour ne plus le saisir à chaque échéance.
             </Text>
+            <Pressable
+              onPress={() => router.push("/recurring/form")}
+              accessibilityRole="button"
+              accessibilityLabel="Créer une transaction récurrente"
+              style={({ pressed }) => [styles.emptyAction, { backgroundColor: theme.accent }, pressed && { opacity: 0.72 }]}
+            >
+              <Plus size={18} color={theme.onAccent} strokeWidth={2.5} />
+              <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Créer une règle</Text>
+            </Pressable>
           </View>
         }
       />
@@ -260,8 +275,26 @@ const styles = StyleSheet.create({
   },
   generateButton: {
     alignSelf: "center",
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
+    borderRadius: radius.xl,
+  },
+  emptyState: {
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
+  },
+  emptyAction: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
     borderRadius: radius.xl,
   },
 });

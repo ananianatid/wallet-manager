@@ -83,6 +83,8 @@ export function IconButton({
   selected,
   hint,
 }: IconButtonProps) {
+  const theme = useTheme();
+
   return (
     <Pressable
       onPress={onPress}
@@ -91,7 +93,14 @@ export function IconButton({
       accessibilityLabel={label}
       accessibilityHint={hint}
       accessibilityState={{ disabled, selected }}
-      style={({ pressed }) => [styles.iconButton, (pressed || disabled) && styles.pressed]}
+      style={({ pressed }) => [
+        styles.iconButton,
+        selected && {
+          backgroundColor: withAlpha(theme.accent, "18"),
+          borderRadius: radius.md,
+        },
+        (pressed || disabled) && styles.pressed,
+      ]}
     >
       {icon}
     </Pressable>
@@ -142,9 +151,9 @@ export function ScreenState({ status, message, onRetry }: ScreenStateProps) {
   return (
     <View
       style={styles.screenState}
-      accessible
       accessibilityRole={isError ? "alert" : undefined}
       accessibilityLiveRegion="polite"
+      accessible={isError ? !onRetry : true}
     >
       {isError ? null : <ActivityIndicator color={theme.accent} />}
       <Text style={[styles.screenStateTitle, { color: theme.label }]}> 
@@ -172,9 +181,9 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
   return (
     <View
       style={[styles.inlineError, { backgroundColor: withAlpha(theme.expense, "16") }]}
-      accessible
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
+      accessible={!onRetry}
     >
       <Text style={[styles.inlineErrorText, { color: theme.expense }]}>{message}</Text>
       {onRetry ? (
@@ -182,6 +191,7 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
           onPress={onRetry}
           accessibilityRole="button"
           accessibilityLabel="Réessayer"
+          accessibilityHint="Relance le chargement."
           style={styles.inlineRetry}
         >
           <Text style={[styles.inlineRetryText, { color: theme.expense }]}>Réessayer</Text>
@@ -248,6 +258,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: "continuous",
   },
   secondaryButton: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -255,6 +266,7 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 16,
     fontWeight: "700",
+    lineHeight: 20,
   },
   iconButton: {
     minWidth: 48,
@@ -285,6 +297,6 @@ const styles = StyleSheet.create({
   },
   inlineErrorText: { flex: 1, lineHeight: 18 },
   inlineRetry: { minHeight: 48, justifyContent: "center" },
-  inlineRetryText: { fontWeight: "800" },
+  inlineRetryText: { fontWeight: "800", lineHeight: 18 },
   keyboardContent: { paddingBottom: spacing.xxl },
 });

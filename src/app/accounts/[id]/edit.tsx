@@ -153,8 +153,9 @@ export default function EditAccountScreen() {
               }}
               placeholder="Nom du compte"
               placeholderTextColor={theme.secondaryLabel}
-              maxLength={40}
-              style={{
+                maxLength={40}
+                returnKeyType="next"
+                style={{
                 color: theme.label,
                 backgroundColor: theme.surface,
                 borderColor: theme.separator,
@@ -209,8 +210,9 @@ export default function EditAccountScreen() {
                     fontWeight: "800",
                     fontVariant: ["tabular-nums"],
                     textAlign: "center",
-                    minWidth: 160,
-                  }}
+                  minWidth: 160,
+                  minHeight: 52,
+                }}
                 />
                   <Text style={{ color: theme.secondaryLabel }}>{account?.currencyCode ?? "XOF"}</Text>
               </View>
@@ -287,6 +289,8 @@ export default function EditAccountScreen() {
             <Switch
               value={hidden}
               onValueChange={setHidden}
+              accessibilityLabel="Masquer le compte"
+              accessibilityHint="Retire le compte des listes et des sélecteurs de transaction."
               trackColor={{ true: theme.accent }}
               thumbColor={theme.accentSurfaceText}
             />
@@ -309,6 +313,8 @@ export default function EditAccountScreen() {
             <Switch
               value={excludeFromTotal}
               onValueChange={setExcludeFromTotal}
+              accessibilityLabel="Exclure du total du patrimoine"
+              accessibilityHint="Retire ce compte du total du patrimoine."
               trackColor={{ true: theme.accent }}
               thumbColor={theme.accentSurfaceText}
             />

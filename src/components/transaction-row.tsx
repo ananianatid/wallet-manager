@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowLeftRight } from "lucide-react-native";
 import { CategoryIcon } from "@/components/category-icons";
-import { spacing, useTheme } from "@/theme";
+import { spacing, useTheme, withAlpha } from "@/theme";
 import type { Transaction } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 
@@ -34,11 +34,11 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   const content = (
     <>
       {isTransfer ? (
-        <View style={[styles.categoryIcon, { backgroundColor: `${color}22` }]}>
+        <View style={[styles.categoryIcon, { backgroundColor: withAlpha(color, "22") }]}>
           <ArrowLeftRight size={17} color={color} />
         </View>
       ) : (
-        <View style={[styles.categoryIcon, { backgroundColor: `${color}22` }]}>
+        <View style={[styles.categoryIcon, { backgroundColor: withAlpha(color, "22") }]}>
           <CategoryIcon name={transaction.categoryIcon} size={17} color={color} />
         </View>
       )}
@@ -60,6 +60,8 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
       </View>
       <Text
         selectable
+        numberOfLines={2}
+        ellipsizeMode="tail"
         style={[styles.amount, { color }]}
       >
         {isIncome ? "+" : isExpense ? "−" : ""}
@@ -110,6 +112,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
+    borderCurve: "continuous",
   },
   body: {
     flex: 1,

@@ -1,6 +1,6 @@
 import { Check } from "lucide-react-native";
 import { Stack } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   getThemePalette,
   radius,
@@ -86,8 +86,17 @@ export default function AppearanceScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Apparence" }} />
-      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-        <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Personnalisez l’apparence</Text>
+          <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Choisissez le mode d’affichage et la couleur utilisée pour les actions principales.</Text>
+        </View>
+        <View style={[styles.section, { backgroundColor: theme.surface }]}>
+          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.secondaryLabel }]}>MODE D’AFFICHAGE</Text>
           {OPTIONS.map((option, index) => (
             <View key={option.value}>
               {index > 0 ? (
@@ -178,12 +187,30 @@ export default function AppearanceScreen() {
             </View>
           ))}
         </View>
-      </View>
+      </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  content: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  intro: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   section: {
     borderRadius: radius.lg,
     overflow: "hidden",
@@ -193,6 +220,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     fontSize: 13,
     fontWeight: "700",
+    letterSpacing: 0.8,
   },
   row: {
     flexDirection: "row",

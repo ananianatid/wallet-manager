@@ -147,6 +147,17 @@ export default function NewTransactionScreen() {
     }, [load]),
   );
 
+  const retryLoad = useCallback(() => {
+    setLoadingOptions(true);
+    setLoadError(null);
+    void load()
+      .catch((error) => {
+        setLoadError(userMessage(error, "Impossible de charger les comptes."));
+        log.error("transaction.load", "Échec du rechargement du formulaire", error);
+      })
+      .finally(() => setLoadingOptions(false));
+  }, [load]);
+
   const accountOptions = useMemo(() => {
     const selectedIds = new Set<number>();
     if (accountId != null) selectedIds.add(accountId);
@@ -441,7 +452,13 @@ export default function NewTransactionScreen() {
           title: transactionId ? "Modifier la transaction" : "Nouvelle transaction",
           headerRight: transactionId
             ? () => (
-                <Pressable onPress={confirmDelete} hitSlop={8}>
+                <Pressable
+                  onPress={confirmDelete}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Supprimer la transaction"
+                  accessibilityHint="Demande une confirmation avant la suppression."
+                >
                   <Text style={{ color: theme.expense, fontWeight: "600" }}>
                     Supprimer
                   </Text>
@@ -454,9 +471,14 @@ export default function NewTransactionScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
       >
-        {loadError ? <InlineError message={loadError} onRetry={() => setLoadError(null)} /> : null}
-        {loadingOptions ? <ActivityIndicator color={theme.accent} accessibilityLabel="Chargement des comptes" /> : null}
-        <View style={styles.typeRow}>
+        {loadError ? <InlineError message={loadError} onRetry={retryLoad} /> : null}
+        {loadingOptions ? (
+          <View style={styles.loadingRow} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={theme.accent} accessibilityLabel="Chargement des comptes" />
+            <Text style={{ color: theme.secondaryLabel }}>Préparation du formulaire…</Text>
+          </View>
+        ) : null}
+        <View accessible accessibilityRole="radiogroup" style={styles.typeRow}>
           {TYPES.map((t) => {
             const active = type === t.value;
             return (
@@ -474,6 +496,7 @@ export default function NewTransactionScreen() {
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={t.label}
+                accessibilityHint="Change le type de transaction."
               >
                 <Text
                   style={{
@@ -498,6 +521,7 @@ export default function NewTransactionScreen() {
             borderColor: theme.separator,
             borderWidth: StyleSheet.hairlineWidth,
             borderRadius: radius.md,
+            borderCurve: "continuous",
             minHeight: 48,
             flexDirection: "row",
             alignItems: "center",
@@ -570,6 +594,7 @@ export default function NewTransactionScreen() {
                   borderColor: theme.separator,
                   borderWidth: StyleSheet.hairlineWidth,
                   borderRadius: radius.md,
+                  borderCurve: "continuous",
                   minHeight: 48,
                   flexDirection: "row",
                   alignItems: "center",
@@ -693,7 +718,11 @@ export default function NewTransactionScreen() {
                   accessibilityLabel={`Frais en ${sourceCurrency}, optionnels`}
                   style={[
                     styles.input,
-                    { backgroundColor: theme.surface, color: theme.label },
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.separator,
+                      color: theme.label,
+                    },
                   ]}
                 />
               </FormField>
@@ -714,7 +743,11 @@ export default function NewTransactionScreen() {
                   accessibilityLabel={`Total débité en ${sourceCurrency}`}
                   style={[
                     styles.input,
-                    { backgroundColor: theme.surface, color: theme.label },
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.separator,
+                      color: theme.label,
+                    },
                   ]}
                 />
                 <View
@@ -760,7 +793,7 @@ export default function NewTransactionScreen() {
             accessibilityLabel={`Date ${formatDate(date.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.surface, borderColor: theme.separator },
               pressed && { opacity: 0.7 },
             ]}
           >
@@ -775,7 +808,7 @@ export default function NewTransactionScreen() {
             accessibilityLabel={`Heure ${formatTime(date.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.surface, borderColor: theme.separator },
               pressed && { opacity: 0.7 },
             ]}
           >
@@ -821,7 +854,12 @@ export default function NewTransactionScreen() {
             accessibilityLabel="Note optionnelle"
             style={[
               styles.input,
-              { backgroundColor: theme.surface, color: theme.label, minHeight: 80 },
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.separator,
+                color: theme.label,
+                minHeight: 80,
+              },
             ]}
           />
         </FormField>
@@ -847,6 +885,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
   },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: 32,
+  },
   typeButton: {
     flex: 1,
     alignItems: "center",
@@ -860,6 +905,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
     borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   feeSection: {
     gap: spacing.sm,

@@ -1,6 +1,7 @@
 import { Stack, useFocusEffect } from "expo-router";
 import { useCallback, useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { EmptyState } from "@/components/empty-state";
 import { ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
@@ -20,6 +21,8 @@ function capitalise(value: string): string {
 
 export default function SavingsHistoryScreen() {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 390;
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
 
@@ -63,6 +66,7 @@ export default function SavingsHistoryScreen() {
     (sum, month) => sum + month.subtractableTotal,
     0,
   );
+  const hasRules = (resource.data?.rules.length ?? 0) > 0;
 
   return (
     <>
@@ -77,13 +81,21 @@ export default function SavingsHistoryScreen() {
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          accessibilityLabel="Historique de l’épargne"
         >
           <Text style={[styles.intro, { color: theme.secondaryLabel }]}>
             Voici l’épargne estimée à partir de vos revenus des 12 derniers mois.
             Les règles informatives sont visibles sans réduire le disponible estimé.
           </Text>
 
-          <View style={[styles.summary, { backgroundColor: theme.surface }]}>
+          <View
+            style={[
+              styles.summary,
+              isNarrow && styles.summaryNarrow,
+              { backgroundColor: theme.surface },
+            ]}
+          >
             <View style={styles.summaryItem}>
               <Text style={[styles.summaryLabel, { color: theme.secondaryLabel }]}>
                 Total estimé
@@ -92,7 +104,13 @@ export default function SavingsHistoryScreen() {
                 {formatAmount(total, baseCurrency)}
               </Text>
             </View>
-            <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
+            <View
+              style={[
+                styles.summaryDivider,
+                isNarrow && styles.summaryDividerNarrow,
+                { backgroundColor: theme.separator },
+              ]}
+            />
             <View style={styles.summaryItem}>
               <Text style={[styles.summaryLabel, { color: theme.secondaryLabel }]}>
                 Retiré du disponible
@@ -103,10 +121,16 @@ export default function SavingsHistoryScreen() {
             </View>
           </View>
 
-          {breakdown
-            .slice()
-            .reverse()
-            .map((month) => {
+          {!hasRules ? (
+            <EmptyState
+              title="Aucune règle d’épargne"
+              message="Ajoutez une règle depuis la page Épargne pour suivre vos estimations mensuelles."
+            />
+          ) : (
+            breakdown
+              .slice()
+              .reverse()
+              .map((month) => {
               const visibleContributions = month.contributions.filter(
                 (contribution) => contribution.amount > 0,
               );
@@ -115,7 +139,7 @@ export default function SavingsHistoryScreen() {
                   key={`${month.year}-${month.month}`}
                   style={[styles.monthCard, { backgroundColor: theme.surface }]}
                 >
-                  <View style={styles.monthHeader}>
+                  <View style={[styles.monthHeader, isNarrow && styles.monthHeaderNarrow]}>
                     <Text style={[styles.monthTitle, { color: theme.label }]}>
                       {capitalise(formatMonthLabel(month.year, month.month))}
                     </Text>
@@ -154,7 +178,8 @@ export default function SavingsHistoryScreen() {
                   )}
                 </View>
               );
-            })}
+              })
+          )}
         </ScrollView>
       )}
     </>
@@ -177,6 +202,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     gap: spacing.md,
   },
+  summaryNarrow: {
+    flexDirection: "column",
+  },
   summaryItem: {
     flex: 1,
     gap: spacing.xs,
@@ -192,6 +220,10 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: StyleSheet.hairlineWidth,
   },
+  summaryDividerNarrow: {
+    width: "100%",
+    height: StyleSheet.hairlineWidth,
+  },
   monthCard: {
     padding: spacing.lg,
     borderRadius: radius.lg,
@@ -202,6 +234,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.sm,
+  },
+  monthHeaderNarrow: {
+    alignItems: "flex-start",
+    flexDirection: "column",
   },
   monthTitle: {
     flex: 1,

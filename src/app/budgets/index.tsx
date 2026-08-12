@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { CategoryIcon } from "@/components/category-icons";
+import { EmptyState } from "@/components/empty-state";
 import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { deleteBudget, listBudgets, setBudget } from "@/db/budgets";
 import { listCategories } from "@/db/categories";
@@ -229,9 +230,12 @@ export default function BudgetsScreen() {
         }}
       >
         {budgets.length === 0 && editingKey === null ? (
-          <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.xl }}>
-            Aucun budget. Définissez un montant mensuel par catégorie de dépenses.
-          </Text>
+          <EmptyState
+            title="Aucun budget"
+            message="Définissez un montant mensuel par catégorie de dépenses."
+            actionLabel="Ajouter un budget"
+            onAction={startAdd}
+          />
         ) : null}
 
         <View
@@ -287,7 +291,12 @@ export default function BudgetsScreen() {
                       <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                         {formatAmount(spent, baseCurrency)} / {formatAmount(budget.amount, budget.currencyCode)} ce mois
                       </Text>
-                      <View style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}>
+                      <View
+                        accessible
+                        accessibilityRole="progressbar"
+                        accessibilityLabel={`${formatAmount(spent, baseCurrency)} dépensés sur ${formatAmount(budget.amount, budget.currencyCode)}`}
+                        style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}
+                      >
                         <View
                           style={[
                             styles.progressFill,

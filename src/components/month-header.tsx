@@ -2,10 +2,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MonthPicker } from "@/components/month-picker";
-import { spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import { formatMonthLabel } from "@/utils/format";
 
-const HEADER_HEIGHT = 35;
+const HEADER_HEIGHT = 44;
 
 interface Props {
   year: number;
@@ -29,7 +29,10 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
         <Pressable
           onPress={() => shift(-1)}
           hitSlop={8}
-          style={styles.arrow}
+          style={({ pressed }) => [
+            styles.arrow,
+            pressed && { backgroundColor: withAlpha(theme.accent, "12") },
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Mois précédent"
         >
@@ -38,9 +41,13 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
         <Pressable
           onPress={() => setPickerOpen(true)}
           hitSlop={8}
-          style={styles.monthButton}
+          style={({ pressed }) => [
+            styles.monthButton,
+            pressed && { backgroundColor: withAlpha(theme.accent, "12") },
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Choisir un mois"
+          accessibilityValue={{ text: formatMonthLabel(year, month) }}
         >
           <Text style={[styles.label, { color: theme.label }]}>
             {formatMonthLabel(year, month)}
@@ -49,7 +56,10 @@ export function MonthHeader({ year, month, years, onChange }: Props) {
         <Pressable
           onPress={() => shift(1)}
           hitSlop={8}
-          style={styles.arrow}
+          style={({ pressed }) => [
+            styles.arrow,
+            pressed && { backgroundColor: withAlpha(theme.accent, "12") },
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Mois suivant"
         >
@@ -81,12 +91,16 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: radius.md,
+    borderCurve: "continuous",
   },
   monthButton: {
     height: HEADER_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
   },
   label: {
     fontSize: 17,

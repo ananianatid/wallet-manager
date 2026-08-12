@@ -50,6 +50,8 @@ export default function CategoriesByTypeScreen() {
   const [editName, setEditName] = useState("");
   const [editIcon, setEditIcon] = useState<CategoryIconName>(DEFAULT_CATEGORY_ICON);
   const [pickerTarget, setPickerTarget] = useState<"new" | "edit" | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savingAction, setSavingAction] = useState<"add" | number | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -67,14 +69,18 @@ export default function CategoriesByTypeScreen() {
   );
 
   const add = async () => {
-    if (!newName.trim()) {
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+      setFormError("Saisissez un nom de catégorie.");
       return;
     }
+    setSavingAction("add");
+    setFormError(null);
     try {
       const db = await getDatabase();
       await createCategory(db, {
         type: categoryType,
-        name: newName,
+        name: trimmedName,
         icon: categoryType === "account" ? null : newIcon,
       });
       setNewName("");
@@ -84,20 +90,30 @@ export default function CategoriesByTypeScreen() {
     } catch (e) {
       log.error("categories.add", "Échec de la création de la catégorie", e);
       Alert.alert("Impossible d'ajouter", userMessage(e));
+    } finally {
+      setSavingAction(null);
     }
   };
 
   const startRename = (category: Category) => {
+    setFormError(null);
     setEditingId(category.id);
     setEditName(category.name);
     setEditIcon(category.icon ?? DEFAULT_CATEGORY_ICON);
   };
 
   const saveRename = async (id: number) => {
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      setFormError("Saisissez un nom de catégorie.");
+      return;
+    }
+    setSavingAction(id);
+    setFormError(null);
     try {
       const db = await getDatabase();
       await updateCategory(db, id, {
-        name: editName,
+        name: trimmedName,
         icon: categoryType === "account" ? null : editIcon,
       });
       setEditingId(null);
@@ -105,6 +121,8 @@ export default function CategoriesByTypeScreen() {
     } catch (e) {
       log.error("categories.rename", "Échec du renommage de la catégorie", e);
       Alert.alert("Impossible de renommer", userMessage(e));
+    } finally {
+      setSavingAction(null);
     }
   };
 
@@ -150,6 +168,10 @@ export default function CategoriesByTypeScreen() {
           gap: spacing.sm,
         }}
       >
+        <Text style={[styles.sectionTitle, { color: theme.label }]}>Catégories</Text>
+        <Text style={[styles.helperText, { color: theme.secondaryLabel }]}>
+          Gérez les catégories utilisées dans vos transactions.
+        </Text>
         <View
           style={{
             backgroundColor: theme.surface,
@@ -158,10 +180,15 @@ export default function CategoriesByTypeScreen() {
           }}
         >
           {adding ? (
-            <View style={[styles.row, { gap: spacing.sm }]}>
+            <View
+              style={[styles.row, { gap: spacing.sm }]}
+            >
               <TextInput
                 value={newName}
-                onChangeText={setNewName}
+                onChangeText={(value) => {
+                  setNewName(value);
+                  if (formError) setFormError(null);
+                }}
                 placeholder="Nouvelle catégorie"
                 placeholderTextColor={theme.secondaryLabel}
                 accessibilityLabel="Nom de la nouvelle catégorie"
@@ -177,6 +204,8 @@ export default function CategoriesByTypeScreen() {
               {categoryType !== "account" ? (
                 <Pressable
                   onPress={() => setPickerTarget("new")}
+                  disabled={savingAction !== null}
+                  accessibilityState={{ disabled: savingAction !== null }}
                   style={({ pressed }) => [
                     styles.iconButton,
                     { backgroundColor: theme.surfaceElevated, borderColor: theme.separator },
@@ -190,15 +219,31 @@ export default function CategoriesByTypeScreen() {
               ) : null}
               <Pressable
                 onPress={add}
+                disabled={savingAction !== null}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter la catégorie"
+                accessibilityState={{ disabled: savingAction !== null }}
                 style={({ pressed }) => [
                   styles.addButton,
                   { backgroundColor: theme.accent },
-                  pressed && { opacity: 0.7 },
+                  (pressed || savingAction !== null) && { opacity: 0.55 },
                 ]}
               >
-                <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Ajouter</Text>
+                <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
+                  {savingAction === "add" ? "Ajout…" : "Ajouter"}
+                </Text>
               </Pressable>
             </View>
+          ) : null}
+
+          {formError ? (
+            <Text
+              style={[styles.formError, { color: theme.expense }]}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+            >
+              {formError}
+            </Text>
           ) : null}
 
           {categories.map((category, index) => (
@@ -216,7 +261,10 @@ export default function CategoriesByTypeScreen() {
                 <View style={[styles.row, { gap: spacing.sm }]}>
                   <TextInput
                     value={editName}
-                    onChangeText={setEditName}
+                    onChangeText={(value) => {
+                      setEditName(value);
+                      if (formError) setFormError(null);
+                    }}
                     style={[
                       styles.input,
                       { backgroundColor: theme.surfaceElevated, color: theme.label },
@@ -230,6 +278,8 @@ export default function CategoriesByTypeScreen() {
                   {categoryType !== "account" ? (
                     <Pressable
                       onPress={() => setPickerTarget("edit")}
+                      disabled={savingAction !== null}
+                      accessibilityState={{ disabled: savingAction !== null }}
                       style={({ pressed }) => [
                         styles.iconButton,
                         { backgroundColor: theme.surfaceElevated, borderColor: theme.separator },
@@ -243,13 +293,19 @@ export default function CategoriesByTypeScreen() {
                   ) : null}
                   <Pressable
                     onPress={() => saveRename(category.id)}
+                    disabled={savingAction === category.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Enregistrer le nom de ${category.name}`}
+                    accessibilityState={{ disabled: savingAction === category.id }}
                     style={({ pressed }) => [
                       styles.addButton,
                       { backgroundColor: theme.accent },
-                      pressed && { opacity: 0.7 },
+                      (pressed || savingAction === category.id) && { opacity: 0.55 },
                     ]}
                   >
-                    <Text style={{ color: theme.onAccent, fontWeight: "700" }}>OK</Text>
+                    <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
+                      {savingAction === category.id ? "…" : "OK"}
+                    </Text>
                   </Pressable>
                 </View>
               ) : (
@@ -265,11 +321,13 @@ export default function CategoriesByTypeScreen() {
                   <IconButton
                     label={`Renommer ${category.name}`}
                     onPress={() => startRename(category)}
+                    disabled={savingAction !== null}
                     icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
                   />
                   <IconButton
                     label={`Supprimer ${category.name}`}
                     onPress={() => confirmDelete(category)}
+                    disabled={savingAction !== null}
                     icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
                   />
                 </View>
@@ -292,14 +350,20 @@ export default function CategoriesByTypeScreen() {
 
         <Pressable
           onPress={() => {
+            if (savingAction !== null) return;
             setAdding((v) => !v);
             setNewName("");
             setNewIcon(DEFAULT_CATEGORY_ICON);
+            setFormError(null);
           }}
+          accessibilityRole="button"
+          accessibilityLabel={adding ? "Annuler l’ajout d’une catégorie" : "Ajouter une catégorie"}
+          accessibilityState={{ disabled: savingAction !== null }}
+          disabled={savingAction !== null}
           style={({ pressed }) => [
             styles.addButton,
             { backgroundColor: theme.accent, alignSelf: "center", paddingHorizontal: spacing.xl },
-            pressed && { opacity: 0.7 },
+            (pressed || savingAction !== null) && { opacity: 0.55 },
           ]}
         >
           <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
@@ -336,6 +400,22 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
+    minWidth: 120,
+    fontWeight: "600",
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    marginTop: spacing.sm,
+  },
+  helperText: {
+    lineHeight: 20,
+    marginBottom: spacing.xs,
+  },
+  formError: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    lineHeight: 18,
     fontWeight: "600",
   },
   input: {

@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
+import { ChevronRight, Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -26,7 +26,7 @@ import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Account } from "@/types";
 import { formatAmount } from "@/utils/format";
 import { log } from "@/utils/logger";
@@ -308,6 +308,7 @@ export default function AccountsScreen() {
           <>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={`${item.name}. Disponible ${formatAmount(item.availableBalance, item.currencyCode)}`}
               onPress={() => {
                 if (longPressTriggered.current) {
                   longPressTriggered.current = false;
@@ -412,7 +413,7 @@ export default function AccountsScreen() {
               gap: spacing.xs,
             }}
           >
-            <Text style={{ color: summaryLabel, fontSize: 13 }}>Patrimoine</Text>
+            <Text style={{ color: summaryLabel, fontSize: 13, fontWeight: "700" }}>Patrimoine</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={{ color: summaryLabel, fontSize: 13 }}>
@@ -455,6 +456,22 @@ export default function AccountsScreen() {
                 </Text>
               </View>
             </View>
+            <View
+              style={[
+                styles.availableSummary,
+                { borderTopColor: withAlpha(summaryLabel, "55") },
+              ]}
+            >
+              <Text style={{ color: summaryLabel, fontSize: 13 }}>
+                Disponible après réservations
+              </Text>
+              <Text
+                selectable
+                style={{ color: theme.accentSurfaceText, fontWeight: "800", fontVariant: ["tabular-nums"] }}
+              >
+                {formatAmount(totals.available)}
+              </Text>
+            </View>
             {(accounts ?? []).some((a) => a.excludeFromTotal) ? (
               <Text style={{ color: summaryLabel, fontSize: 13 }}>
                 {(accounts ?? []).filter((a) => a.excludeFromTotal).length} compte
@@ -479,6 +496,9 @@ export default function AccountsScreen() {
             {(accounts ?? []).some((a) => a.hidden) ? (
               <Pressable
                 onPress={() => setShowHidden((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: showHidden }}
+                accessibilityHint="Affiche ou masque les comptes masqués."
                 style={({ pressed }) => [
                   styles.filterButton,
                   { backgroundColor: theme.surface, borderColor: theme.separator },
@@ -569,6 +589,8 @@ export default function AccountsScreen() {
           <EmptyState
             title="Aucun compte"
             message="Créez votre premier compte pour commencer à suivre vos transactions."
+            actionLabel="Créer un compte"
+            onAction={openForm}
           />
         ) : (
           <View style={{ padding: spacing.xl }}>
@@ -577,6 +599,40 @@ export default function AccountsScreen() {
             </Text>
           </View>
         )
+        }
+        ListFooterComponent={
+          <View style={styles.advancedSection}>
+            <Text style={[styles.advancedSectionTitle, { color: theme.secondaryLabel }]}>ORGANISATION</Text>
+            <View style={[styles.advancedList, { backgroundColor: theme.surface }]}>
+              <Pressable
+                onPress={() => router.push("/(tabs)/(settings)/account-groups")}
+                accessibilityRole="button"
+                accessibilityLabel="Groupes de comptes"
+                accessibilityHint="Ouvrir la gestion des groupes de comptes"
+                style={({ pressed }) => [styles.advancedRow, pressed && { opacity: 0.6 }]}
+              >
+                <View style={styles.body}>
+                  <Text style={[styles.advancedRowTitle, { color: theme.label }]}>Groupes de comptes</Text>
+                  <Text style={[styles.advancedRowSubtitle, { color: theme.secondaryLabel }]}>Organiser les comptes par groupe</Text>
+                </View>
+                <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+              </Pressable>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separator, marginLeft: spacing.lg }} />
+              <Pressable
+                onPress={() => router.push("/(tabs)/(settings)/accounts-management")}
+                accessibilityRole="button"
+                accessibilityLabel="Gestion avancée des comptes"
+                accessibilityHint="Ouvrir la gestion avancée des comptes"
+                style={({ pressed }) => [styles.advancedRow, pressed && { opacity: 0.6 }]}
+              >
+                <View style={styles.body}>
+                  <Text style={[styles.advancedRowTitle, { color: theme.label }]}>Gestion avancée</Text>
+                  <Text style={[styles.advancedRowSubtitle, { color: theme.secondaryLabel }]}>Gérer les comptes supprimés et les groupes</Text>
+                </View>
+                <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+              </Pressable>
+            </View>
+          </View>
         }
         />
       </KeyboardAwareView>
@@ -728,6 +784,44 @@ const styles = StyleSheet.create({
   },
   summaryItemRight: {
     alignItems: "flex-end",
+  },
+  availableSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  advancedSection: {
+    marginTop: spacing.xl,
+    marginHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  advancedSectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 1.1,
+  },
+  advancedList: {
+    borderRadius: radius.lg,
+    overflow: "hidden",
+  },
+  advancedRow: {
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  advancedRowTitle: {
+    fontWeight: "600",
+  },
+  advancedRowSubtitle: {
+    marginTop: spacing.xs,
+    fontSize: 13,
   },
   dot: {
     width: 10,

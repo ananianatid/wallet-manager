@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { SelectField } from "@/components/select-field";
-import { ActionButton, FormField, KeyboardAwareScreen } from "@/components/ui";
+import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { useCurrency } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
 import { changeReferenceCurrency } from "@/currency/service";
@@ -17,6 +17,8 @@ export default function CurrencySettingsScreen() {
   const { baseCurrency, currencies, stale, lastRefresh, refresh, loading } = useCurrency();
   const [selected, setSelected] = useState(baseCurrency);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const options = useMemo(
     () => currencies.map((currency, index) => ({ id: index + 1, label: currencyLabel(currency), code: currency.code })),
     [currencies],
@@ -24,6 +26,7 @@ export default function CurrencySettingsScreen() {
 
   const save = async () => {
     if (selected === baseCurrency) return;
+    setError(null);
     setSaving(true);
     try {
       const db = await getDatabase();
@@ -32,9 +35,22 @@ export default function CurrencySettingsScreen() {
       Alert.alert("Devise modifiée", `Les budgets et objectifs sont maintenant en ${selected}.`);
     } catch (error) {
       log.error("currency.change", "Échec du changement de devise de référence", error);
-      Alert.alert("Changement impossible", userMessage(error, "Taux indisponible."));
+      setError(userMessage(error, "Taux indisponible."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const refreshRates = async () => {
+    setError(null);
+    setRefreshing(true);
+    try {
+      await refresh(true);
+    } catch (error) {
+      log.error("currency.refresh", "Échec de l'actualisation des taux", error);
+      setError(userMessage(error, "Les taux n’ont pas pu être actualisés."));
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -45,6 +61,11 @@ export default function CurrencySettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
       >
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Devise de référence</Text>
+          <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Elle sert à afficher les totaux, budgets et objectifs dans une même unité.</Text>
+        </View>
+        {error ? <InlineError message={error} /> : null}
         <FormField label="Devise de référence">
           <SelectField
             label="Devise de référence"
@@ -71,12 +92,18 @@ export default function CurrencySettingsScreen() {
           disabled={saving || loading || selected === baseCurrency}
         />
         <ActionButton
-          label="Actualiser les taux"
+          label={refreshing || loading ? "Actualisation…" : "Actualiser les taux"}
           variant="secondary"
-          onPress={() => void refresh(true)}
-          disabled={loading || saving}
+          onPress={() => void refreshRates()}
+          disabled={loading || saving || refreshing}
         />
       </KeyboardAwareScreen>
     </>
   );
 }
+
+const styles = {
+  intro: { gap: spacing.xs, paddingHorizontal: spacing.xs },
+  title: { fontSize: 22, fontWeight: "800" as const, letterSpacing: -0.2 },
+  subtitle: { fontSize: 14, lineHeight: 20 },
+};

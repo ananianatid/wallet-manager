@@ -77,7 +77,7 @@ export default function PrivacyPolicyScreen() {
         </View>
 
         <View style={styles.introduction}>
-          <Text style={[styles.title, { color: theme.label }]}>Politique de confidentialité</Text>
+            <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Politique de confidentialité</Text>
           <Text style={[styles.updated, { color: theme.secondaryLabel }]}>Dernière mise à jour : 9 août 2026</Text>
           <Text style={[styles.body, { color: theme.secondaryLabel }]}>Cette page explique quelles données Wallet utilise, où elles sont conservées et dans quels cas elles quittent votre appareil.</Text>
         </View>
@@ -85,9 +85,9 @@ export default function PrivacyPolicyScreen() {
         <View style={styles.sections}>
           {sections.map((section) => (
             <View key={section.title} style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.label }]}>{section.title}</Text>
+              <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.label }]}>{section.title}</Text>
               {section.paragraphs.map((paragraph) => (
-                <Text key={paragraph} style={[styles.body, { color: theme.secondaryLabel }]}>{paragraph}</Text>
+                <Text key={paragraph} selectable style={[styles.body, { color: theme.secondaryLabel }]}>{paragraph}</Text>
               ))}
             </View>
           ))}

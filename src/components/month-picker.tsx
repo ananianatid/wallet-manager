@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MonthGridPicker } from "@/components/month-grid-picker";
 import { radius, spacing, useTheme } from "@/theme";
 
@@ -14,6 +15,7 @@ interface Props {
 
 export function MonthPicker({ visible, year, month, years, onSelect, onClose }: Props) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [session, setSession] = useState(0);
 
   return (
@@ -27,14 +29,23 @@ export function MonthPicker({ visible, year, month, years, onSelect, onClose }: 
       <Pressable
         style={[styles.backdrop, { backgroundColor: theme.scrim }]}
         onPress={onClose}
+        accessibilityRole="button"
         accessibilityLabel="Fermer"
+        accessibilityHint="Ferme le sélecteur de mois."
       >
         <Pressable
           onPress={(event) => event.stopPropagation()}
           accessibilityViewIsModal
-          style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: theme.surfaceElevated,
+              paddingBottom: spacing.xl + insets.bottom,
+            },
+          ]}
         >
-          <Text style={[styles.sheetTitle, { color: theme.label }]}>
+          <View style={[styles.handle, { backgroundColor: theme.separator }]} />
+          <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.label }]}>
             Choisir un mois
           </Text>
           <MonthGridPicker
@@ -69,5 +80,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 16,
     paddingBottom: spacing.md,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: spacing.md,
   },
 });

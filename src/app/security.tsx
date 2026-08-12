@@ -1,9 +1,9 @@
 import { Check, Lock, LockKeyhole, ShieldCheck } from "lucide-react-native";
 import { Stack, router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
-import { ActionButton } from "@/components/ui";
+import { ActionButton, InlineError } from "@/components/ui";
 import {
   LOCK_DELAY_OPTIONS_SECONDS,
   clearPinCredentials,
@@ -28,6 +28,7 @@ export default function SecurityScreen() {
   const lock = useLockState();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS === "web") {
@@ -55,6 +56,7 @@ export default function SecurityScreen() {
   }
 
   const onToggleLock = (enabled: boolean) => {
+    setError(null);
     if (enabled) {
       router.push("/pin-setup?mode=create");
       return;
@@ -72,7 +74,7 @@ export default function SecurityScreen() {
             setLockEnabled(false)
               .then(clearPinCredentials)
               .then(refreshLockConfig)
-              .catch(() => {})
+              .catch(() => setError("Le verrouillage n’a pas pu être modifié."))
               .finally(() => setBusy(false));
           },
         },
@@ -81,17 +83,27 @@ export default function SecurityScreen() {
   };
 
   const onDelayChange = (seconds: number) => {
+    setError(null);
     setBusy(true);
     setLockDelaySeconds(seconds)
       .then(refreshLockConfig)
-      .catch(() => {})
+      .catch(() => setError("Le délai de verrouillage n’a pas pu être enregistré."))
       .finally(() => setBusy(false));
   };
 
   return (
     <>
       <Stack.Screen options={{ title: "Sécurité" }} />
-      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Protégez Wallet</Text>
+          <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Contrôlez l’accès à vos données financières avec un code ou la biométrie.</Text>
+        </View>
+        {error ? <InlineError message={error} /> : null}
         <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
           <View style={[styles.row, styles.switchRow]}>
             <View style={styles.switchText}>
@@ -202,15 +214,24 @@ export default function SecurityScreen() {
           stockées sur l&apos;appareil. Pour les protéger en dehors du téléphone, utilisez
           l&apos;export chiffré dans Paramètres → Données.
         </Text>
-      </View>
+      </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  content: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  intro: { gap: spacing.xs, paddingHorizontal: spacing.xs },
+  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
+  subtitle: { fontSize: 14, lineHeight: 20 },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.8,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },

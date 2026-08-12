@@ -1,14 +1,10 @@
 import { Stack, router } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+  Alert, StyleSheet, Text, TextInput,
 } from "react-native";
 import { exportEncryptedBackup } from "@/backup/export";
-import { ActionButton, FormField, InlineError } from "@/components/ui";
+import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { radius, spacing, useTheme } from "@/theme";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
@@ -94,7 +90,11 @@ export default function BackupExportScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Exporter une sauvegarde" }} />
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <KeyboardAwareScreen
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Créer une sauvegarde chiffrée</Text>
         <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>
           Crée un fichier « .wlbak » chiffré (AES-256) contenant toutes vos données.
           Le mot de passe ne peut pas être récupéré : notez-le précieusement.
@@ -120,19 +120,20 @@ export default function BackupExportScreen() {
           />
         </FormField>
         <ActionButton
-          label="Exporter"
+          label={busy ? "Création…" : "Exporter"}
           onPress={() => void onExport()}
           disabled={busy}
         />
-      </View>
+      </KeyboardAwareScreen>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: spacing.lg,
     gap: spacing.lg,
+    flexGrow: 1,
   },
+  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
 });

@@ -107,7 +107,7 @@ export default function EditGoalScreen() {
         >
           {saveError ? <InlineError message={saveError} onRetry={() => setSaveError(null)} /> : null}
 
-          <FormField label="Nom de l'objectif">
+          <FormField label="Nom de l'objectif" hint="Un nom court vous aidera à le retrouver rapidement.">
             <TextInput
               value={name}
               onChangeText={setName}
@@ -115,12 +115,13 @@ export default function EditGoalScreen() {
               placeholderTextColor={theme.secondaryLabel}
               accessibilityLabel="Nom de l'objectif"
               maxLength={40}
+              returnKeyType="next"
               style={[styles.input, { backgroundColor: theme.surface, color: theme.label }]}
             />
           </FormField>
 
           <FormField label="Montant à réserver">
-            <View style={styles.amountCard}>
+            <View style={[styles.amountCard, { backgroundColor: theme.surfaceElevated }]}>
               <TextInput
                 value={targetAmount}
                 onChangeText={setTargetAmount}
@@ -128,6 +129,7 @@ export default function EditGoalScreen() {
                 placeholderTextColor={theme.secondaryLabel}
                 keyboardType="number-pad"
                 inputMode="numeric"
+                returnKeyType="done"
                 accessibilityLabel={`Montant cible en ${goalCurrency}`}
                 style={[styles.amountInput, { color: theme.label }]}
               />
@@ -145,6 +147,7 @@ export default function EditGoalScreen() {
               onPress={() => setShowDatePicker(true)}
               accessibilityRole="button"
               accessibilityLabel={`Date cible ${formatDate(targetDate.getTime())}`}
+              accessibilityHint="Ouvre le sélecteur de date."
               style={({ pressed }) => [
                 styles.dateButton,
                 { backgroundColor: theme.surface, borderColor: theme.separator },
@@ -190,6 +193,7 @@ export default function EditGoalScreen() {
 
 const styles = StyleSheet.create({
   input: {
+    minHeight: 48,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
     borderRadius: radius.md,
@@ -197,6 +201,7 @@ const styles = StyleSheet.create({
   amountCard: {
     alignItems: "center",
     gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
     borderRadius: radius.lg,
   },
@@ -208,6 +213,8 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   dateButton: {
+    minHeight: 48,
+    justifyContent: "center",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
     borderRadius: radius.md,

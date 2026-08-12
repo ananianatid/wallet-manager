@@ -116,6 +116,17 @@ export default function RecurringFormScreen() {
     }, [load]),
   );
 
+  const retryLoad = useCallback(() => {
+    setLoadingOptions(true);
+    setLoadError(null);
+    void load()
+      .catch((error) => {
+        setLoadError(userMessage(error, "Impossible de charger les comptes."));
+        log.error("recurring.load", "Échec du rechargement des options", error);
+      })
+      .finally(() => setLoadingOptions(false));
+  }, [load]);
+
   const accountOptions = useMemo(() => {
     const selectedIds = new Set<number>();
     if (accountId != null) selectedIds.add(accountId);
@@ -217,9 +228,14 @@ export default function RecurringFormScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
       >
-        {loadError ? <InlineError message={loadError} onRetry={() => setLoadError(null)} /> : null}
-        {loadingOptions ? <ActivityIndicator color={theme.accent} accessibilityLabel="Chargement des comptes" /> : null}
-        <View style={styles.typeRow}>
+        {loadError ? <InlineError message={loadError} onRetry={retryLoad} /> : null}
+        {loadingOptions ? (
+          <View style={styles.loadingRow} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={theme.accent} accessibilityLabel="Chargement des comptes" />
+            <Text style={{ color: theme.secondaryLabel }}>Préparation du formulaire…</Text>
+          </View>
+        ) : null}
+        <View accessible accessibilityRole="radiogroup" style={styles.typeRow}>
           {TYPES.map((t) => {
             const active = type === t.value;
             return (
@@ -229,6 +245,7 @@ export default function RecurringFormScreen() {
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={t.label}
+                accessibilityHint="Change le type de récurrence."
                 style={({ pressed }) => [
                   styles.typeButton,
                   {
@@ -251,14 +268,20 @@ export default function RecurringFormScreen() {
           })}
         </View>
 
-        <View
+        <View style={styles.amountSection}>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+            Montant de la récurrence
+          </Text>
+          <View
           style={{
             backgroundColor: theme.surface,
+            borderColor: theme.separator,
+            borderWidth: StyleSheet.hairlineWidth,
             borderRadius: radius.lg,
             alignItems: "center",
             paddingVertical: spacing.lg,
           }}
-        >
+          >
           <TextInput
             value={amount}
             onChangeText={setAmount}
@@ -277,6 +300,7 @@ export default function RecurringFormScreen() {
             }}
           />
           <Text style={{ color: theme.secondaryLabel }}>{sourceCurrency}</Text>
+          </View>
         </View>
 
         <SelectField
@@ -308,7 +332,11 @@ export default function RecurringFormScreen() {
               accessibilityLabel={`Frais en ${sourceCurrency}, optionnels`}
                 style={[
                   styles.input,
-                  { backgroundColor: theme.surface, color: theme.label },
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.separator,
+                    color: theme.label,
+                  },
                 ]}
               />
             </View>
@@ -346,7 +374,11 @@ export default function RecurringFormScreen() {
                 accessibilityLabel="Intervalle de répétition"
                 style={[
                   styles.input,
-                  { backgroundColor: theme.surface, color: theme.label },
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.separator,
+                    color: theme.label,
+                  },
                 ]}
               />
             </View>
@@ -360,7 +392,7 @@ export default function RecurringFormScreen() {
             accessibilityLabel={`Date de début ${formatDate(startDate.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.surface, borderColor: theme.separator },
               pressed && { opacity: 0.7 },
             ]}
           >
@@ -375,7 +407,7 @@ export default function RecurringFormScreen() {
             accessibilityLabel={`Prochaine échéance ${formatDate(nextDate.getTime())}`}
             style={({ pressed }) => [
               styles.dateButton,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.surface, borderColor: theme.separator },
               pressed && { opacity: 0.7 },
             ]}
           >
@@ -391,13 +423,23 @@ export default function RecurringFormScreen() {
             Fin (optionnel)
           </Text>
           {endDate ? (
-            <Pressable onPress={() => setEndDate(null)} hitSlop={8}>
+          <Pressable
+            onPress={() => setEndDate(null)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Retirer la date de fin"
+          >
               <Text style={{ color: theme.expense, fontWeight: "600", fontSize: 13 }}>
                 Retirer
               </Text>
             </Pressable>
           ) : null}
-          <Pressable onPress={() => setPicking("end")} hitSlop={8}>
+          <Pressable
+            onPress={() => setPicking("end")}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={endDate ? `Modifier la date de fin ${formatDate(endDate.getTime())}` : "Choisir une date de fin"}
+          >
             <Text style={{ color: theme.secondaryLabel, fontWeight: "600", fontSize: 13 }}>
               {endDate ? formatDate(endDate.getTime()) : "Choisir"}
             </Text>
@@ -440,7 +482,7 @@ export default function RecurringFormScreen() {
             onValueChange={setIsActive}
             accessibilityLabel="Récurrence active"
             accessibilityState={{ checked: isActive }}
-            trackColor={{ true: theme.accent }}
+            trackColor={{ true: theme.accent, false: theme.surfaceElevated }}
             thumbColor={theme.accentSurfaceText}
           />
         </View>
@@ -459,7 +501,12 @@ export default function RecurringFormScreen() {
             accessibilityLabel="Note optionnelle"
             style={[
               styles.input,
-              { backgroundColor: theme.surface, color: theme.label, minHeight: 80 },
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.separator,
+                color: theme.label,
+                minHeight: 80,
+              },
             ]}
           />
         </View>
@@ -479,6 +526,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
   },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: 32,
+  },
+  amountSection: {
+    gap: spacing.xs + 2,
+  },
   typeButton: {
     flex: 1,
     alignItems: "center",
@@ -494,6 +551,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
     borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   dateButton: {
     flex: 1,
@@ -501,6 +559,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   saveButton: {
     alignItems: "center",

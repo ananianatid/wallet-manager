@@ -1,9 +1,9 @@
 import { router } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { ArrowLeft } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LegacyTextRow } from "@/components/legacy-money-manager";
-import { useTheme } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 
 const entries = [
   { label: "Groupes de comptes", pathname: "/(tabs)/(settings)/account-groups" },
@@ -36,9 +36,15 @@ export default function AccountsSettingsScreen() {
         style={[styles.screen, { backgroundColor: theme.background }]}
         contentContainerStyle={[styles.content, { backgroundColor: theme.background }]}
       >
-        {entries.map((entry) => (
-          <LegacyTextRow key={entry.label} label={entry.label} onPress={() => router.push(entry.pathname)} />
-        ))}
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Organiser vos comptes</Text>
+          <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Gérez les groupes et les comptes utilisés par vos transactions.</Text>
+        </View>
+        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          {entries.map((entry) => (
+            <LegacyTextRow key={entry.label} label={entry.label} onPress={() => router.push(entry.pathname)} />
+          ))}
+        </View>
       </ScrollView>
     </>
   );
@@ -46,5 +52,9 @@ export default function AccountsSettingsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { flexGrow: 1 },
+  content: { flexGrow: 1, padding: spacing.lg, gap: spacing.lg },
+  intro: { gap: spacing.xs, paddingHorizontal: spacing.xs },
+  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
+  subtitle: { fontSize: 14, lineHeight: 20 },
+  card: { borderRadius: radius.lg, overflow: "hidden" },
 });

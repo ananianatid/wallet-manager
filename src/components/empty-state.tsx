@@ -41,6 +41,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
+    width: "100%",
+    maxWidth: 380,
   },
   dot: {
     width: 12,
@@ -54,6 +56,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 14,
+    lineHeight: 20,
     textAlign: "center",
   },
   button: {
@@ -62,9 +65,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
+    borderCurve: "continuous",
   },
   buttonLabel: {
     fontWeight: "700",
+    lineHeight: 20,
   },
 });

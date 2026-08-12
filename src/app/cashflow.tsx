@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronRight, PiggyBank } from "lucide-react-native";
+import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronRight, Landmark, PiggyBank } from "lucide-react-native";
 import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
@@ -15,7 +15,7 @@ import { userMessage } from "@/utils/user-message";
 
 export default function CashflowScreen() {
   const theme = useTheme();
-  const { baseCurrency } = useCurrency();
+  const { baseCurrency, lastRefresh, stale } = useCurrency();
   const load = useCallback(async () => {
     const db = await getDatabase();
     return calculateSafeToSpend(db);
@@ -56,9 +56,25 @@ export default function CashflowScreen() {
                 { backgroundColor: withAlpha(theme.accentSurface, "0C") },
               ]}
             >
-              <Text style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
+              <Text
+                accessibilityRole="header"
+                style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}
+              >
                 Le calcul
               </Text>
+              <Text
+                accessibilityRole="text"
+                style={{ color: theme.secondaryLabel, lineHeight: 18, paddingVertical: spacing.sm }}
+              >
+                Disponible estimé = disponible maintenant + revenus prévus − échéances prévues − épargne prévue.
+                Les sommes réservées sont déjà retirées du disponible maintenant.
+              </Text>
+              <View style={[styles.row, { borderBottomColor: theme.separator }]}>
+                <Text style={{ color: theme.label }}>Comptes pris en compte</Text>
+                <Text style={{ color: theme.label, fontWeight: "700" }}>
+                  {data.includedAccountCount} inclus{data.excludedAccountCount > 0 ? ` · ${data.excludedAccountCount} exclus` : ""}
+                </Text>
+              </View>
               <View style={[styles.row, { borderBottomColor: theme.separator }]}>
                 <View style={styles.rowLabel}>
                   <View style={[styles.rowIcon, { backgroundColor: theme.surfaceElevated }]}>
@@ -70,6 +86,22 @@ export default function CashflowScreen() {
                   {formatAmount(data.currentAvailable, baseCurrency)}
                 </Text>
               </View>
+              {data.overdraft < 0 ? (
+                <View style={[styles.row, { borderBottomColor: theme.separator }]}>
+                  <View style={styles.rowLabel}>
+                    <View style={[styles.rowIcon, { backgroundColor: theme.surfaceElevated }]}>
+                      <Landmark size={16} color={theme.expense} />
+                    </View>
+                    <Text style={{ color: theme.label }}>
+                      Découvert{data.overdraftAccountCount > 1 ? "s" : ""} · {data.overdraftAccountCount}{" "}
+                      compte{data.overdraftAccountCount > 1 ? "s" : ""}
+                    </Text>
+                  </View>
+                  <Text style={{ color: theme.expense, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
+                    −{formatAmount(Math.abs(data.overdraft), baseCurrency)}
+                  </Text>
+                </View>
+              ) : null}
               <View style={[styles.row, { borderBottomColor: theme.separator }]}>
                 <View style={styles.rowLabel}>
                   <View style={[styles.rowIcon, { backgroundColor: theme.surfaceElevated }]}>
@@ -115,6 +147,17 @@ export default function CashflowScreen() {
               </View>
             </View>
 
+            <View style={{ gap: spacing.xs, paddingHorizontal: spacing.lg }}>
+              <Text style={{ color: theme.label, fontWeight: "700" }}>
+                Devise de référence : {baseCurrency}
+              </Text>
+              <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>
+                {lastRefresh != null
+                  ? `Pour les comptes en devise étrangère, taux enregistrés le ${formatDate(lastRefresh)}${stale ? " · hors connexion, taux en cache" : ""}.`
+                  : "Aucun taux de change enregistré pour le moment ; les conversions concernées peuvent être indisponibles."}
+              </Text>
+            </View>
+
             {data.amount < 0 ? (
               <View style={[styles.warning, { backgroundColor: `${theme.expense}16` }]}>
                 <AlertTriangle size={18} color={theme.expense} />
@@ -126,6 +169,8 @@ export default function CashflowScreen() {
                   {data.suggestion ? (
                     <Pressable
                       onPress={() => router.push({ pathname: "/goals/[id]", params: { id: String(data.suggestion!.goalId) } })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Voir ${data.suggestion.goalName} et libérer jusqu'à ${formatAmount(data.suggestion.amount, baseCurrency)}`}
                       style={({ pressed }) => [styles.suggestion, { borderColor: theme.separator }, pressed && { opacity: 0.7 }]}
                     >
                       <Text style={{ color: theme.label, flex: 1 }}>
@@ -155,6 +200,8 @@ export default function CashflowScreen() {
 const styles = StyleSheet.create({
   panel: {
     marginHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.lg,
   },
@@ -196,6 +243,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.sm,
+    minHeight: 48,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
   },

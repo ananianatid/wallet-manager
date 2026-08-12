@@ -1,10 +1,10 @@
 import { Check } from "lucide-react-native";
 import { Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
-import { ScreenState } from "@/components/ui";
+import { InlineError, ScreenState } from "@/components/ui";
 import { radius, spacing, useTheme } from "@/theme";
 import {
   DEFAULT_WEEK_START_DAY,
@@ -27,7 +27,17 @@ export default function CalendarSettingsScreen() {
   const [weekStartDay, setWeekStartDay] = useState<WeekStartDay>(
     DEFAULT_WEEK_START_DAY,
   );
-  const [status, setStatus] = useState<"loading" | "ready">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setStatus("loading");
+    setError(null);
+    const db = await getDatabase();
+    const value = await getSetting(db, "week_start_day");
+    setWeekStartDay(parseWeekStartDay(value));
+    setStatus("ready");
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -36,13 +46,15 @@ export default function CalendarSettingsScreen() {
         .then((db) => getSetting(db, "week_start_day"))
         .then((value) => {
           if (!cancelled) {
+            setError(null);
             setWeekStartDay(parseWeekStartDay(value));
             setStatus("ready");
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setStatus("ready");
+            setError("Le réglage du calendrier n’a pas pu être chargé.");
+            setStatus("error");
           }
         });
       return () => {
@@ -53,24 +65,26 @@ export default function CalendarSettingsScreen() {
 
   const selectWeekStart = async (next: WeekStartDay) => {
     const previous = weekStartDay;
+    setError(null);
     setWeekStartDay(next);
     try {
       const db = await getDatabase();
       await setSetting(db, "week_start_day", String(next));
     } catch {
       setWeekStartDay(previous);
-      Alert.alert(
-        "Impossible d'enregistrer",
-        "Le premier jour de la semaine n'a pas pu être enregistré.",
-      );
+      setError("Le premier jour de la semaine n’a pas pu être enregistré.");
     }
   };
 
   return (
     <>
       <Stack.Screen options={{ title: "Calendrier" }} />
-      {status === "loading" ? (
-        <ScreenState status="loading" />
+      {status === "loading" || status === "error" ? (
+        <ScreenState
+          status={status}
+          message={error ?? undefined}
+          onRetry={() => void load().catch(() => setStatus("error"))}
+        />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
@@ -78,13 +92,14 @@ export default function CalendarSettingsScreen() {
           contentContainerStyle={styles.content}
         >
           <View style={styles.intro}>
-            <Text style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
+            <Text accessibilityRole="header" style={{ color: theme.label, fontSize: 22, fontWeight: "800" }}>
               Début de la semaine
             </Text>
             <Text style={{ color: theme.secondaryLabel, lineHeight: 19 }}>
               Ce choix sert à définir les périodes hebdomadaires dans Statistiques.
               La semaine commence à 00:00 le jour choisi.
             </Text>
+            {error ? <InlineError message={error} /> : null}
           </View>
 
           <View style={[styles.section, { backgroundColor: theme.surface }]}> 

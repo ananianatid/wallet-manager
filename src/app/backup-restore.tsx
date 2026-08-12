@@ -1,18 +1,14 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+  Alert, StyleSheet, Text, TextInput,
 } from "react-native";
 import {
   applyRestoredBackup,
   readRestoredBackup,
   type RestoredBackupInfo,
 } from "@/backup/restore";
-import { ActionButton, FormField, InlineError } from "@/components/ui";
+import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { radius, spacing, useTheme } from "@/theme";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
@@ -67,7 +63,11 @@ export default function BackupRestoreScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Restaurer une sauvegarde" }} />
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <KeyboardAwareScreen
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[styles.container, { backgroundColor: theme.background }]}
+      >
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Restaurer une sauvegarde</Text>
         <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>
           Restaure les comptes, catégories, budgets et transactions depuis un fichier
           « .wlbak ». La restauration remplace définitivement les données actuelles :
@@ -98,20 +98,21 @@ export default function BackupRestoreScreen() {
           />
         </FormField>
         <ActionButton
-          label="Restaurer"
+          label={busy ? "Restauration…" : "Restaurer"}
           variant="destructive"
           onPress={() => void onRestore()}
           disabled={busy || passphrase.length === 0}
         />
-      </View>
+      </KeyboardAwareScreen>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: spacing.lg,
     gap: spacing.lg,
+    flexGrow: 1,
   },
+  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
 });

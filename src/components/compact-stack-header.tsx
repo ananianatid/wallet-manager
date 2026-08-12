@@ -2,9 +2,9 @@ import { ArrowLeft } from "lucide-react-native";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackHeaderProps } from "expo-router";
-import { spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 
-const TOOLBAR_HEIGHT = 35;
+const TOOLBAR_HEIGHT = 48;
 
 export function CompactStackHeader({ back, options, navigation, route }: NativeStackHeaderProps) {
   const theme = useTheme();
@@ -51,13 +51,21 @@ export function CompactStackHeader({ back, options, navigation, route }: NativeS
       {options.headerBackground ? (
         <View style={StyleSheet.absoluteFill}>{options.headerBackground()}</View>
       ) : null}
-      <View style={styles.toolbar}>
+      <View
+        style={[
+          styles.toolbar,
+          {
+            backgroundColor: options.headerTransparent ? "transparent" : theme.surfaceElevated,
+          },
+        ]}
+      >
         <View style={styles.side}>
           {shouldShowBack ? (
             <Pressable
               onPress={() => navigation.goBack()}
               accessibilityRole="button"
               accessibilityLabel="Retour"
+              accessibilityHint="Revient à l’écran précédent."
               hitSlop={8}
               style={styles.backButton}
             >
@@ -75,6 +83,8 @@ export function CompactStackHeader({ back, options, navigation, route }: NativeS
           {typeof titleContent === "string" ? (
             <Text
               numberOfLines={1}
+              ellipsizeMode="tail"
+              accessibilityRole="header"
               style={[styles.title, { color: theme.label }, options.headerTitleStyle]}
             >
               {titleContent}
@@ -97,7 +107,11 @@ const styles = StyleSheet.create({
     height: TOOLBAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
     paddingHorizontal: spacing.xs,
+    borderRadius: radius.lg,
+    borderCurve: "continuous",
   },
   side: {
     minWidth: 48,

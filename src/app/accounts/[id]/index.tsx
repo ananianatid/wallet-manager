@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { EmptyState } from "@/components/empty-state";
 import { TransactionRow } from "@/components/transaction-row";
 import { ScreenState } from "@/components/ui";
 import { deleteAccount, getAccount } from "@/db/accounts";
@@ -41,6 +42,9 @@ export default function AccountDetailScreen() {
   const reload = resource.reload;
   const account = resource.data?.account ?? null;
   const transactions = resource.data?.transactions ?? [];
+
+  const openEdit = (transactionId: number) =>
+    router.push({ pathname: "/new-transaction", params: { id: String(transactionId) } });
 
   useFocusEffect(
     useCallback(() => {
@@ -90,7 +94,9 @@ export default function AccountDetailScreen() {
                   })
                 }
                 hitSlop={8}
+                accessibilityRole="button"
                 accessibilityLabel="Modifier le compte"
+                style={styles.headerAction}
               >
                 <Text style={{ color: theme.accent, fontWeight: "600" }}>
                   Modifier
@@ -115,7 +121,7 @@ export default function AccountDetailScreen() {
         data={transactions}
         keyExtractor={(t) => String(t.id)}
         renderItem={({ item }) => (
-          <TransactionRow transaction={item} />
+          <TransactionRow transaction={item} onPress={() => openEdit(item.id)} />
         )}
         ItemSeparatorComponent={() => (
           <View
@@ -128,7 +134,8 @@ export default function AccountDetailScreen() {
         )}
         ListHeaderComponent={
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
-            <View style={{ gap: spacing.xs }}>
+            <View style={[styles.accountHero, { backgroundColor: theme.surfaceElevated }]}>
+              <View style={{ gap: spacing.xs }}>
               <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
                 {account?.groupName ?? ""}
               </Text>
@@ -160,13 +167,22 @@ export default function AccountDetailScreen() {
                   </Text>
                 ) : null}
               </View>
+              </View>
             </View>
             {account.description ? (
-              <Text style={{ color: theme.secondaryLabel, fontSize: 14, lineHeight: 20 }}>
-                {account.description}
-              </Text>
+              <View style={[styles.descriptionBlock, { backgroundColor: theme.surface }]}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 14, lineHeight: 20 }}>
+                  {account.description}
+                </Text>
+              </View>
             ) : null}
-            <Pressable onPress={confirmDelete} hitSlop={8} style={{ alignSelf: "flex-start" }}>
+            <Pressable
+              onPress={confirmDelete}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Supprimer le compte"
+              style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.65 }]}
+            >
               <Text style={{ color: theme.expense, fontWeight: "600" }}>
                 Supprimer le compte
               </Text>
@@ -174,14 +190,41 @@ export default function AccountDetailScreen() {
           </View>
         }
         ListEmptyComponent={
-          <View style={{ padding: spacing.xl }}>
-            <Text style={{ color: theme.secondaryLabel, textAlign: "center" }}>
-              Aucune transaction sur ce compte.
-            </Text>
-          </View>
+          <EmptyState
+            title="Aucune transaction"
+            message="Ajoutez un revenu ou une dépense pour commencer à suivre ce compte."
+            actionLabel="Ajouter une transaction"
+            onAction={() => router.push("/new-transaction")}
+          />
         }
       />
       )}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  headerAction: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accountHero: {
+    gap: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: 16,
+    borderCurve: "continuous",
+  },
+  descriptionBlock: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    borderCurve: "continuous",
+  },
+  deleteButton: {
+    alignSelf: "flex-start",
+    minHeight: 48,
+    justifyContent: "center",
+  },
+});

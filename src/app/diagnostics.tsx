@@ -47,12 +47,17 @@ export default function DiagnosticsScreen() {
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
       >
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.cardTitle, { color: theme.label }]}>État des services</Text>
+          <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>État des services</Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Wallet v{report.appVersion} · {new Date(report.ranAt).toLocaleString("fr-FR")}
           </Text>
           {report.items.map((entry) => (
-            <View key={entry.id} style={styles.itemRow}>
+            <View
+              key={entry.id}
+              accessible
+              accessibilityLabel={`${entry.label}, ${STATUS_LABEL[entry.status]}. ${entry.detail}`}
+              style={styles.itemRow}
+            >
               <View style={[styles.statusDot, { backgroundColor: statusColor(entry.status) }]} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ color: theme.label, fontWeight: "600" }}>{entry.label}</Text>
@@ -63,11 +68,15 @@ export default function DiagnosticsScreen() {
               </Text>
             </View>
           ))}
-          <ActionButton label="Relancer la vérification" onPress={() => void resource.reload()} />
+          <ActionButton
+            label="Relancer la vérification"
+            onPress={() => void resource.reload()}
+            accessibilityLabel="Relancer la vérification des services"
+          />
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.cardTitle, { color: theme.label }]}>Journal récent</Text>
+          <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>Journal récent</Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Les {report.logs.length} dernières entrées (session {report.sessionId.slice(0, 8)}…)
           </Text>
@@ -100,6 +109,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.md,
+    borderCurve: "continuous",
   },
   cardTitle: { fontSize: 16, fontWeight: "700" },
   itemRow: {

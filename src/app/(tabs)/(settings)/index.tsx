@@ -43,11 +43,9 @@ const ENTRIES: {
     | "/about"
     | "/privacy-policy"
     | "/currency-settings"
-    | "/diagnostics"
-    | "/(tabs)/(settings)/accounts-settings";
+    | "/diagnostics";
   section: "Organisation" | "Planification" | "Sécurité" | "Préférences";
 }[] = [
-  { label: "Comptes", icon: Wallet, href: "/(tabs)/(settings)/accounts-settings", section: "Organisation" },
   { label: "Catégories de revenus", icon: ArrowUp, href: "/categories/income", section: "Organisation" },
   { label: "Catégories de dépenses", icon: ArrowDown, href: "/categories/expense", section: "Organisation" },
   { label: "Budgets", icon: Target, href: "/budgets", section: "Planification" },
@@ -171,7 +169,8 @@ export default function SettingsScreen() {
               onPress={() => router.push(entry.href)}
               accessibilityRole="button"
               accessibilityLabel={entry.label}
-              style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+              accessibilityHint={`Ouvrir ${entry.label.toLowerCase()}`}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
               <View style={{ width: 24 }}><entry.icon size={22} strokeWidth={2} color={theme.accent} /></View>
               <Text style={[styles.label, { color: theme.label }]}>{entry.label}</Text>
@@ -182,9 +181,16 @@ export default function SettingsScreen() {
       </View>
 
       <View style={{ gap: spacing.sm }}>
-        <Text style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "600" }}>DONNÉES</Text>
+        <Text
+          accessibilityRole="header"
+          style={{ color: theme.secondaryLabel, fontSize: 13, fontWeight: "700", letterSpacing: 0.8 }}
+        >
+          DONNÉES
+        </Text>
         <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
-          <Text style={{ color: theme.label, fontWeight: "600" }}>Sauvegarde chiffrée</Text>
+          <Text accessibilityRole="header" style={{ color: theme.label, fontWeight: "700", fontSize: 16 }}>
+            Sauvegarde chiffrée
+          </Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Exporte toutes vos données dans un fichier protégé par mot de passe, puis restaurez-les à tout moment sur cet appareil.
           </Text>
@@ -208,7 +214,9 @@ export default function SettingsScreen() {
 
         <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
           {importError ? <InlineError message={importError} onRetry={() => setImportStatus("idle")} /> : null}
-          <Text style={{ color: theme.label, fontWeight: "600" }}>Importer Money Manager</Text>
+          <Text accessibilityRole="header" style={{ color: theme.label, fontWeight: "700", fontSize: 16 }}>
+            Importer Money Manager
+          </Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Restaure les comptes, catégories et transactions depuis un fichier .mmbak (export complet de l’app Money Manager).
           </Text>
@@ -217,7 +225,14 @@ export default function SettingsScreen() {
             disabled={importing}
             label={importStatus === "reading" ? "Lecture…" : importStatus === "confirming" ? "Confirmation…" : importStatus === "applying" ? "Import en cours…" : "Choisir un fichier .mmbak"}
           />
-          {importReport ? <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>Dernier import : {importReport.transactionsInserted} transactions ajoutées, {importReport.transactionsSkipped} doublons ignorés.</Text> : null}
+          {importReport ? (
+            <Text
+              accessibilityRole="summary"
+              style={[styles.successText, { color: theme.income }]}
+            >
+              Dernier import : {importReport.transactionsInserted} transactions ajoutées, {importReport.transactionsSkipped} doublons ignorés.
+            </Text>
+          ) : null}
         </View>
       </View>
     </ScrollView>
@@ -226,6 +241,8 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: "600", paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg },
+  row: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg },
   label: { flex: 1, fontWeight: "600" },
+  pressed: { opacity: 0.6 },
+  successText: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
 });

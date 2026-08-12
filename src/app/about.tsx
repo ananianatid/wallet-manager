@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { router, Stack } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { spacing, useTheme } from "@/theme";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { radius, spacing, useTheme } from "@/theme";
 
 export default function AboutScreen() {
   const theme = useTheme();
@@ -11,14 +11,10 @@ export default function AboutScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "À propos" }} />
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          gap: spacing.sm,
-          padding: spacing.xl,
-        }}
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={styles.content}
       >
         <Image
           source={require("../../assets/images/wallet-logo-square.png")}
@@ -26,17 +22,11 @@ export default function AboutScreen() {
           resizeMode="contain"
           style={styles.logo}
         />
-        <Text style={{ color: theme.label, fontSize: 22, fontWeight: "800" }}>
+        <Text accessibilityRole="header" style={{ color: theme.label, fontSize: 26, fontWeight: "800" }}>
           {name}
         </Text>
         <Text style={{ color: theme.secondaryLabel }}>Version {version}</Text>
-        <View
-          style={{
-            marginTop: spacing.lg,
-            alignItems: "center",
-            gap: 2,
-          }}
-        >
+        <View style={[styles.infoCard, { backgroundColor: theme.surface }]}>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Suivez vos dépenses simplement, en FCFA.
           </Text>
@@ -56,12 +46,20 @@ export default function AboutScreen() {
         >
           <Text style={{ color: theme.accent, fontWeight: "700" }}>Diagnostics</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+  },
   logo: {
     width: 96,
     height: 96,
@@ -76,5 +74,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  infoCard: {
+    width: "100%",
+    marginTop: spacing.lg,
+    alignItems: "center",
+    gap: 2,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
   },
 });

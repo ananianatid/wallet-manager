@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { CategoryIcon } from "@/components/category-icons";
+import { EmptyState } from "@/components/empty-state";
 import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
@@ -41,6 +42,7 @@ interface EditRowProps {
   onStartDateChange: (value: number | null) => void;
   onCancel: () => void;
   onSave: () => void;
+  saving: boolean;
   theme: ThemeColors;
 }
 
@@ -56,6 +58,7 @@ function EditRow({
   onSubtractFromAvailableChange,
   onCancel,
   onSave,
+  saving,
   theme,
 }: EditRowProps) {
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -155,23 +158,31 @@ function EditRow({
       <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
         <Pressable
           onPress={onCancel}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving }}
           style={({ pressed }) => [
             styles.button,
             { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.separator },
-            pressed && { opacity: 0.7 },
+            (pressed || saving) && { opacity: 0.55 },
           ]}
         >
           <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>Annuler</Text>
         </Pressable>
         <Pressable
           onPress={onSave}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving }}
           style={({ pressed }) => [
             styles.button,
             { flex: 1, backgroundColor: theme.accent },
-            pressed && { opacity: 0.7 },
+            (pressed || saving) && { opacity: 0.55 },
           ]}
         >
-          <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Enregistrer</Text>
+          <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -185,6 +196,8 @@ export default function SavingsScreen() {
   const [percent, setPercent] = useState("");
   const [startDate, setStartDate] = useState<number | null>(null);
   const [subtractFromAvailable, setSubtractFromAvailable] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busyRuleId, setBusyRuleId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -238,8 +251,9 @@ export default function SavingsScreen() {
       Alert.alert("Pourcentage invalide", "Saisissez un entier entre 1 et 100.");
       return;
     }
-    const db = await getDatabase();
+    setSaving(true);
     try {
+      const db = await getDatabase();
       await setSavingsRule(db, {
         categoryId,
         percent: parsed,
@@ -251,6 +265,8 @@ export default function SavingsScreen() {
     } catch (e) {
       Alert.alert("Impossible d'enregistrer", userMessage(e));
       log.error("savings.save", "Échec de l'enregistrement de la règle d'épargne", e);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -270,6 +286,7 @@ export default function SavingsScreen() {
   };
 
   const toggleRuleSubtract = async (rule: SavingsRule, next: boolean) => {
+    setBusyRuleId(rule.id);
     try {
       const db = await getDatabase();
       await setSavingsRule(db, {
@@ -282,6 +299,8 @@ export default function SavingsScreen() {
     } catch (e) {
       log.error("savings.toggle", "Échec de la mise à jour de la règle d'épargne", e);
       Alert.alert("Impossible d'enregistrer", "Le réglage de cette règle n'a pas pu être mis à jour.");
+    } finally {
+      setBusyRuleId(null);
     }
   };
 
@@ -303,7 +322,7 @@ export default function SavingsScreen() {
           gap: spacing.md,
         }}
       >
-        <Text style={{ color: theme.secondaryLabel, lineHeight: 20 }}>
+          <Text style={[styles.intro, { color: theme.secondaryLabel }]}>
           Projetez combien vous économisez : un pourcentage de vos revenus par
           catégorie. La cible est calculée en temps réel depuis la date de
           départ de chaque règle.
@@ -333,10 +352,15 @@ export default function SavingsScreen() {
           <ChevronRight size={20} color={theme.secondaryLabel} />
         </Pressable>
 
+        <Text style={[styles.sectionTitle, { color: theme.label }]}>Règles d’épargne</Text>
+
         {rules.length === 0 && editingKey === null ? (
-          <Text style={{ color: theme.secondaryLabel, textAlign: "center", paddingVertical: spacing.xl }}>
-            Aucune règle. Définissez un pourcentage par catégorie de revenus.
-          </Text>
+          <EmptyState
+            title="Aucune règle d’épargne"
+            message="Aucune règle. Définissez un pourcentage par catégorie de revenus."
+            actionLabel="Ajouter une règle"
+            onAction={startAdd}
+          />
         ) : null}
 
         <View
@@ -372,6 +396,7 @@ export default function SavingsScreen() {
                     onSubtractFromAvailableChange={setSubtractFromAvailable}
                     onCancel={cancelEdit}
                     onSave={save}
+                    saving={saving}
                     theme={theme}
                   />
                 ) : (
@@ -400,26 +425,32 @@ export default function SavingsScreen() {
                         {rule.subtractFromAvailable ? "Retirée du disponible" : "Informatif uniquement"}
                       </Text>
                     </View>
-                    <Text selectable style={[styles.amount, { color: theme.label }]}>
-                      {rule.percent} %
-                    </Text>
-                    <Switch
-                      value={rule.subtractFromAvailable}
-                      onValueChange={(next) => void toggleRuleSubtract(rule, next)}
-                      trackColor={{ true: theme.accent }}
-                      thumbColor={theme.accentSurfaceText}
-                      accessibilityLabel={`Retirer la règle ${rule.categoryName ?? "globale"} du disponible estimé`}
-                    />
-                    <IconButton
-                      label={`Modifier la règle ${rule.categoryName ?? "globale"}`}
-                      onPress={() => startEdit(rule)}
-                      icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
-                    />
-                    <IconButton
-                      label={`Supprimer la règle ${rule.categoryName ?? "globale"}`}
-                      onPress={() => confirmDelete(rule)}
-                      icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
-                    />
+                    <View style={styles.ruleActions}>
+                      <Text selectable style={[styles.amount, { color: theme.label }]}>
+                        {rule.percent} %
+                      </Text>
+                      <Switch
+                        value={rule.subtractFromAvailable}
+                        disabled={busyRuleId === rule.id || saving}
+                        onValueChange={(next) => void toggleRuleSubtract(rule, next)}
+                        trackColor={{ true: theme.accent }}
+                        thumbColor={theme.accentSurfaceText}
+                        accessibilityLabel={`Retirer la règle ${rule.categoryName ?? "globale"} du disponible estimé`}
+                        accessibilityState={{ disabled: busyRuleId === rule.id || saving }}
+                      />
+                      <IconButton
+                        label={`Modifier la règle ${rule.categoryName ?? "globale"}`}
+                        onPress={() => startEdit(rule)}
+                        disabled={saving || busyRuleId !== null}
+                        icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
+                      />
+                      <IconButton
+                        label={`Supprimer la règle ${rule.categoryName ?? "globale"}`}
+                        onPress={() => confirmDelete(rule)}
+                        disabled={saving || busyRuleId !== null}
+                        icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
+                      />
+                    </View>
                   </View>
                 )}
               </View>
@@ -447,19 +478,24 @@ export default function SavingsScreen() {
                 onSubtractFromAvailableChange={setSubtractFromAvailable}
                 onCancel={cancelEdit}
                 onSave={save}
+                saving={saving}
                 theme={theme}
               />
             </View>
           ) : null}
         </View>
 
-        {editingKey === null ? (
+        {editingKey === null && rules.length > 0 ? (
           <Pressable
             onPress={startAdd}
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter une règle d’épargne"
+            accessibilityState={{ disabled: saving }}
+            disabled={saving}
             style={({ pressed }) => [
               styles.addButton,
               { backgroundColor: theme.accent, alignSelf: "center", paddingHorizontal: spacing.xl },
-              pressed && { opacity: 0.7 },
+              (pressed || saving) && { opacity: 0.55 },
             ]}
           >
             <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
@@ -476,6 +512,7 @@ export default function SavingsScreen() {
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -487,6 +524,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
+    minHeight: 64,
+  },
+  intro: {
+    lineHeight: 20,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    marginTop: spacing.sm,
   },
   ruleToggle: {
     flexDirection: "row",
@@ -508,7 +554,15 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+    minWidth: 150,
     gap: 2,
+  },
+  ruleActions: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: spacing.xs,
   },
   categoryIcon: {
     width: 34,
@@ -525,6 +579,7 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   input: {
+    minHeight: 48,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,

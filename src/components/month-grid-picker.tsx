@@ -47,7 +47,9 @@ export function MonthGridPicker({
           styles.yearBar,
           pressed && { opacity: 0.7 },
         ]}
+        accessibilityRole="button"
         accessibilityLabel="Choisir l'année"
+        accessibilityHint="Affiche la liste des années."
       >
         <Text style={[styles.yearBarLabel, { color: theme.label }]}>
           {browsedYear}
@@ -69,13 +71,16 @@ export function MonthGridPicker({
                 },
                 pressed && { opacity: 0.7 },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} ${browsedYear}`}
+              accessibilityState={{ selected }}
             >
               <Text
-                style={{
-                  color: selected ? theme.onAccent : theme.label,
-                  fontWeight: selected ? "700" : "500",
-                  fontSize: 14,
-                }}
+                style={[
+                  styles.monthLabel,
+                  { color: selected ? theme.onAccent : theme.label },
+                  selected && styles.selectedMonthLabel,
+                ]}
               >
                 {label}
               </Text>
@@ -92,6 +97,8 @@ export function MonthGridPicker({
           styles.backBar,
           pressed && { opacity: 0.7 },
         ]}
+        accessibilityRole="button"
+        accessibilityHint="Revient au choix des mois."
         accessibilityLabel="Revenir au choix du mois"
       >
         <ChevronLeft size={20} strokeWidth={2.2} color={theme.accent} />
@@ -103,7 +110,7 @@ export function MonthGridPicker({
         data={years}
         keyExtractor={(y) => String(y)}
         style={{ maxHeight: yearsMaxHeight }}
-        initialScrollIndex={Math.max(years.indexOf(browsedYear), 0)}
+        initialScrollIndex={years.length ? Math.max(years.indexOf(browsedYear), 0) : undefined}
         getItemLayout={(_, index) => ({
           length: YEAR_ROW_HEIGHT,
           offset: YEAR_ROW_HEIGHT * index,
@@ -121,8 +128,11 @@ export function MonthGridPicker({
                 styles.yearRow,
                 { backgroundColor: pressed ? theme.surface : "transparent" },
               ]}
+              accessibilityRole="radio"
+              accessibilityLabel={String(sectionYear)}
+              accessibilityState={{ selected }}
             >
-              <Text style={{ color: theme.label, flex: 1, fontSize: 15 }}>
+              <Text style={[styles.yearLabel, { color: theme.label }]}>
                 {sectionYear}
               </Text>
               {selected ? (
@@ -145,6 +155,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     marginBottom: spacing.md,
     alignSelf: "center",
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
   },
   yearBarLabel: {
     fontSize: 18,
@@ -161,8 +175,17 @@ const styles = StyleSheet.create({
     flexBasis: "30%",
     alignItems: "center",
     paddingVertical: spacing.md,
+    minHeight: 48,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
+    borderCurve: "continuous",
+  },
+  monthLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  selectedMonthLabel: {
+    fontWeight: "700",
   },
   backBar: {
     flexDirection: "row",
@@ -170,6 +193,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingVertical: spacing.sm,
     marginBottom: spacing.xs,
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderCurve: "continuous",
   },
   backLabel: {
     fontSize: 15,
@@ -183,5 +209,10 @@ const styles = StyleSheet.create({
     height: YEAR_ROW_HEIGHT,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
+    borderCurve: "continuous",
+  },
+  yearLabel: {
+    flex: 1,
+    fontSize: 15,
   },
 });

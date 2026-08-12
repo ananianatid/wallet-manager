@@ -9,9 +9,10 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CategoryIcon } from "@/components/category-icons";
 import type { CategoryIconName } from "@/constants/category-icons";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
 
 export interface SelectOption {
   id: number;
@@ -29,6 +30,7 @@ interface Props {
 
 export function SelectField({ label, value, options, onChange, hideLabel = false }: Props) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const selectedId = options.find((o) => o.label === value)?.id;
   const selectedOption = options.find((o) => o.id === selectedId);
@@ -82,14 +84,25 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
         <Pressable
           style={[styles.backdrop, { backgroundColor: theme.scrim }]}
           onPress={() => setOpen(false)}
+          accessibilityRole="button"
           accessibilityLabel="Fermer"
+          accessibilityHint="Ferme la liste sans modifier la sélection."
         >
           <Pressable
             onPress={(event) => event.stopPropagation()}
             accessibilityViewIsModal
-            style={[styles.sheet, { backgroundColor: theme.surfaceElevated }]}
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: theme.surfaceElevated,
+                paddingBottom: spacing.xl + insets.bottom,
+              },
+            ]}
           >
-            <Text style={[styles.sheetTitle, { color: theme.label }]}>{label}</Text>
+            <View style={[styles.handle, { backgroundColor: theme.separator }]} />
+            <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.label }]}>
+              {label}
+            </Text>
             <FlatList
               data={options}
               keyExtractor={(o) => String(o.id)}
@@ -119,13 +132,20 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
                   >
                     {item.icon ? (
                       <View
-                        style={[styles.optionIcon, { backgroundColor: theme.surfaceElevated }]}
+                        style={[
+                          styles.optionIcon,
+                          {
+                            backgroundColor: selected
+                              ? withAlpha(theme.onAccent, "1F")
+                              : theme.surfaceElevated,
+                          },
+                        ]}
                       >
                         <CategoryIcon
                           name={item.icon}
                           size={20}
                           strokeWidth={2.1}
-                          color={selected ? theme.accent : theme.label}
+                          color={selected ? theme.onAccent : theme.label}
                         />
                       </View>
                     ) : null}
@@ -170,6 +190,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
+    borderCurve: "continuous",
   },
   backdrop: {
     flex: 1,
@@ -181,6 +202,13 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl,
     paddingHorizontal: spacing.sm,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: spacing.md,
   },
   sheetTitle: {
     fontWeight: "700",
@@ -202,6 +230,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
+    borderCurve: "continuous",
   },
   optionIcon: {
     width: 34,

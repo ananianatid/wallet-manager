@@ -23,7 +23,7 @@ import {
   View,
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
-import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
+import { IconButton, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import {
   assignAccountGroup,
   createAccountGroup,
@@ -125,6 +125,7 @@ export default function AccountGroupsScreen() {
   const [reorderMode, setReorderMode] = useState(false);
   const [order, setOrder] = useState<number[]>([]);
   const [membershipGroup, setMembershipGroup] = useState<AccountGroup | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -164,8 +165,10 @@ export default function AccountGroupsScreen() {
 
   const add = async () => {
     if (!newName.trim()) {
+      setFormError("Saisissez un nom pour le groupe.");
       return;
     }
+    setFormError(null);
     try {
       const db = await getDatabase();
       await createAccountGroup(db, newName);
@@ -181,9 +184,15 @@ export default function AccountGroupsScreen() {
   const startRename = (group: AccountGroup) => {
     setEditingId(group.id);
     setEditName(group.name);
+    setFormError(null);
   };
 
   const saveRename = async (id: number) => {
+    if (!editName.trim()) {
+      setFormError("Saisissez un nom pour le groupe.");
+      return;
+    }
+    setFormError(null);
     try {
       const db = await getDatabase();
       await renameAccountGroup(db, id, editName);
@@ -368,16 +377,19 @@ export default function AccountGroupsScreen() {
                 />
                 <Pressable
                   onPress={add}
+                  disabled={!newName.trim()}
+                  accessibilityState={{ disabled: !newName.trim() }}
                   style={({ pressed }) => [
                     styles.addButton,
                     { backgroundColor: theme.accent },
-                    pressed && { opacity: 0.7 },
+                    (pressed || !newName.trim()) && styles.pressed,
                   ]}
                 >
                   <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Ajouter</Text>
                 </Pressable>
               </View>
             ) : null}
+            {adding && formError ? <InlineError message={formError} /> : null}
 
             {orderedGroups.map((group, index) => (
               <View key={group.id}>
@@ -408,10 +420,12 @@ export default function AccountGroupsScreen() {
                     />
                     <Pressable
                       onPress={() => saveRename(group.id)}
+                      disabled={!editName.trim()}
+                      accessibilityState={{ disabled: !editName.trim() }}
                       style={({ pressed }) => [
                         styles.addButton,
                         { backgroundColor: theme.accent },
-                        pressed && { opacity: 0.7 },
+                        (pressed || !editName.trim()) && styles.pressed,
                       ]}
                     >
                       <Text style={{ color: theme.onAccent, fontWeight: "700" }}>OK</Text>
@@ -609,6 +623,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,
   },
+  pressed: { opacity: 0.55 },
   backdrop: {
     flex: 1,
     justifyContent: "flex-end",

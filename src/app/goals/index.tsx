@@ -34,6 +34,9 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${goal.name}. ${status}. ${formatAmount(goal.reservedAmount, goal.currencyCode)} sur ${formatAmount(goal.targetAmount, goal.currencyCode)}`}
+      accessibilityHint="Ouvre le détail de l’objectif."
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: cardSurface },
@@ -59,7 +62,12 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
         <Text style={{ color: statusColor, fontWeight: "800" }}>{status}</Text>
       </View>
 
-      <View style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}>
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={`${goal.progressPercent}% de l’objectif atteint`}
+        style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}
+      >
         <View
           style={[styles.progressFill, { backgroundColor: statusColor, width: `${goal.progressPercent}%` }]}
         />
@@ -133,7 +141,7 @@ export default function GoalsScreen() {
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl, flexGrow: 1 }}
       >
         <View style={[styles.intro, { backgroundColor: theme.surfaceElevated }]}>
-          <Text style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
+          <Text accessibilityRole="header" style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
             Donnez une destination à votre argent.
           </Text>
           <Text style={{ color: theme.secondaryLabel, lineHeight: 19 }}>
@@ -145,6 +153,8 @@ export default function GoalsScreen() {
           <EmptyState
             title="Aucun objectif"
             message="Créez une première cible, comme une PS5, un voyage ou un fonds de sécurité."
+            actionLabel="Créer un objectif"
+            onAction={() => router.push("/goals/new")}
           />
         ) : null}
 

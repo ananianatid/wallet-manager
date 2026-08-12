@@ -132,11 +132,19 @@ export default function GoalDetailScreen() {
                     })
                   }
                   hitSlop={8}
+                  accessibilityRole="button"
                   accessibilityLabel="Modifier l'objectif"
+                  style={styles.headerAction}
                 >
                   <Pencil size={19} strokeWidth={2.1} color={theme.accent} />
                 </Pressable>
-                <Pressable onPress={remove} hitSlop={8} accessibilityLabel="Supprimer l'objectif">
+                <Pressable
+                  onPress={remove}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Supprimer l'objectif"
+                  style={styles.headerAction}
+                >
                   <Trash2 size={19} strokeWidth={2.1} color={theme.expense} />
                 </Pressable>
               </View>
@@ -194,7 +202,11 @@ export default function GoalDetailScreen() {
           goal ? (
             <View style={{ gap: spacing.md }}>
               {actionError ? <InlineError message={actionError} onRetry={() => setActionError(null)} /> : null}
-              <View style={[styles.hero, { backgroundColor: theme.surface }]}>
+              <View
+                accessible
+                accessibilityLabel={`${goal.name}. ${goal.isAchieved ? "Objectif atteint" : `${goal.progressPercent}% atteint`}. ${formatAmount(goal.reservedAmount, goal.currencyCode)} réservés sur ${formatAmount(goal.targetAmount, goal.currencyCode)}`}
+                style={[styles.hero, { backgroundColor: theme.surface }]}
+              >
                 <View style={styles.heroTitle}>
                   <View style={[styles.heroIcon, { backgroundColor: theme.surfaceElevated }]}>
                     {goal.isAchieved ? <Check size={20} color={theme.income} /> : <Target size={20} color={theme.accent} />}
@@ -207,7 +219,12 @@ export default function GoalDetailScreen() {
                     {goal.isAchieved ? "100%" : `${goal.progressPercent}%`}
                   </Text>
                 </View>
-                <View style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}>
+                <View
+                  accessible
+                  accessibilityRole="progressbar"
+                  accessibilityLabel={`${goal.progressPercent}% de l’objectif atteint`}
+                  style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}
+                >
                   <View style={[styles.progressFill, { backgroundColor: goal.isOverdue ? theme.expense : theme.accent, width: `${goal.progressPercent}%` }]} />
                 </View>
                 <View style={styles.metrics}>
@@ -230,6 +247,10 @@ export default function GoalDetailScreen() {
               <Pressable
                 onPress={() => router.push({ pathname: "/new-transaction", params: { goalId: String(goal.id) } })}
                 disabled={goal.status !== "active"}
+                accessibilityRole="button"
+                accessibilityLabel="Réserver une somme"
+                accessibilityHint={goal.status === "active" ? "Ajoute une somme réservée à cet objectif." : "Cet objectif est clôturé."}
+                accessibilityState={{ disabled: goal.status !== "active" }}
                 style={({ pressed }) => [styles.reserveButton, { backgroundColor: theme.accent }, goal.status !== "active" && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}
               >
                 <ArrowUpRight size={18} color={theme.onAccent} strokeWidth={2.4} />
@@ -238,7 +259,12 @@ export default function GoalDetailScreen() {
 
               <View style={styles.actionsRow}>
                 {goal.status === "active" ? (
-                  <Pressable onPress={close} style={({ pressed }) => [styles.secondaryButton, { borderColor: theme.separator }, pressed && { opacity: 0.7 }]}>
+                  <Pressable
+                    onPress={close}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clôturer l'objectif"
+                    style={({ pressed }) => [styles.secondaryButton, { borderColor: theme.separator }, pressed && { opacity: 0.7 }]}
+                  >
                     <Calendar size={15} color={theme.secondaryLabel} />
                     <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>Clôturer</Text>
                   </Pressable>
@@ -268,6 +294,12 @@ export default function GoalDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerAction: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   hero: {
     gap: spacing.md,
     padding: spacing.lg,
