@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { ActionButton, InlineError } from "@/components/ui";
+import { getBlockScreenshots, setBlockScreenshots } from "@/security/screen-capture";
 import {
   LOCK_DELAY_OPTIONS_SECONDS,
   clearPinCredentials,
@@ -27,6 +28,7 @@ export default function SecurityScreen() {
   const theme = useTheme();
   const lock = useLockState();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [blockScreenshotsEnabled, setBlockScreenshotsEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,15 @@ export default function SecurityScreen() {
       )
       .then(setBiometricAvailable)
       .catch(() => setBiometricAvailable(false));
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") {
+      return;
+    }
+    getBlockScreenshots()
+      .then(setBlockScreenshotsEnabled)
+      .catch(() => {});
   }, []);
 
   if (Platform.OS === "web") {
@@ -88,6 +99,15 @@ export default function SecurityScreen() {
     setLockDelaySeconds(seconds)
       .then(refreshLockConfig)
       .catch(() => setError("Le délai de verrouillage n’a pas pu être enregistré."))
+      .finally(() => setBusy(false));
+  };
+
+  const onToggleBlockScreenshots = (blocked: boolean) => {
+    setError(null);
+    setBusy(true);
+    setBlockScreenshots(blocked)
+      .then(() => setBlockScreenshotsEnabled(blocked))
+      .catch(() => setError("La protection des captures n’a pas pu être modifiée."))
       .finally(() => setBusy(false));
   };
 
@@ -144,6 +164,33 @@ export default function SecurityScreen() {
             </View>
           ) : null}
         </View>
+
+        {Platform.OS === "android" ? (
+          <View style={{ gap: spacing.sm }}>
+            <Text style={[styles.sectionTitle, { color: theme.secondaryLabel }]}>
+              CAPTURES D&apos;ÉCRAN
+            </Text>
+            <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
+              <View style={[styles.row, styles.switchRow]}>
+                <View style={styles.switchText}>
+                  <Text style={{ color: theme.label, fontWeight: "600" }}>
+                    Masquer l&apos;écran aux captures
+                  </Text>
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    Empêche les captures, les enregistrements d&apos;écran et l&apos;aperçu
+                    dans le multitâche.
+                  </Text>
+                </View>
+                <Switch
+                  value={blockScreenshotsEnabled}
+                  onValueChange={onToggleBlockScreenshots}
+                  disabled={busy}
+                  accessibilityLabel="Masquer l'écran aux captures"
+                />
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {lock.enabled ? (
           <View style={{ gap: spacing.sm }}>

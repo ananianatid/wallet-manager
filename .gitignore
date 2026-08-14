@@ -18,6 +18,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Local tooling caches (never committed)
+.reasonix/
+.impeccable/
+
 # Metro
 .metro-health-check*
 

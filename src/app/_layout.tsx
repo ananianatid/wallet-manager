@@ -12,6 +12,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CompactStackHeader } from "@/components/compact-stack-header";
 import { LockScreen } from "@/components/lock-screen";
 import { initLock, useLockState } from "@/state/lock";
+import { applyScreenSecurity } from "@/security/screen-capture";
 import { useDataEpoch } from "@/state/data-epoch";
 import { CurrencyProvider } from "@/currency/context";
 import { getDatabase } from "@/db/database";
@@ -103,6 +104,11 @@ export default function RootLayout() {
   useEffect(() => {
     let active = true;
     initLock();
+    try {
+      applyScreenSecurity();
+    } catch {
+      // L'écran reste protégé par le FLAG_SECURE natif si le réglage est illisible.
+    }
 
     void (async () => {
       let shouldOnboard = false;
