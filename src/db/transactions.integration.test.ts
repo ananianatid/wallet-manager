@@ -5,6 +5,7 @@ import {
   getAccountBalance,
   getAccountAvailableBalance,
   listAccounts,
+  listAccountsByUsage,
   restoreAccount,
   updateAccountFlags,
 } from "./accounts";
@@ -82,6 +83,48 @@ describe("transactions integration (real SQLite)", () => {
   });
 
   describe("getAccountBalance", () => {
+    it("orders accounts by transaction usage with a name tie-breaker", async () => {
+      const frequent = await createAccount(db, {
+        name: "Compte fréquent",
+        groupId: null,
+      });
+      const tieB = await createAccount(db, {
+        name: "Compte B",
+        groupId: null,
+      });
+      const tieA = await createAccount(db, {
+        name: "Compte A",
+        groupId: null,
+      });
+      const unused = await createAccount(db, {
+        name: "Compte vide",
+        groupId: null,
+      });
+
+      await income(db, frequent, 100);
+      await expense(db, frequent, 50);
+      await income(db, tieB, 100);
+      await expense(db, tieA, 50);
+      await createTransaction(db, {
+        type: "transfer",
+        amount: 25,
+        categoryId: null,
+        accountId: frequent,
+        destinationAccountId: unused,
+        fee: null,
+        note: null,
+        transactionDate: NOW,
+      });
+
+      const ordered = await listAccountsByUsage(db);
+      expect(ordered.map((account) => account.id)).toEqual([
+        frequent,
+        tieA,
+        tieB,
+        unused,
+      ]);
+    });
+
     it("computes income, expense and transfer-with-fee against real rows", async () => {
       const source = await createAccount(db, {
         name: "Banque A",

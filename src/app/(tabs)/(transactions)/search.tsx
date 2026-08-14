@@ -34,7 +34,7 @@ import {
   InlineError,
   ScreenState,
 } from "@/components/ui";
-import { listAccounts } from "@/db/accounts";
+import { listAccountsByUsage } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
@@ -203,7 +203,7 @@ export default function TransactionSearchScreen() {
   const loadOptions = useCallback(async (): Promise<SearchOptions> => {
     const db = await getDatabase();
     const [accounts, categories] = await Promise.all([
-      listAccounts(db),
+      listAccountsByUsage(db),
       listCategories(db),
     ]);
     return {

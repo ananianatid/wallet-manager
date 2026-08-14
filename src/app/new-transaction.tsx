@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { listAccounts } from "@/db/accounts";
+import { listAccountsByUsage } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
 import { calculateRateFromMinor, currencyDigits, parseMoneyInput } from "@/currency/currencies";
@@ -84,7 +84,7 @@ export default function NewTransactionScreen() {
   const load = useCallback(async () => {
     const db = await getDatabase();
     const [accs, cats, goalRows, existing] = await Promise.all([
-      listAccounts(db),
+      listAccountsByUsage(db),
       listCategories(db),
       listGoals(db),
       transactionId ? getTransaction(db, transactionId) : Promise.resolve(null),
@@ -656,6 +656,7 @@ export default function NewTransactionScreen() {
               hideLabel
               value={categoryOptions.find((o) => o.id === categoryId)?.label ?? null}
               options={categoryOptions}
+              layout="grid"
               onChange={(value) => {
                 setCategoryId(value);
                 setErrors((current) => ({ ...current, category: "" }));

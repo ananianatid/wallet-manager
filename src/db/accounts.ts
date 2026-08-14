@@ -97,6 +97,32 @@ export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
   return rows.map(mapAccount);
 }
 
+export async function listAccountsByUsage(db: SQLiteDatabase): Promise<Account[]> {
+  const [accounts, usageRows] = await Promise.all([
+    listAccounts(db),
+    db.getAllAsync<{ accountId: number; usageCount: number }>(`
+      SELECT account_id AS accountId, COUNT(*) AS usageCount
+      FROM (
+        SELECT account_id FROM transactions
+        UNION ALL
+        SELECT destination_account_id AS account_id
+        FROM transactions
+        WHERE destination_account_id IS NOT NULL
+      ) AS account_usage
+      GROUP BY account_id
+    `),
+  ]);
+  const usageByAccountId = new Map(
+    usageRows.map((row) => [row.accountId, row.usageCount]),
+  );
+
+  return [...accounts].sort((a, b) => {
+    const usageDifference =
+      (usageByAccountId.get(b.id) ?? 0) - (usageByAccountId.get(a.id) ?? 0);
+    return usageDifference || a.name.localeCompare(b.name, "fr") || a.id - b.id;
+  });
+}
+
 export async function listDeletedAccounts(
   db: SQLiteDatabase,
 ): Promise<Account[]> {

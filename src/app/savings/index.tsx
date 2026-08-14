@@ -73,6 +73,7 @@ function EditRow({
           label="Catégorie de revenus"
           value={options.find((o) => o.id === categorySelection)?.label ?? null}
           options={options}
+          layout="grid"
           onChange={(id) => onCategoryChange(id === 0 ? null : id)}
         />
       </View>

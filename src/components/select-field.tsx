@@ -26,9 +26,17 @@ interface Props {
   options: SelectOption[];
   onChange: (id: number) => void;
   hideLabel?: boolean;
+  layout?: "list" | "grid";
 }
 
-export function SelectField({ label, value, options, onChange, hideLabel = false }: Props) {
+export function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+  hideLabel = false,
+  layout = "list",
+}: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
@@ -105,8 +113,10 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
             </Text>
             <FlatList
               data={options}
+              numColumns={layout === "grid" ? 2 : 1}
               keyExtractor={(o) => String(o.id)}
-              contentContainerStyle={styles.options}
+              columnWrapperStyle={layout === "grid" ? styles.gridRow : undefined}
+              contentContainerStyle={[styles.options, layout === "grid" && styles.gridOptions]}
               style={{ maxHeight: 320 }}
               ListEmptyComponent={
                 <Text style={[styles.empty, { color: theme.secondaryLabel }]}>
@@ -123,6 +133,7 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
                     accessibilityState={{ selected }}
                     style={({ pressed }) => [
                       styles.option,
+                      layout === "grid" && styles.gridOption,
                       {
                         backgroundColor: selected ? theme.accent : theme.surface,
                         borderColor: selected ? theme.accent : theme.separator,
@@ -154,11 +165,12 @@ export function SelectField({ label, value, options, onChange, hideLabel = false
                       style={[
                         styles.optionLabel,
                         { color: selected ? theme.onAccent : theme.label },
+                        layout === "grid" && styles.gridOptionLabel,
                       ]}
                     >
                       {item.label}
                     </Text>
-                    <View style={styles.trailing}>
+                    <View style={[styles.trailing, layout === "grid" && styles.gridTrailing]}>
                       {selected ? (
                         <Check size={19} strokeWidth={3} color={theme.onAccent} />
                       ) : null}
@@ -221,6 +233,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.sm,
   },
+  gridOptions: {
+    gap: spacing.sm,
+  },
+  gridRow: {
+    gap: spacing.sm,
+  },
   option: {
     minHeight: 56,
     flexDirection: "row",
@@ -231,6 +249,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     borderCurve: "continuous",
+  },
+  gridOption: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingRight: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   optionIcon: {
     width: 34,
@@ -244,11 +273,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
+  gridOptionLabel: {
+    flex: 1,
+    textAlign: "left",
+  },
   trailing: {
     width: 24,
     height: 24,
     alignItems: "center",
     justifyContent: "center",
+  },
+  gridTrailing: {
+    position: "absolute",
+    top: spacing.xs,
+    right: spacing.xs,
   },
   empty: {
     paddingHorizontal: spacing.md,

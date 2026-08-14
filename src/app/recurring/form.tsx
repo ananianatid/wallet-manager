@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { listAccounts } from "@/db/accounts";
+import { listAccountsByUsage } from "@/db/accounts";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
 import { parseMoneyInput } from "@/currency/currencies";
@@ -75,7 +75,7 @@ export default function RecurringFormScreen() {
   const load = useCallback(async () => {
     const db = await getDatabase();
     const [accs, cats, existing] = await Promise.all([
-      listAccounts(db),
+      listAccountsByUsage(db),
       listCategories(db),
       recurringId ? getRecurring(db, recurringId) : Promise.resolve(null),
     ]);
@@ -346,6 +346,7 @@ export default function RecurringFormScreen() {
             label="Catégorie"
             value={categoryOptions.find((o) => o.id === categoryId)?.label ?? null}
             options={categoryOptions}
+            layout="grid"
             onChange={setCategoryId}
           />
         )}

@@ -354,6 +354,7 @@ export default function OnboardingScreen() {
                 hideLabel
                 value={categoryOptions.find((option) => option.id === selectedCategoryId)?.label ?? null}
                 options={categoryOptions}
+                layout="grid"
                 onChange={setCategoryId}
               />
             </FormField>
