@@ -1,7 +1,0 @@
-expo.modules.screensecurity.screen-security-pngs-0 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/build/generated/res/pngs/release
-expo.modules.screensecurity.screen-security-resValues-1 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/build/generated/res/resValues/release
-expo.modules.screensecurity.screen-security-mergeReleaseResources-2 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
-expo.modules.screensecurity.screen-security-mergeReleaseResources-3 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
-expo.modules.screensecurity.screen-security-release-4 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/build/intermediates/merged_res/release/mergeReleaseResources
-expo.modules.screensecurity.screen-security-main-5 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/src/main/res
-expo.modules.screensecurity.screen-security-release-6 /Users/ananianatide/Workspace/wallet-the-app/modules/screen-security/android/src/release/res

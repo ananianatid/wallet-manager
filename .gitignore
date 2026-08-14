@@ -22,6 +22,9 @@ expo-env.d.ts
 .reasonix/
 .impeccable/
 
+# Native module build artifacts
+modules/**/android/build/
+
 # Metro
 .metro-health-check*
 
