@@ -1,7 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -34,13 +33,17 @@ import { calculateTransferFee } from "@/utils/transfer-fees";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
 
-const TYPES: { value: TransactionType; label: string }[] = [
-  { value: "income", label: "Revenu" },
-  { value: "expense", label: "Dépense" },
-  { value: "transfer", label: "Transfert" },
-];
-
 type TransferFeeMode = "manual" | "calculated";
+
+export function resolveInitialTransactionType(
+  typeParam?: string,
+  goalParam?: string,
+): TransactionType {
+  if (typeParam === "income" || typeParam === "expense" || typeParam === "transfer") {
+    return typeParam;
+  }
+  return goalParam ? "transfer" : "expense";
+}
 
 const FEE_MODES: { value: TransferFeeMode; label: string }[] = [
   { value: "manual", label: "Frais connu" },
@@ -127,9 +130,10 @@ export default function NewTransactionScreen() {
       setDebitedAmount("");
       setNote(existing.note ?? "");
       setDate(new Date(existing.transactionDate));
-    } else if (typeParam === "income" || typeParam === "expense" || typeParam === "transfer") {
-      setType(typeParam);
-    } else if (goalParam) {
+    } else {
+      setType(resolveInitialTransactionType(typeParam, goalParam));
+    }
+    if (!existing && !typeParam && goalParam) {
       const parsedGoalId = Number(goalParam);
       if (Number.isInteger(parsedGoalId) && parsedGoalId > 0) {
         setType("transfer");
@@ -237,25 +241,6 @@ export default function NewTransactionScreen() {
     return () => controller.abort();
   }, [accountId, amount, destinationCurrency, destinationEdited, destinationId, isCrossCurrency, preserveStoredConversion, sourceCurrency]);
 
-  const switchType = (t: TransactionType) => {
-    setType(t);
-    if (t === "transfer") {
-      setCategoryId(null);
-    } else {
-      setDestinationId(null);
-      setGoalReservationId(null);
-      setFee("");
-      setFeeMode("manual");
-      setDebitedAmount("");
-      setDestinationAmount("");
-      setExchangeRate(null);
-      setExchangeRateDate(null);
-      setExchangeRateProvider(null);
-      setRateError(null);
-      setDestinationEdited(false);
-    }
-  };
-
   const switchFeeMode = (mode: TransferFeeMode) => {
     if (mode === feeMode) {
       return;
@@ -308,7 +293,7 @@ export default function NewTransactionScreen() {
     return parsedDebitedAmount - parsedAmount;
   }, [amount, debitedAmount, feeMode, sourceCurrency]);
 
-  const save = async () => {
+  const save = async (mode: "close" | "continue") => {
     setErrors({});
     const parsedAmount = parseMoneyInput(amount, sourceCurrency);
     let parsedFee: number | null = fee.trim() ? parseMoneyInput(fee, sourceCurrency) : null;
@@ -442,21 +427,30 @@ export default function NewTransactionScreen() {
       } else {
         await createTransaction(db, input);
       }
-      if (transactionId == null && !isGoalReservation) {
+      if (transactionId == null && mode === "continue") {
+        setType("expense");
         setAmount("");
         setDestinationAmount("");
         setDestinationEdited(false);
         setPreserveStoredConversion(false);
+        setDestinationId(null);
+        setGoalReservationId(null);
         setCategoryId(null);
         setFee("");
+        setFeeMode("manual");
         setDebitedAmount("");
         setNote("");
         setDate(new Date());
+        setExchangeRate(null);
+        setExchangeRateDate(null);
+        setExchangeRateProvider(null);
+        setRateError(null);
         setErrors({});
         setSaveNotice("Transaction enregistrée. Vous pouvez en ajouter une autre.");
         setSaving(false);
         return;
       }
+      setSaving(false);
       router.back();
     } catch (e) {
       log.error("transaction.save", "Échec de l'enregistrement de la transaction", e);
@@ -524,56 +518,6 @@ export default function NewTransactionScreen() {
             <Text style={{ color: theme.secondaryLabel }}>Préparation du formulaire…</Text>
           </View>
         ) : null}
-        <View accessible accessibilityRole="radiogroup" style={styles.typeRow}>
-          {TYPES.map((t) => {
-            const active = type === t.value;
-            const semanticColor =
-              t.value === "income"
-                ? theme.income
-                : t.value === "expense"
-                  ? theme.expense
-                  : theme.accent;
-            const Icon =
-              t.value === "income"
-                ? ArrowUpRight
-                : t.value === "expense"
-                  ? ArrowDownLeft
-                  : ArrowLeftRight;
-            return (
-              <Pressable
-                key={t.value}
-                onPress={() => switchType(t.value)}
-                style={({ pressed }) => [
-                  styles.typeButton,
-                  {
-                    backgroundColor: active ? theme.accent : theme.surface,
-                    borderColor: active ? theme.accent : theme.separator,
-                  },
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={t.label}
-                accessibilityHint="Change le type de transaction."
-                >
-                  <Icon
-                    size={17}
-                    strokeWidth={2.4}
-                    color={active ? theme.onAccent : semanticColor}
-                  />
-                  <Text
-                  style={{
-                    color: active ? theme.onAccent : theme.secondaryLabel,
-                    fontWeight: "600",
-                  }}
-                >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
         <FormField
           label={type === "transfer" ? `Montant débité (${sourceCurrency})` : `Montant (${sourceCurrency})`}
           error={errors.amount}
@@ -934,27 +878,31 @@ export default function NewTransactionScreen() {
           />
         </FormField>
 
-        <ActionButton
-          onPress={save}
-          disabled={saving || loadingOptions}
-          label={
-            saving
-              ? "Enregistrement…"
-              : type === "transfer" && destinationId != null && destinationId < 0
-                ? "Réserver pour l'objectif"
-                : "Enregistrer"
-          }
-        />
+        <View style={styles.saveActions}>
+          <View style={styles.saveAction}>
+            <ActionButton
+              onPress={() => void save("close")}
+              disabled={saving || loadingOptions}
+              label={saving ? "Enregistrement…" : "Enregistrer"}
+            />
+          </View>
+          {transactionId == null ? (
+            <View style={styles.saveAction}>
+              <ActionButton
+                onPress={() => void save("continue")}
+                disabled={saving || loadingOptions}
+                variant="secondary"
+                label={saving ? "Enregistrement…" : "Enregistrer et continuer"}
+              />
+            </View>
+          ) : null}
+        </View>
       </KeyboardAwareScreen>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  typeRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -962,16 +910,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 32,
   },
-  typeButton: {
-    flex: 1,
+  saveActions: {
     flexDirection: "row",
-    gap: spacing.xs,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "stretch",
+    gap: spacing.sm,
+  },
+  saveAction: {
+    flex: 1,
   },
   input: {
     paddingHorizontal: spacing.lg,
