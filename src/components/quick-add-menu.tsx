@@ -1,7 +1,9 @@
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, PiggyBank, Plus, X } from "lucide-react-native";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { AnimatedPressable, motion, useReduceMotion } from "@/components/motion";
 
 interface QuickAddMenuProps {
   visible: boolean;
@@ -16,6 +18,32 @@ const ACTIONS = [
 
 export function QuickAddMenu({ visible, onClose }: QuickAddMenuProps) {
   const theme = useTheme();
+  const reducedMotion = useReduceMotion();
+  const [overlayOpacity] = useState(() => new Animated.Value(0));
+  const [sheetTranslateY] = useState(() => new Animated.Value(48));
+
+  useEffect(() => {
+    if (!visible) {
+      overlayOpacity.setValue(0);
+      sheetTranslateY.setValue(48);
+      return;
+    }
+
+    overlayOpacity.setValue(reducedMotion ? 1 : 0);
+    sheetTranslateY.setValue(reducedMotion ? 0 : 48);
+    Animated.parallel([
+      Animated.timing(overlayOpacity, {
+        toValue: 1,
+        duration: reducedMotion ? 0 : motion.overlay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: 0,
+        duration: reducedMotion ? 0 : motion.entrance,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [overlayOpacity, reducedMotion, sheetTranslateY, visible]);
 
   const openTransaction = (type: (typeof ACTIONS)[number]["type"]) => {
     onClose();
@@ -31,56 +59,56 @@ export function QuickAddMenu({ visible, onClose }: QuickAddMenuProps) {
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      <View style={styles.overlay}>
+      <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
         <Pressable style={styles.dismiss} onPress={onClose} accessibilityLabel="Fermer" />
-        <View style={[styles.sheet, { backgroundColor: theme.surface }]}>
+        <Animated.View style={[styles.sheet, { backgroundColor: theme.surface, transform: [{ translateY: sheetTranslateY }] }]}>
           <View style={styles.sheetHeader}>
             <View>
               <Text style={[styles.title, { color: theme.label }]}>Ajouter</Text>
               <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Choisissez une action</Text>
             </View>
-            <Pressable
+            <AnimatedPressable
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Fermer le menu d’ajout"
-              style={({ pressed }) => [styles.close, { backgroundColor: theme.surfaceMuted }, pressed && styles.pressed]}
+              style={[styles.close, { backgroundColor: theme.surfaceMuted }]}
             >
               <X size={20} color={theme.label} />
-            </Pressable>
+            </AnimatedPressable>
           </View>
           <View style={styles.actions}>
             {ACTIONS.map(({ label, type, icon: Icon }) => (
-              <Pressable
+              <AnimatedPressable
                 key={type}
                 onPress={() => openTransaction(type)}
                 accessibilityRole="button"
                 accessibilityLabel={`Ajouter un ${label.toLowerCase()}`}
-                style={({ pressed }) => [styles.action, { borderColor: theme.separator }, pressed && styles.pressed]}
+                style={[styles.action, { borderColor: theme.separator }]}
               >
                 <View style={[styles.icon, { backgroundColor: withAlpha(type === "expense" ? theme.expense : type === "income" ? theme.income : theme.accent, "18") }]}>
                   <Icon size={20} color={type === "expense" ? theme.expense : type === "income" ? theme.income : theme.accent} />
                 </View>
                 <Text style={[styles.actionLabel, { color: theme.label }]}>{label}</Text>
-              </Pressable>
+              </AnimatedPressable>
             ))}
-            <Pressable
+            <AnimatedPressable
               onPress={openSavings}
               accessibilityRole="button"
               accessibilityLabel="Configurer une épargne"
-              style={({ pressed }) => [styles.action, { borderColor: theme.separator }, pressed && styles.pressed]}
+              style={[styles.action, { borderColor: theme.separator }]}
             >
               <View style={[styles.icon, { backgroundColor: withAlpha(theme.income, "18") }]}>
                 <PiggyBank size={20} color={theme.income} />
               </View>
               <Text style={[styles.actionLabel, { color: theme.label }]}>Épargne</Text>
-            </Pressable>
+            </AnimatedPressable>
           </View>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -88,19 +116,18 @@ export function QuickAddMenu({ visible, onClose }: QuickAddMenuProps) {
 export function AddFab({ onPress, bottom }: { onPress: () => void; bottom: number }) {
   const theme = useTheme();
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Ajouter"
       accessibilityHint="Ouvre les actions pour ajouter une opération."
-      style={({ pressed }) => [
+      style={[
         styles.fab,
         { backgroundColor: theme.accent, bottom, shadowColor: theme.label },
-        pressed && styles.fabPressed,
       ]}
     >
       <Plus size={26} strokeWidth={2.5} color={theme.onAccent} />
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

@@ -14,6 +14,7 @@ import { CategoryIcon } from "@/components/category-icons";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { ContentSection, ScreenState } from "@/components/ui";
+import { MotionEntrance } from "@/components/motion";
 import { listAccounts } from "@/db/accounts";
 import { listBudgets } from "@/db/budgets";
 import { calculateSafeToSpend } from "@/db/cashflow";
@@ -203,13 +204,13 @@ export default function DashboardScreen() {
               {safeToSpend ? (
                 // SafeToSpendCard porte son propre marginHorizontal: annule celui-ci
                 // pour rester aligné avec les autres cards (conteneur paddé).
-                <View style={{ marginHorizontal: -spacing.lg }}>
+                <MotionEntrance style={{ marginHorizontal: -spacing.lg }}>
                   <SafeToSpendCard
                     data={safeToSpend}
                     compact
                     onPress={() => router.push("/cashflow")}
                   />
-                </View>
+                </MotionEntrance>
               ) : null}
 
               {budgetRows.length > 0 ? (

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
+import { AnimatedPressable } from "@/components/motion";
 
 type ActionButtonVariant = "primary" | "secondary" | "destructive";
 
@@ -42,16 +42,16 @@ export function ContentSection({ title, action, children }: ContentSectionProps)
           {title}
         </Text>
         {action ? (
-          <Pressable
+          <AnimatedPressable
             onPress={action.onPress}
             accessibilityRole="button"
             accessibilityLabel={action.label}
-            style={({ pressed }) => [styles.contentSectionAction, pressed && styles.pressed]}
+            style={styles.contentSectionAction}
           >
             <Text style={[styles.contentSectionActionLabel, { color: theme.accent }]}>
               {action.label}
             </Text>
-          </Pressable>
+          </AnimatedPressable>
         ) : null}
       </View>
       <View style={styles.contentSectionBody}>{children}</View>
@@ -81,21 +81,21 @@ export function ActionButton({
         : theme.label;
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
+      style={[
         styles.actionButton,
         { backgroundColor, borderColor: variant === "secondary" ? theme.outline : backgroundColor },
         variant === "secondary" && styles.secondaryButton,
-        (pressed || disabled) && styles.pressed,
+        disabled && styles.pressed,
       ]}
     >
       <Text style={[styles.actionLabel, { color: labelColor }]}>{label}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -119,24 +119,24 @@ export function IconButton({
   const theme = useTheme();
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
       accessibilityState={{ disabled, selected }}
-      style={({ pressed }) => [
+      style={[
         styles.iconButton,
         selected && {
           backgroundColor: withAlpha(theme.accent, "18"),
           borderRadius: radius.md,
         },
-        (pressed || disabled) && styles.pressed,
+        disabled && styles.pressed,
       ]}
     >
       {icon}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -220,7 +220,7 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
     >
       <Text style={[styles.inlineErrorText, { color: theme.expense }]}>{message}</Text>
       {onRetry ? (
-        <Pressable
+        <AnimatedPressable
           onPress={onRetry}
           accessibilityRole="button"
           accessibilityLabel="Réessayer"
@@ -228,7 +228,7 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
           style={styles.inlineRetry}
         >
           <Text style={[styles.inlineRetryText, { color: theme.expense }]}>Réessayer</Text>
-        </Pressable>
+        </AnimatedPressable>
       ) : null}
     </View>
   );

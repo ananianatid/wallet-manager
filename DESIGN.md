@@ -63,6 +63,12 @@ Les titres sont peu nombreux. Un montant important est grand parce que le reste 
 
 Les listes utilisent une lecture pleine largeur avec des séparateurs fins. Les cartes ne deviennent pas des mini-dashboards et une carte secondaire porte une seule information principale.
 
+## Motion
+
+Le mouvement explique une action ou un changement d’état ; il ne sert pas de décoration permanente. Le menu d’ajout est le moment focal : le voile apparaît en environ 220 ms et le panneau arrive depuis le bas en environ 320 ms. Les boutons et le FAB donnent un retour tactile discret en environ 110 ms. La carte patrimoine peut entrer une seule fois avec un léger déplacement vertical pour établir la hiérarchie.
+
+Les sorties sont plus rapides que les entrées. Aucun rebond, aucune animation infinie et aucun défilement automatique. Lorsque la préférence système de réduction des animations est active, les transitions deviennent instantanées tout en conservant les états et le contenu.
+
 ## Accueil
 
 Le premier écran suit cet ordre :
