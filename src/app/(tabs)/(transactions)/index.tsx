@@ -295,7 +295,7 @@ export default function TransactionsScreen() {
                 <Text style={[styles.dayAmount, { color: theme.income }]}>+ {formatAmount(section.income, baseCurrency)}</Text>
               ) : null}
               {section.expense > 0 ? (
-                <Text style={[styles.dayAmount, { color: theme.label }]}>−{formatAmount(section.expense, baseCurrency)}</Text>
+                <Text style={[styles.dayAmount, { color: theme.expense }]}>−{formatAmount(section.expense, baseCurrency)}</Text>
               ) : null}
             </View>
           </View>

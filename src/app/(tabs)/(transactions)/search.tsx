@@ -676,7 +676,12 @@ export default function TransactionSearchScreen() {
               <Text style={[styles.sectionHeaderTitle, { color: theme.secondaryLabel }]}>
                 {section.title}
               </Text>
-              <Text style={[styles.sectionHeaderTotal, { color: theme.label }]}>
+              <Text
+                style={[
+                  styles.sectionHeaderTotal,
+                  { color: section.total < 0 ? theme.expense : theme.label },
+                ]}
+              >
                 {formatAmount(section.total, baseCurrency)}
               </Text>
             </View>

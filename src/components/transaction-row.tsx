@@ -23,7 +23,11 @@ export const TransactionRow = memo(function TransactionRow({
   const isTransfer = transaction.type === "transfer";
 
   const color = isIncome ? theme.income : isExpense ? theme.accent : theme.accent;
-  const amountColor = isIncome ? theme.income : theme.label;
+  const amountColor = isIncome
+    ? theme.income
+    : isExpense
+      ? theme.expense
+      : theme.label;
   const title = isTransfer
     ? `${transaction.accountName} → ${transaction.destinationAccountName}`
     : (transaction.categoryName ?? "Sans catégorie");
