@@ -1,22 +1,20 @@
 ---
 name: Wallet
-description: Une caisse de poche pour décider, enregistrer et garder le contrôle.
+description: Finance Personal OS — un outil calme pour comprendre, enregistrer et maîtriser son argent.
 colors:
-  indigo-night: "#0A1020"
-  indigo-surface: "#111A2B"
-  indigo-elevated: "#182541"
-  lime-decision: "#D8F36A"
-  indigo-action-light: "#263A77"
-  coral-outflow: "#F87171"
-  mint-inflow: "#4ADE80"
-  paper-bg: "#F4F6F1"
-  ink: "#16213A"
-  sage-outline: "#99A8A0"
+  background: "#F5F5F2"
+  surface: "#FFFFFF"
+  text: "#181916"
+  muted: "#85877F"
+  line: "#E6E6E0"
+  accent: "#26352D"
+  accent-soft: "#E2EBE4"
+  positive: "#4C6656"
+  negative: "#B75C52"
 rounded:
-  sm: "8px"
-  md: "12px"
-  lg: "16px"
-  xl: "24px"
+  small: "12px"
+  medium: "18px"
+  large: "26px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -24,136 +22,89 @@ spacing:
   lg: "16px"
   xl: "24px"
   xxl: "32px"
-components:
-  button-primary:
-    backgroundColor: "{colors.lime-decision}"
-    textColor: "{colors.indigo-night}"
-    rounded: "{rounded.md}"
-    height: "52px"
-  navigation:
-    backgroundColor: "{colors.indigo-surface}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
-    height: "64px"
 ---
 
-# Design System: Wallet
+# Finance Personal OS
 
-## Overview
+## Philosophie
 
-**Creative North Star: « La caisse de poche »**
+Wallet doit sembler calme, intelligent et maîtrisé. La clarté passe avant la quantité d’informations, la hiérarchie avant la décoration et la confiance reste humaine, jamais anxiogène.
 
-Wallet reprend la précision d'un carnet de caisse et la rapidité d'un reçu mobile money, mais les traduit en une interface Android calme et contemporaine. Les surfaces indigo forment le support de lecture ; le citron ne sert qu'à signaler une décision ou une action possible. Le coral et le mint décrivent les sorties et entrées réelles, jamais une décoration.
+L’application est en mode **Operate** : elle doit aider à comprendre une situation financière en quelques secondes, puis rendre l’action utile évidente. Les données restent locales, les chiffres viennent de SQLite et l’interface ne fabrique aucune tendance.
 
-L'app est en mode Operate : la situation financière doit être comprise en quelques secondes, puis l'action la plus utile doit être évidente. La densité est assumée dans les listes et les chiffres, compensée par des espacements réguliers et une typographie compacte. Les composants privilégient la profondeur tonale aux effets de verre ou aux cartes décoratives.
+## Couleur
 
-**Key Characteristics:**
+Le fond chaud `#F5F5F2` évite la froideur d’un blanc intégral. Le vert botanique profond `#26352D` est la signature et porte les actions principales ainsi que la carte patrimoine. La surface douce `#E2EBE4` accueille les insights sans créer d’alerte.
 
-- Indigo profond, surfaces tonales, accent citron rare.
-- Chiffres tabulaires et hiérarchie Android lisible.
-- Décision « à dépenser sans risque » au premier plan.
-- Navigation flottante mais conforme aux attentes Android, structurée autour de l'usage quotidien.
+Les couleurs sémantiques restent discrètes : `#4C6656` pour les revenus et les évolutions positives, `#B75C52` pour les alertes, dépassements et situations problématiques. Une dépense normale reste dans la couleur de texte principale.
 
-## Colors
+Le mode sombre conserve la même identité avec une dérivation contrastée. Le choix d’accent historique est conservé uniquement pour lire les anciennes préférences ; il ne change plus la palette du produit.
 
-La palette reste stable entre les modes clair et sombre : l'indigo structure, le citron décide, le mint crédite et le coral alerte.
+## Typographie
 
-### Primary
+La famille prioritaire est Inter lorsqu’un fichier local vérifié est embarqué. Le fallback Android est la famille système sans-serif. Les montants utilisent des chiffres tabulaires.
 
-- **Citron décision** (#D8F36A): action primaire en sombre, sélection active et marqueur de possibilité.
-- **Indigo action** (#263A77): action primaire en clair et surface d'action partagée.
+- Hero : 34–38 px, poids 700, tracking serré.
+- Montant principal : 46 px, poids 700, tracking serré.
+- Section : 18 px, poids 700.
+- Corps : 15 px, interligne 21 px.
+- Métadonnée : 12 px, silencieuse mais contrastée.
 
-### Tertiary
+Les titres sont peu nombreux. Un montant important est grand parce que le reste de l’écran sait rester discret.
 
-- **Mint entrée** (#4ADE80): revenus et amélioration du disponible.
-- **Coral sortie** (#F87171): dépenses, frais et situations déficitaires.
+## Formes, surfaces et profondeur
 
-### Neutral
+- Petits contrôles : rayon 12 px.
+- Sections et cartes secondaires : rayon 18 px.
+- Carte patrimoine et grands panneaux : rayon 26 px.
+- Bordure : 1 px `#E6E6E0`, jamais de contour noir épais.
+- Ombre : aucune par défaut ; uniquement pour le FAB, les menus et les panneaux flottants.
+- Une surface est définie par sa couleur, son espace et sa séparation avant toute élévation.
 
-- **Indigo nuit** (#0A1020): fond sombre et scène de lecture nocturne.
-- **Indigo surface** (#111A2B): listes et zones de contenu.
-- **Indigo élevé** (#182541): contrôle, champ et niveau de profondeur supérieur.
-- **Papier végétal** (#F4F6F1): fond clair reposant.
-- **Encre bleue** (#16213A): texte principal en clair.
+Les listes utilisent une lecture pleine largeur avec des séparateurs fins. Les cartes ne deviennent pas des mini-dashboards et une carte secondaire porte une seule information principale.
 
-### Named Rules
+## Accueil
 
-**La règle du citron rare.** L'accent citron appartient aux décisions et aux contrôles ; il ne colore pas chaque titre ni chaque section.
+Le premier écran suit cet ordre :
 
-## Typography
+1. contexte du jour ;
+2. carte **Patrimoine disponible** avec montant actuel, évolution ou prévision après échéances ;
+3. budgets et plans utiles ;
+4. activité récente ;
+5. premiers réglages uniquement lorsqu’ils sont nécessaires.
 
-**Display Font:** sans-serif-condensed système Android, avec sans-serif comme repli.
-**Body Font:** Roboto système via les familles natives Android.
-**Label Font:** même famille, chiffres tabulaires pour les montants et les dates.
+La carte patrimoine conserve le calcul « disponible sans risque » existant. La formulation explique le périmètre au lieu de présenter une prévision comme un solde brut.
 
-**Character:** compacte, précise et humaine. Les titres sont courts et fermes ; les explications restent en phrase normale.
+## Actions et navigation
 
-### Hierarchy
+La navigation Android expose cinq espaces :
 
-- **Display** (800, 34/40): titre du premier écran et annonce de contexte.
-- **Title** (700, 22/28): titre d'écran secondaire et bloc d'identité.
-- **Section** (700, 16/22): section de contenu et état principal.
-- **Body** (400, 15/21): description, détail et aide.
-- **Label** (600, 12/16): métadonnée, état et contrôle secondaire.
-- **Amount** (800, 30/36): montants clés avec variantes compactes.
+`Accueil · Activité · Planification · Statistiques · Comptes`
 
-### Named Rules
+Le bouton central `+` ouvre un menu d’ajout avec `Dépense`, `Revenu`, `Transfert` et `Épargne`. Le menu est un panneau inférieur accessible, avec une action par libellé et icône cohérente. Réglages est accessible depuis Comptes.
 
-**La règle du chiffre stable.** Les montants utilisent des chiffres tabulaires et ne sont jamais réduits à une couleur sans libellé.
+Toutes les cibles tactiles font au moins 48 dp, la navigation respecte les insets système et le retour Android, et l’ouverture du clavier ne masque pas le contenu utile.
 
-## Layout
+## Transactions
 
-Les écrans mobiles utilisent une marge latérale de 16 dp, un rythme de 4/8/12/16/24/32 dp et des cibles de 48 dp minimum. Le premier écran suit l'ordre décision → actions rapides → pression future → historique. Les listes utilisent une lecture pleine largeur avec séparateurs fins plutôt qu'une grille de cartes imbriquées. La navigation reste en bas sur téléphone, avec les insets système intégrés.
+Une ligne est immédiatement lisible :
 
-## Elevation & Depth
+`icône · nom · catégorie/date · montant`
 
-La profondeur est principalement tonale : `background` → `surface` → `surfaceElevated` → surfaces accentuées. Les bordures servent à séparer et à rendre les contrôles identifiables. Une ombre courte peut accompagner le FAB, mais elle ne doit pas devenir une texture générale.
+Le nom domine, la catégorie et la date sont secondaires, le montant est aligné et tabulaire. Une dépense normale n’est pas rouge ; le négatif est réservé à une information demandant une décision.
 
-## Shapes
+## Responsive et accessibilité
 
-Les contrôles principaux utilisent 12 dp, les groupes de contenu 16 dp et la carte de décision 24 dp. Les icônes dans les listes sont des carrés légèrement arrondis, plus proches d'un ticket ou d'un repère de caisse que d'un badge circulaire. Les pills restent réservées aux états courts et aux sélections.
+- Téléphone : marge latérale 16 dp, une colonne, navigation inférieure.
+- Tablette : passage progressif à deux colonnes lorsque l’espace le permet.
+- Contraste vérifié en clair et sombre, sans dépendre de la couleur seule.
+- États de chargement, vide, erreur, succès, focus et désactivation explicites.
+- Respect de la taille de texte système et de la réduction des animations.
 
-## Components
+## À éviter
 
-### Buttons
+Gradients flashy, glassmorphism, néons, ombres lourdes, bordures épaisses, rouge sur chaque dépense, couleurs différentes par catégorie, cinq boutons permanents, dashboards saturés et gamification excessive.
 
-- **Shape:** 12 dp, hauteur 52 dp pour l'action principale.
-- **Primary:** accent courant avec texte `onAccent`, poids 700.
-- **Secondary:** surface élevée, contour `outline`, texte principal.
-- **State:** opacité réduite à la pression ou lorsqu'il est désactivé.
+## Règle fondamentale
 
-### Cards / Containers
-
-- **Decision card:** surface accentuée, 24 dp, montant principal puis projection après échéances.
-- **Summary card:** même surface accentuée, bilan net en tête et détail revenus/dépenses dessous.
-- **Lists:** surface simple, séparation fine, pas de carte dans une carte.
-
-### Inputs / Fields
-
-- **Style:** surface ou surface élevée, contour fin, 12 dp, hauteur minimum 48 dp.
-- **Focus:** changement de contour et accent, jamais un halo décoratif.
-- **Error:** message français actionnable sous le champ, avec couleur et rôle d'alerte.
-
-### Navigation
-
-La barre principale est une navigation Android pleine largeur visuellement flottante, avec cinq destinations : Accueil, Transactions, Plans, Comptes et Réglages. Les Statistiques restent accessibles depuis Plans comme outil d'analyse secondaire, plutôt que de concurrencer les tâches quotidiennes. L'état actif utilise une tonalité de l'accent ; le retour système et les insets restent prioritaires.
-
-### Carte de décision
-
-« À dépenser sans risque » juxtapose le disponible maintenant et le disponible après échéances. Elle est interactive, accessible, et ouvre le détail du calcul plutôt que de transformer une prévision en simple décoration.
-
-## Do's and Don'ts
-
-### Do:
-
-- **Do** relier chaque nombre important à son périmètre et à une action.
-- **Do** garder les revenus, dépenses et alertes lisibles sans dépendre de la couleur seule.
-- **Do** privilégier la profondeur tonale, les séparateurs fins et une hiérarchie stable.
-- **Do** vérifier le clair, le sombre, le clavier et les insets Android.
-
-### Don't:
-
-- **Don't** transformer chaque information en carte arrondie indépendante.
-- **Don't** utiliser l'accent citron sur les éléments purement informatifs.
-- **Don't** afficher de données, promesses ou tendances qui ne viennent pas de SQLite.
-- **Don't** remplacer un libellé français par un pictogramme ambigu.
+Chaque élément doit aider l’utilisateur à mieux comprendre ou contrôler son argent. Sinon, il doit être simplifié, déplacé ou supprimé.

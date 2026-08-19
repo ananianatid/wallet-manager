@@ -21,11 +21,11 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="(dashboard)" options={{ title: "Accueil", tabBarAccessibilityLabel: "Accueil" }} />
-      <Tabs.Screen name="(transactions)" options={{ title: "Transactions", tabBarAccessibilityLabel: "Transactions" }} />
-      <Tabs.Screen name="(plans)" options={{ title: "Plans", tabBarAccessibilityLabel: "Plans" }} />
+      <Tabs.Screen name="(transactions)" options={{ title: "Activité", tabBarAccessibilityLabel: "Activité" }} />
+      <Tabs.Screen name="(plans)" options={{ title: "Planification", tabBarAccessibilityLabel: "Planification" }} />
       <Tabs.Screen name="(accounts)" options={{ title: "Comptes", tabBarAccessibilityLabel: "Comptes" }} />
-      <Tabs.Screen name="(settings)" options={{ title: "Réglages", tabBarAccessibilityLabel: "Réglages" }} />
-      <Tabs.Screen name="(statistics)" options={{ href: null }} />
+      <Tabs.Screen name="(settings)" options={{ title: "Réglages", href: null }} />
+      <Tabs.Screen name="(statistics)" options={{ title: "Statistiques", tabBarAccessibilityLabel: "Statistiques" }} />
     </Tabs>
   );
 }

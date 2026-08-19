@@ -1,11 +1,5 @@
-import { Fragment, useCallback, useMemo, type ReactNode } from "react";
-import {
-  ArrowDownLeft,
-  ArrowLeftRight,
-  ArrowUpRight,
-  ChevronRight,
-  Plus,
-} from "lucide-react-native";
+import { Fragment, useCallback, useMemo } from "react";
+import { ChevronRight } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   Pressable,
@@ -29,7 +23,7 @@ import { listGoals } from "@/db/goals";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import { budgetProgress } from "@/utils/dashboard";
 import { formatAmount, formatDate, formatDayLabel, formatTime } from "@/utils/format";
 import { savingsByRule } from "@/utils/statistics";
@@ -57,37 +51,6 @@ function groupTransactionsByDay(transactions: Transaction[]): RecentDayGroup[] {
     groups.set(key, group);
   }
   return [...groups.values()];
-}
-
-function QuickAction({
-  label,
-  color,
-  icon,
-  onPress,
-}: {
-  label: string;
-  color: string;
-  icon: ReactNode;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label === "Dépense" ? "Ajouter une dépense" : `Ajouter un ${label.toLowerCase()}`}
-      style={({ pressed }) => [
-        styles.quickAction,
-        { backgroundColor: theme.surface, borderColor: theme.separator },
-        pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] },
-      ]}
-    >
-      <View style={[styles.quickActionIcon, { backgroundColor: withAlpha(color, "1A") }]}>
-        {icon}
-      </View>
-      <Text style={[styles.quickActionLabel, { color: theme.label }]}>{label}</Text>
-    </Pressable>
-  );
 }
 
 export default function DashboardScreen() {
@@ -191,7 +154,6 @@ export default function DashboardScreen() {
     [budgets, spentByCategory, totalExpense],
   );
 
-  const openNew = () => router.push("/new-transaction");
   const openEdit = (id: number) =>
     router.push({ pathname: "/new-transaction", params: { id: String(id) } });
 
@@ -249,31 +211,6 @@ export default function DashboardScreen() {
                   />
                 </View>
               ) : null}
-
-              <View
-                style={styles.quickActions}
-                accessibilityRole="toolbar"
-                accessibilityLabel="Actions rapides"
-              >
-                <QuickAction
-                  label="Dépense"
-                  color={theme.expense}
-                  icon={<ArrowDownLeft size={18} strokeWidth={2.4} color={theme.expense} />}
-                  onPress={() => router.push({ pathname: "/new-transaction", params: { type: "expense" } })}
-                />
-                <QuickAction
-                  label="Revenu"
-                  color={theme.income}
-                  icon={<ArrowUpRight size={18} strokeWidth={2.4} color={theme.income} />}
-                  onPress={() => router.push({ pathname: "/new-transaction", params: { type: "income" } })}
-                />
-                <QuickAction
-                  label="Transfert"
-                  color={theme.accent}
-                  icon={<ArrowLeftRight size={18} strokeWidth={2.4} color={theme.accent} />}
-                  onPress={() => router.push({ pathname: "/new-transaction", params: { type: "transfer" } })}
-                />
-              </View>
 
               {budgetRows.length > 0 ? (
                 <ContentSection
@@ -536,24 +473,6 @@ export default function DashboardScreen() {
           )}
         </ScrollView>
       )}
-      {hasAccounts ? (
-        <Pressable
-          onPress={openNew}
-          accessibilityLabel="Ajouter une transaction"
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.fab,
-            {
-              backgroundColor: theme.accent,
-              bottom: insets.bottom + 88,
-              boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
-            },
-            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
-          ]}
-        >
-          <Plus size={30} strokeWidth={2.5} color={theme.onAccent} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -581,31 +500,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     textAlign: "right",
-  },
-  quickActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  quickAction: {
-    flex: 1,
-    minHeight: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
-  },
-  quickActionIcon: {
-    width: 30,
-    height: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-  },
-  quickActionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
   },
   planningRow: {
     flexDirection: "row",
@@ -678,15 +572,5 @@ const styles = StyleSheet.create({
   },
   recentDayTitle: {
     fontSize: 12,
-  },
-  fab: {
-    position: "absolute",
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

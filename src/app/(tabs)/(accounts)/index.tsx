@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { ChevronRight, EllipsisVertical, Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
+import { ChevronRight, EllipsisVertical, Eye, EyeOff, Plus, Settings, Target, X } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -259,6 +259,11 @@ export default function AccountsScreen() {
         options={{
           headerRight: () => (
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
+              <IconButton
+                onPress={() => router.push("/(tabs)/(settings)")}
+                label="Ouvrir les réglages"
+                icon={<Settings size={21} strokeWidth={2.2} color={theme.accent} />}
+              />
               <IconButton
                 onPress={() => router.push("/goals")}
                 label="Ouvrir les objectifs"

@@ -15,7 +15,7 @@ export default function PlansLayout() {
         contentStyle: { backgroundColor: theme.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Plans" }} />
+      <Stack.Screen name="index" options={{ title: "Planification" }} />
     </Stack>
   );
 }

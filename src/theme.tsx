@@ -11,11 +11,11 @@ import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 
 /*
-THESIS: Wallet is a pocket cash desk: decide what is safe now, record it fast, then prepare what comes next.
-OWN-WORLD: Indigo ledger surfaces, lime decision markers, coral outflows, mint inflows, compact Android type.
-STORY: See the available amount, record a movement, then find every future commitment in Plans.
-FIRST VIEWPORT: A calm daily header, the available-now decision card, then three quick actions.
-FORM: Five Android destinations split daily operation from planning and configuration; lists stay dense, calm, and actionable.
+THESIS: Wallet is a calm personal finance OS that makes the next useful decision obvious.
+OWN-WORLD: Warm paper background, deep botanical green, quiet separators, soft semantic colors, and one restrained focal card.
+STORY: Understand where the money stands, see what changed, then record or prepare the next move.
+FIRST VIEWPORT: A quiet greeting, the available-money card, recent activity, and one central add action.
+FORM: Five Android destinations keep daily activity, planning, analysis, and accounts discoverable without dashboard noise.
 */
 
 export interface ThemeColors {
@@ -24,6 +24,7 @@ export interface ThemeColors {
   surfaceMuted: string;
   surfaceElevated: string;
   label: string;
+  muted: string;
   secondaryLabel: string;
   separator: string;
   outline: string;
@@ -46,222 +47,74 @@ export interface ThemeColors {
 }
 
 export type ThemeMode = "system" | "light" | "dark";
+// Kept for backwards compatibility with persisted settings. The visual identity is fixed.
 export type AccentTheme = "blue" | "midnight" | "green";
 
 export const palettes: Record<"dark" | "light", ThemeColors> = {
   dark: {
-    background: "#0A1020",
-    surface: "#111A2B",
-    surfaceMuted: "#0E1728",
-    surfaceElevated: "#182541",
-    label: "#F3F6FF",
-    secondaryLabel: "#9EAAC4",
-    separator: "#263452",
-    outline: "#516181",
+    background: "#101713",
+    surface: "#17201A",
+    surfaceMuted: "#131B16",
+    surfaceElevated: "#202B24",
+    label: "#F2F5F0",
+    muted: "#B1BAB1",
+    secondaryLabel: "#B1BAB1",
+    separator: "#303B33",
+    outline: "#657268",
     scrim: "#00000080",
-    accent: "#34D399",
-    onAccent: "#0A1020",
-    warning: "#F59E0B",
-    income: "#4ADE80",
-    expense: "#F87171",
-    accentSurface: "#0F3D2E",
-    accentSurfaceLabel: "#B8F0D8",
+    accent: "#B0D2B8",
+    onAccent: "#17231B",
+    warning: "#D7A65D",
+    income: "#8DBA96",
+    expense: "#E28A80",
+    accentSurface: "#26352D",
+    accentSurfaceLabel: "#DCE8DE",
     accentSurfaceText: "#FFFFFF",
-    dangerSurface: "#5A232B",
-    dangerSurfaceLabel: "#FFD0D6",
+    dangerSurface: "#5B2B27",
+    dangerSurfaceLabel: "#F6CCC7",
     dangerSurfaceText: "#FFFFFF",
-    accentSurfaceIncome: "#86EFAC",
-    accentSurfaceExpense: "#FFB0B0",
-    dangerSurfaceIncome: "#86EFAC",
-    dangerSurfaceExpense: "#FFB0B0",
+    accentSurfaceIncome: "#B9D9C0",
+    accentSurfaceExpense: "#F0AAA2",
+    dangerSurfaceIncome: "#B9D9C0",
+    dangerSurfaceExpense: "#F0AAA2",
   },
   light: {
-    background: "#F4F6F1",
+    background: "#F5F5F2",
     surface: "#FFFFFF",
-    surfaceMuted: "#EDF1EA",
-    surfaceElevated: "#F8FAF5",
-    label: "#16213A",
-    secondaryLabel: "#5F6D83",
-    separator: "#D9E1D6",
-    outline: "#99A8A0",
+    surfaceMuted: "#F0F1EC",
+    surfaceElevated: "#FAFAF7",
+    label: "#181916",
+    muted: "#85877F",
+    secondaryLabel: "#6B7068",
+    separator: "#E6E6E0",
+    outline: "#A3A59D",
     scrim: "#00000080",
-    accent: "#059669",
+    accent: "#26352D",
     onAccent: "#FFFFFF",
-    warning: "#B45309",
-    income: "#16A34A",
-    expense: "#DC2626",
-    accentSurface: "#0F3D2E",
-    accentSurfaceLabel: "#B8F0D8",
+    warning: "#906622",
+    income: "#4C6656",
+    expense: "#B75C52",
+    accentSurface: "#26352D",
+    accentSurfaceLabel: "#DCE8DE",
     accentSurfaceText: "#FFFFFF",
-    dangerSurface: "#5A232B",
-    dangerSurfaceLabel: "#FFD0D6",
-    dangerSurfaceText: "#FFFFFF",
-    accentSurfaceIncome: "#86EFAC",
-    accentSurfaceExpense: "#FFB0B0",
-    dangerSurfaceIncome: "#86EFAC",
-    dangerSurfaceExpense: "#FFB0B0",
+    dangerSurface: "#F4DFDC",
+    dangerSurfaceLabel: "#7C352E",
+    dangerSurfaceText: "#5B2924",
+    accentSurfaceIncome: "#B9D9C0",
+    accentSurfaceExpense: "#F0AAA2",
+    dangerSurfaceIncome: "#4C6656",
+    dangerSurfaceExpense: "#B75C52",
   },
 };
 
+// Old values remain accepted when reading existing settings, but no longer change the product palette.
 export const ACCENT_THEME_VALUES: AccentTheme[] = ["blue", "midnight", "green"];
-
-const ACCENT_PALETTES: Record<
-  AccentTheme,
-  Record<
-    "dark" | "light",
-    Pick<
-      ThemeColors,
-      | "accent"
-      | "onAccent"
-      | "accentSurface"
-      | "accentSurfaceLabel"
-      | "accentSurfaceText"
-      | "dangerSurface"
-      | "dangerSurfaceLabel"
-      | "dangerSurfaceText"
-      | "accentSurfaceIncome"
-      | "accentSurfaceExpense"
-      | "dangerSurfaceIncome"
-      | "dangerSurfaceExpense"
-    >
-  >
-> = {
-  blue: {
-    dark: {
-      accent: "#339CFF",
-      onAccent: "#07111F",
-      accentSurface: "#123A60",
-      accentSurfaceLabel: "#B7DBFF",
-      accentSurfaceText: "#FFFFFF",
-      dangerSurface: "#5A232B",
-      dangerSurfaceLabel: "#FFD0D6",
-      dangerSurfaceText: "#FFFFFF",
-      accentSurfaceIncome: "#86EFAC",
-      accentSurfaceExpense: "#FFB0B0",
-      dangerSurfaceIncome: "#86EFAC",
-      dangerSurfaceExpense: "#FFB0B0",
-    },
-    light: {
-      accent: "#339CFF",
-      onAccent: "#07111F",
-      accentSurface: "#123A60",
-      accentSurfaceLabel: "#B7DBFF",
-      accentSurfaceText: "#FFFFFF",
-      dangerSurface: "#5A232B",
-      dangerSurfaceLabel: "#FFD0D6",
-      dangerSurfaceText: "#FFFFFF",
-      accentSurfaceIncome: "#86EFAC",
-      accentSurfaceExpense: "#FFB0B0",
-      dangerSurfaceIncome: "#86EFAC",
-      dangerSurfaceExpense: "#FFB0B0",
-    },
-  },
-  midnight: {
-    dark: {
-      accent: "#D8F36A",
-      onAccent: "#17213A",
-      accentSurface: "#202D5A",
-      accentSurfaceLabel: "#E6EDB2",
-      accentSurfaceText: "#FFFFFF",
-      dangerSurface: "#5A232B",
-      dangerSurfaceLabel: "#FFD0D6",
-      dangerSurfaceText: "#FFFFFF",
-      accentSurfaceIncome: "#86EFAC",
-      accentSurfaceExpense: "#FFB0B0",
-      dangerSurfaceIncome: "#86EFAC",
-      dangerSurfaceExpense: "#FFB0B0",
-    },
-    light: {
-      accent: "#263A77",
-      onAccent: "#FFFFFF",
-      accentSurface: "#263A77",
-      accentSurfaceLabel: "#D7E0FF",
-      accentSurfaceText: "#FFFFFF",
-      dangerSurface: "#5A232B",
-      dangerSurfaceLabel: "#FFD0D6",
-      dangerSurfaceText: "#FFFFFF",
-      accentSurfaceIncome: "#86EFAC",
-      accentSurfaceExpense: "#FFB0B0",
-      dangerSurfaceIncome: "#86EFAC",
-      dangerSurfaceExpense: "#FFB0B0",
-    },
-  },
-  green: {
-    dark: {
-      accent: "#34D399",
-      onAccent: "#0A0A0B",
-      accentSurface: "#0F3D2E",
-      accentSurfaceLabel: "#B8F0D8",
-      accentSurfaceText: "#FFFFFF",
-      dangerSurface: "#5A232B",
-      dangerSurfaceLabel: "#FFD0D6",
-      dangerSurfaceText: "#FFFFFF",
-      accentSurfaceIncome: "#86EFAC",
-      accentSurfaceExpense: "#FFB0B0",
-      dangerSurfaceIncome: "#86EFAC",
-      dangerSurfaceExpense: "#FFB0B0",
-    },
-    light: {
-      accent: "#059669",
-      onAccent: "#0A0A0B",
-      accentSurface: "#0F3D2E",
-      accentSurfaceLabel: "#B8F0D8",
-      accentSurfaceText: "#FFFFFF",
-      dangerSurface: "#5A232B",
-      dangerSurfaceLabel: "#FFD0D6",
-      dangerSurfaceText: "#FFFFFF",
-      accentSurfaceIncome: "#86EFAC",
-      accentSurfaceExpense: "#FFB0B0",
-      dangerSurfaceIncome: "#86EFAC",
-      dangerSurfaceExpense: "#FFB0B0",
-    },
-  },
-};
-
-type MidnightNeutralPalette = Pick<
-  ThemeColors,
-  | "background"
-  | "surface"
-  | "surfaceMuted"
-  | "surfaceElevated"
-  | "label"
-  | "secondaryLabel"
-  | "separator"
-  | "outline"
->;
-
-const MIDNIGHT_NEUTRALS: Record<"dark" | "light", MidnightNeutralPalette> = {
-  dark: {
-    background: "#0A1020",
-    surface: "#111A2B",
-    surfaceMuted: "#0E1728",
-    surfaceElevated: "#182541",
-    label: "#F3F6FF",
-    secondaryLabel: "#9EAAC4",
-    separator: "#263452",
-    outline: "#516181",
-  },
-  light: {
-    background: "#F4F6F1",
-    surface: "#FFFFFF",
-    surfaceMuted: "#EDF1EA",
-    surfaceElevated: "#F8FAF5",
-    label: "#16213A",
-    secondaryLabel: "#5F6D83",
-    separator: "#D9E1D6",
-    outline: "#99A8A0",
-  },
-};
 
 export function getThemePalette(
   scheme: "dark" | "light",
-  accentTheme: AccentTheme = "midnight",
+  _accentTheme: AccentTheme = "midnight",
 ): ThemeColors {
-  return {
-    ...palettes[scheme],
-    ...ACCENT_PALETTES[accentTheme][scheme],
-    ...(accentTheme === "midnight" ? MIDNIGHT_NEUTRALS[scheme] : {}),
-  };
+  return palettes[scheme];
 }
 
 export function withAlpha(color: string, alpha: string): string {
@@ -269,16 +122,16 @@ export function withAlpha(color: string, alpha: string): string {
 }
 
 export const chartColors = [
-  "#34D399",
-  "#60A5FA",
-  "#F59E0B",
-  "#A78BFA",
-  "#F472B6",
-  "#22D3EE",
-  "#F87171",
-  "#A3E635",
-  "#FBBF24",
-  "#818CF8",
+  "#4C6656",
+  "#789681",
+  "#B7A26A",
+  "#8F9FB0",
+  "#A8879A",
+  "#6E9B9A",
+  "#B75C52",
+  "#9AAE75",
+  "#C48668",
+  "#7B82A7",
 ];
 
 interface ThemeContextValue {
@@ -291,12 +144,11 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-
 const MODE_VALUES: ThemeMode[] = ["system", "light", "dark"];
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>("system");
+  const [mode, setModeState] = useState<ThemeMode>("light");
   const [accentTheme, setAccentThemeState] = useState<AccentTheme>("midnight");
 
   useEffect(() => {
@@ -315,8 +167,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       if (ACCENT_THEME_VALUES.includes(accentThemeValue as AccentTheme)) {
         setAccentThemeState(accentThemeValue as AccentTheme);
       }
-    })
-      .catch(() => {});
+    }).catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -324,33 +175,23 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   const setMode = (next: ThemeMode) => {
     setModeState(next);
-    getDatabase()
-      .then((db) => setSetting(db, "theme_mode", next))
-      .catch(() => {});
+    getDatabase().then((db) => setSetting(db, "theme_mode", next)).catch(() => {});
   };
 
   const setAccentTheme = (next: AccentTheme) => {
     setAccentThemeState(next);
-    getDatabase()
-      .then((db) => setSetting(db, "accent_theme", next))
-      .catch(() => {});
+    getDatabase().then((db) => setSetting(db, "accent_theme", next)).catch(() => {});
   };
 
   const scheme: "light" | "dark" =
     mode === "system" ? (systemScheme === "dark" ? "dark" : "light") : mode;
-  const theme = useMemo(
-    () => getThemePalette(scheme, accentTheme),
-    [accentTheme, scheme],
-  );
-
+  const theme = useMemo(() => getThemePalette(scheme, accentTheme), [accentTheme, scheme]);
   const value = useMemo(
     () => ({ theme, scheme, mode, accentTheme, setMode, setAccentTheme }),
     [accentTheme, mode, scheme, theme],
   );
 
-  return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeColors {
@@ -380,17 +221,17 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 8,
+  sm: 12,
   md: 12,
-  lg: 16,
-  xl: 24,
+  lg: 18,
+  xl: 26,
 } as const;
 
 export const typography = {
-  display: { fontSize: 34, lineHeight: 40, fontWeight: "800" as const, letterSpacing: -0.8 },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: "700" as const, letterSpacing: -0.35 },
-  section: { fontSize: 16, lineHeight: 22, fontWeight: "700" as const, letterSpacing: -0.15 },
+  display: { fontSize: 34, lineHeight: 38, fontWeight: "700" as const, letterSpacing: -1.35 },
+  title: { fontSize: 22, lineHeight: 27, fontWeight: "700" as const, letterSpacing: -0.5 },
+  section: { fontSize: 18, lineHeight: 23, fontWeight: "700" as const, letterSpacing: -0.25 },
   body: { fontSize: 15, lineHeight: 21, fontWeight: "400" as const },
-  label: { fontSize: 12, lineHeight: 16, fontWeight: "600" as const, letterSpacing: 0.15 },
-  amount: { fontSize: 30, lineHeight: 36, fontWeight: "800" as const },
+  label: { fontSize: 12, lineHeight: 16, fontWeight: "600" as const, letterSpacing: 0.1 },
+  amount: { fontSize: 46, lineHeight: 50, fontWeight: "700" as const, letterSpacing: -2.3 },
 } as const;

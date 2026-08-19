@@ -75,7 +75,7 @@ describe("SafeToSpendCard", () => {
     );
 
     expect(getByText(formatAmount(-15_000, "XOF")).props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
+      expect.arrayContaining([expect.objectContaining({ color: "#5B2924" })]),
     );
     expect(
       getByText("Prévision déficitaire : il manque 15 000 XOF après les échéances prévues."),

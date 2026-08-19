@@ -127,7 +127,7 @@ export function SafeToSpendCard({
       <View style={styles.heading}>
         <View style={styles.titleBlock}>
           <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600" }}>
-            À DÉPENSER SANS RISQUE
+            PATRIMOINE DISPONIBLE
           </Text>
         </View>
         {interactive && onPress ? (
@@ -144,7 +144,7 @@ export function SafeToSpendCard({
 
       {!compact ? (
         <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600" }}>
-          Maintenant, sans toucher aux échéances
+          Disponible maintenant, avant les échéances
         </Text>
       ) : null}
 
@@ -253,7 +253,7 @@ export function SafeToSpendCard({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Solde disponible maintenant : ${formatAmount(currentAmount, baseCurrency)}. Prévision après échéances : ${formatAmount(data.amount, baseCurrency)}`}
+        accessibilityLabel={`Patrimoine disponible maintenant : ${formatAmount(currentAmount, baseCurrency)}. Prévision après échéances : ${formatAmount(data.amount, baseCurrency)}`}
         accessibilityHint="Ouvre le détail du calcul du solde disponible."
         style={({ pressed }) => [
           styles.card,

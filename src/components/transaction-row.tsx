@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowLeftRight } from "lucide-react-native";
 import { CategoryIcon } from "@/components/category-icons";
-import { spacing, typography, useTheme, withAlpha } from "@/theme";
+import { spacing, typography, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 
@@ -17,7 +17,8 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   const isExpense = transaction.type === "expense";
   const isTransfer = transaction.type === "transfer";
 
-  const color = isIncome ? theme.income : isExpense ? theme.expense : theme.accent;
+  const color = isIncome ? theme.income : isExpense ? theme.accent : theme.accent;
+  const amountColor = isIncome ? theme.income : theme.label;
   const title = isTransfer
     ? `${transaction.accountName} → ${transaction.destinationAccountName}`
     : (transaction.categoryName ?? "Sans catégorie");
@@ -32,11 +33,11 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   const content = (
     <>
       {isTransfer ? (
-        <View style={[styles.categoryIcon, { backgroundColor: withAlpha(color, "22") }]}>
+        <View style={styles.categoryIcon}>
           <ArrowLeftRight size={17} color={color} />
         </View>
       ) : (
-        <View style={[styles.categoryIcon, { backgroundColor: withAlpha(color, "22") }]}>
+        <View style={styles.categoryIcon}>
           <CategoryIcon name={transaction.categoryIcon} size={17} color={color} />
         </View>
       )}
@@ -60,7 +61,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
         selectable
         numberOfLines={2}
         ellipsizeMode="tail"
-        style={[styles.amount, { color }]}
+        style={[styles.amount, { color: amountColor }]}
       >
         {isIncome ? "+" : isExpense ? "−" : ""}
         {isTransfer && transaction.destinationAmount != null && transaction.destinationCurrencyCode && transaction.destinationCurrencyCode !== transaction.accountCurrencyCode
