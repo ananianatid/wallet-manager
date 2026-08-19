@@ -49,6 +49,31 @@ export function listCategories(
         .then((rows) => rows.map(mapCategory));
 }
 
+export async function listCategoriesByUsage(
+  db: SQLiteDatabase,
+): Promise<Category[]> {
+  const [rows, usageRows] = await Promise.all([
+    db.getAllAsync<CategoryRow>(
+      `SELECT ${SELECT_FIELDS} FROM categories WHERE type IN ('income', 'expense') ORDER BY name`,
+    ),
+    db.getAllAsync<{ categoryId: number; usageCount: number }>(
+      `SELECT category_id AS categoryId, COUNT(*) AS usageCount
+       FROM transactions
+       WHERE category_id IS NOT NULL
+       GROUP BY category_id`,
+    ),
+  ]);
+  const usage = new Map(usageRows.map((row) => [row.categoryId, row.usageCount]));
+  return rows
+    .map(mapCategory)
+    .sort(
+      (a, b) =>
+        (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0) ||
+        a.name.localeCompare(b.name, "fr") ||
+        a.id - b.id,
+    );
+}
+
 function isUniqueViolation(e: unknown): boolean {
   return (
     e instanceof Error &&

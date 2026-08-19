@@ -78,7 +78,7 @@ describe("SafeToSpendCard", () => {
       expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
     );
     expect(
-      getByText("Il manque 15 000 XOF pour couvrir les échéances prévues."),
+      getByText("Prévision déficitaire : il manque 15 000 XOF après les échéances prévues."),
     ).toBeTruthy();
   });
 
@@ -95,9 +95,21 @@ describe("SafeToSpendCard", () => {
     expect(queryByText(/Horizon/)).toBeNull();
     expect(queryByText(/compte.*inclus/)).toBeNull();
     expect(queryByText("Revenus")).toBeNull();
+    expect(getByText("Identique au solde actuel")).toBeTruthy();
     expect(getByText(formatAmount(30_000, "XOF")).props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
     );
+  });
+
+  it("affiche le solde actuel sans présenter un revenu futur comme déjà disponible", async () => {
+    const data = makeData(175_000);
+    data.currentAvailable = 75_000;
+    const { getByText } = await render(
+      <SafeToSpendCard data={data} interactive={false} />,
+    );
+
+    expect(getByText(formatAmount(75_000, "XOF"))).toBeTruthy();
+    expect(getByText(`+${formatAmount(120_000, "XOF")} à venir`)).toBeTruthy();
   });
 
   it("shows the balance before calculation when provided", async () => {

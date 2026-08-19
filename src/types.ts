@@ -180,6 +180,9 @@ export type GoalStatus = "active" | "closed";
 export interface Goal {
   id: number;
   name: string;
+  description?: string | null;
+  imageUri?: string | null;
+  linkUrl?: string | null;
   targetAmount: number;
   currencyCode: string;
   targetDate: number;
@@ -195,6 +198,9 @@ export interface Goal {
 
 export interface GoalInput {
   name: string;
+  description?: string | null;
+  imageUri?: string | null;
+  linkUrl?: string | null;
   targetAmount: number;
   targetDate: number;
   currencyCode?: string;

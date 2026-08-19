@@ -402,7 +402,8 @@ export function listTransactionsByAccount(
   db: SQLiteDatabase,
   accountId: number,
 ): Promise<Transaction[]> {
-  return listTransactions(db, { accountId, order: "desc" });
+  // Une opération future appartient au forecast, pas à l'historique du compte.
+  return listTransactions(db, { accountId, endMs: Date.now(), order: "desc" });
 }
 
 export async function getTransaction(

@@ -8,10 +8,12 @@ import { IconButton, ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listGoals } from "@/db/goals";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Goal } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 import { userMessage } from "@/utils/user-message";
+import { goalTotals } from "@/utils/goals";
 
 function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
   const theme = useTheme();
@@ -99,6 +101,8 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
 
 export default function GoalsScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const load = useCallback(async () => {
     const db = await getDatabase();
     return listGoals(db);
@@ -107,6 +111,7 @@ export default function GoalsScreen() {
   const resource = useAsyncResource(load, "goals.load");
   const reload = resource.reload;
   const goals = resource.data;
+  const totals = goalTotals(goals ?? [], convert);
 
   useFocusEffect(
     useCallback(() => {
@@ -149,6 +154,30 @@ export default function GoalsScreen() {
           </Text>
         </View>
 
+        {goals && goals.length > 0 ? (
+          <View
+            accessible
+            accessibilityLabel={`Total des objectifs actifs : cible ${formatAmount(totals.target, baseCurrency)}, réservé ${formatAmount(totals.reserved, baseCurrency)}, reste ${formatAmount(totals.remaining, baseCurrency)}`}
+            style={[styles.totalCard, { backgroundColor: theme.surface }]}
+          >
+            <Text style={{ color: theme.label, fontWeight: "800" }}>Total des objectifs actifs</Text>
+            <View style={styles.totalGrid}>
+              <View style={styles.totalItem}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>Cibles</Text>
+                <Text selectable style={{ color: theme.label, fontWeight: "800" }}>{formatAmount(totals.target, baseCurrency)}</Text>
+              </View>
+              <View style={styles.totalItem}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>Réservé</Text>
+                <Text selectable style={{ color: theme.accent, fontWeight: "800" }}>{formatAmount(totals.reserved, baseCurrency)}</Text>
+              </View>
+              <View style={[styles.totalItem, styles.totalItemRight]}>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>Reste</Text>
+                <Text selectable style={{ color: theme.label, fontWeight: "800" }}>{formatAmount(totals.remaining, baseCurrency)}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         {goals?.length === 0 ? (
           <EmptyState
             title="Aucun objectif"
@@ -176,6 +205,22 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.lg,
     borderRadius: radius.lg,
+  },
+  totalCard: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  totalGrid: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  totalItem: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  totalItemRight: {
+    alignItems: "flex-end",
   },
   card: {
     gap: spacing.md,

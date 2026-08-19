@@ -21,12 +21,10 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   const title = isTransfer
     ? `${transaction.accountName} → ${transaction.destinationAccountName}`
     : (transaction.categoryName ?? "Sans catégorie");
-  const details = [
-    transaction.accountName,
-    hideDate
-      ? formatTime(transaction.transactionDate)
-      : `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`,
-  ];
+  const dateLabel = hideDate
+    ? formatTime(transaction.transactionDate)
+    : `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`;
+  const details = [transaction.accountName, dateLabel];
   if (isTransfer && transaction.fee) {
     details.push(`Frais : ${formatAmount(transaction.fee, transaction.accountCurrencyCode)}`);
   }
@@ -50,7 +48,10 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
           {title}
         </Text>
         <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
-          {details.join(" · ")}
+          {transaction.accountName}
+        </Text>
+        <Text style={[styles.dateDetail, { color: theme.secondaryLabel }]} numberOfLines={1}>
+          {dateLabel}
         </Text>
         {transaction.note ? (
           <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
@@ -119,13 +120,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontWeight: "600",
+    fontWeight: "500",
   },
   detail: {
-    fontSize: 13,
+    fontSize: 12,
+  },
+  dateDetail: {
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
   },
   amount: {
-    fontWeight: "700",
+    fontWeight: "600",
     fontVariant: ["tabular-nums"],
   },
 });

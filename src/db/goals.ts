@@ -13,6 +13,9 @@ import type {
 interface GoalRow {
   id: number;
   name: string;
+  description: string | null;
+  imageUri: string | null;
+  linkUrl: string | null;
   targetAmount: number;
   currencyCode: string;
   targetDate: number;
@@ -54,6 +57,9 @@ function mapGoal(row: GoalRow): Goal {
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
+    imageUri: row.imageUri,
+    linkUrl: row.linkUrl,
     targetAmount: row.targetAmount,
     currencyCode: row.currencyCode,
     targetDate: row.targetDate,
@@ -94,6 +100,9 @@ function mapReservation(row: ReservationRow): GoalReservation {
 const GOAL_FIELDS = `
   g.id,
   g.name,
+  g.description,
+  g.image_uri AS imageUri,
+  g.link_url AS linkUrl,
   g.target_amount AS targetAmount,
   g.currency_code AS currencyCode,
   g.target_date AS targetDate,
@@ -115,6 +124,9 @@ function validateGoalInput(input: GoalInput): GoalInput {
   }
   return {
     name,
+    description: input.description?.trim() || null,
+    imageUri: input.imageUri?.trim() || null,
+    linkUrl: input.linkUrl?.trim() || null,
     targetAmount: input.targetAmount,
     targetDate: input.targetDate,
     currencyCode: input.currencyCode,
@@ -156,17 +168,23 @@ export async function createGoal(
   const valid = validateGoalInput(input);
   const result = valid.currencyCode == null
     ? await db.runAsync(
-        `INSERT INTO goals (name, target_amount, target_date, created_at)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO goals (name, description, image_uri, link_url, target_amount, target_date, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         valid.name,
+        valid.description ?? null,
+        valid.imageUri ?? null,
+        valid.linkUrl ?? null,
         valid.targetAmount,
         valid.targetDate,
         Date.now(),
       )
     : await db.runAsync(
-        `INSERT INTO goals (name, target_amount, target_date, created_at, currency_code)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO goals (name, description, image_uri, link_url, target_amount, target_date, created_at, currency_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         valid.name,
+        valid.description ?? null,
+        valid.imageUri ?? null,
+        valid.linkUrl ?? null,
         valid.targetAmount,
         valid.targetDate,
         Date.now(),
@@ -183,15 +201,21 @@ export async function updateGoal(
   const valid = validateGoalInput(input);
   const result = valid.currencyCode == null
     ? await db.runAsync(
-        "UPDATE goals SET name = ?, target_amount = ?, target_date = ? WHERE id = ?",
+        "UPDATE goals SET name = ?, description = ?, image_uri = ?, link_url = ?, target_amount = ?, target_date = ? WHERE id = ?",
         valid.name,
+        valid.description ?? null,
+        valid.imageUri ?? null,
+        valid.linkUrl ?? null,
         valid.targetAmount,
         valid.targetDate,
         id,
       )
     : await db.runAsync(
-        "UPDATE goals SET name = ?, target_amount = ?, target_date = ?, currency_code = ? WHERE id = ?",
+        "UPDATE goals SET name = ?, description = ?, image_uri = ?, link_url = ?, target_amount = ?, target_date = ?, currency_code = ? WHERE id = ?",
         valid.name,
+        valid.description ?? null,
+        valid.imageUri ?? null,
+        valid.linkUrl ?? null,
         valid.targetAmount,
         valid.targetDate,
         valid.currencyCode,

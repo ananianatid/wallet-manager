@@ -15,7 +15,7 @@ import {
 import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { listAccountsByUsage } from "@/db/accounts";
-import { listCategories } from "@/db/categories";
+import { listCategoriesByUsage } from "@/db/categories";
 import { getDatabase } from "@/db/database";
 import { calculateRateFromMinor, currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { getRateForPair } from "@/currency/service";
@@ -77,6 +77,7 @@ export default function NewTransactionScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -85,7 +86,7 @@ export default function NewTransactionScreen() {
     const db = await getDatabase();
     const [accs, cats, goalRows, existing] = await Promise.all([
       listAccountsByUsage(db),
-      listCategories(db),
+      listCategoriesByUsage(db),
       listGoals(db),
       transactionId ? getTransaction(db, transactionId) : Promise.resolve(null),
     ]);
@@ -419,6 +420,21 @@ export default function NewTransactionScreen() {
       } else {
         await createTransaction(db, input);
       }
+      if (transactionId == null && !isGoalReservation) {
+        setAmount("");
+        setDestinationAmount("");
+        setDestinationEdited(false);
+        setPreserveStoredConversion(false);
+        setCategoryId(null);
+        setFee("");
+        setDebitedAmount("");
+        setNote("");
+        setDate(new Date());
+        setErrors({});
+        setSaveNotice("Transaction enregistrée. Vous pouvez en ajouter une autre.");
+        setSaving(false);
+        return;
+      }
       router.back();
     } catch (e) {
       log.error("transaction.save", "Échec de l'enregistrement de la transaction", e);
@@ -471,6 +487,14 @@ export default function NewTransactionScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl }}
       >
+        {saveNotice ? (
+          <View
+            accessibilityLiveRegion="polite"
+            style={[styles.saveNotice, { backgroundColor: theme.surfaceElevated }]}
+          >
+            <Text style={{ color: theme.income, fontWeight: "600" }}>{saveNotice}</Text>
+          </View>
+        ) : null}
         {loadError ? <InlineError message={loadError} onRetry={retryLoad} /> : null}
         {loadingOptions ? (
           <View style={styles.loadingRow} accessibilityLiveRegion="polite">
@@ -501,7 +525,7 @@ export default function NewTransactionScreen() {
                 <Text
                   style={{
                     color: active ? theme.onAccent : theme.secondaryLabel,
-                    fontWeight: "700",
+                    fontWeight: "600",
                   }}
                 >
                   {t.label}
@@ -545,7 +569,7 @@ export default function NewTransactionScreen() {
             style={{
               color: theme.label,
               fontSize: 24,
-              fontWeight: "700",
+              fontWeight: "600",
               fontVariant: ["tabular-nums"],
               textAlign: "left",
               flex: 1,
@@ -616,7 +640,7 @@ export default function NewTransactionScreen() {
                     returnKeyType="done"
                     onSubmitEditing={() => Keyboard.dismiss()}
                     accessibilityLabel={`Montant crédité en ${destinationCurrency}`}
-                    style={{ color: theme.label, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"], flex: 1 }}
+                    style={{ color: theme.label, fontSize: 24, fontWeight: "600", fontVariant: ["tabular-nums"], flex: 1 }}
                   />
                   <Text style={{ color: theme.secondaryLabel }}>{destinationCurrency}</Text>
                 </View>
@@ -690,7 +714,7 @@ export default function NewTransactionScreen() {
                       <Text
                         style={{
                           color: active ? theme.onAccent : theme.secondaryLabel,
-                          fontWeight: "700",
+                          fontWeight: "600",
                           textAlign: "center",
                         }}
                       >
@@ -758,7 +782,7 @@ export default function NewTransactionScreen() {
                   ]}
                 >
                   <Text style={{ color: theme.secondaryLabel }}>Frais calculés</Text>
-                  <Text selectable style={{ color: theme.label, fontWeight: "700" }}>
+                  <Text selectable style={{ color: theme.label, fontWeight: "600" }}>
                     {calculatedFeePreview == null
                       ? "—"
                       : formatAmount(calculatedFeePreview, sourceCurrency)}
@@ -778,7 +802,7 @@ export default function NewTransactionScreen() {
               gap: spacing.xs,
             }}
           >
-            <Text style={{ color: theme.label, fontWeight: "700" }}>
+            <Text style={{ color: theme.label, fontWeight: "600" }}>
               Réservation virtuelle
             </Text>
             <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>
@@ -947,5 +971,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     borderRadius: radius.xl,
     marginTop: spacing.sm,
+  },
+  saveNotice: {
+    padding: spacing.md,
+    borderRadius: radius.md,
   },
 });

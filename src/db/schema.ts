@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 13;
+export const DATABASE_VERSION = 14;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -101,6 +101,9 @@ CREATE UNIQUE INDEX ux_savings_rules_category ON savings_rules (category_id) WHE
 CREATE TABLE goals (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   name          TEXT NOT NULL,
+  description   TEXT,
+  image_uri     TEXT,
+  link_url      TEXT,
   target_amount INTEGER NOT NULL CHECK (target_amount > 0),
   currency_code TEXT NOT NULL DEFAULT 'XOF',
   target_date   INTEGER NOT NULL,
@@ -370,6 +373,12 @@ export const MIGRATION_V13 = `
   CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs (ts DESC);
 `;
 
+export const MIGRATION_V14 = `
+  ALTER TABLE goals ADD COLUMN description TEXT;
+  ALTER TABLE goals ADD COLUMN image_uri TEXT;
+  ALTER TABLE goals ADD COLUMN link_url TEXT;
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -471,6 +480,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 12) {
       await db.execAsync(MIGRATION_V13);
+    }
+    if (currentDbVersion <= 13) {
+      await db.execAsync(MIGRATION_V14);
     }
   }
 

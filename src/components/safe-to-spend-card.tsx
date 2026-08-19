@@ -95,7 +95,10 @@ export function SafeToSpendCard({
 }: Props) {
   const theme = useTheme();
   const { baseCurrency } = useCurrency();
-  const isNegative = data.amount < 0;
+  const currentAmount = data.currentAvailable;
+  const isNegative = currentAmount < 0;
+  const forecastIsNegative = data.amount < 0;
+  const forecastMatchesCurrent = data.amount === currentAmount;
   const cardSurface = isNegative ? theme.dangerSurface : theme.accentSurface;
   const cardLabel = isNegative ? theme.dangerSurfaceLabel : theme.accentSurfaceLabel;
   const cardText = isNegative ? theme.dangerSurfaceText : theme.accentSurfaceText;
@@ -110,8 +113,8 @@ export function SafeToSpendCard({
     <>
       <View style={styles.heading}>
         <View style={styles.titleBlock}>
-          <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "700" }}>
-            DISPONIBLE ESTIMÉ
+          <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600" }}>
+            SOLDE DISPONIBLE
           </Text>
         </View>
         {interactive && onPress ? (
@@ -123,18 +126,75 @@ export function SafeToSpendCard({
         style={[styles.amount, compact && styles.compactAmount, { color: cardText }]}
         selectable
       >
-        {formatAmount(data.amount, baseCurrency)}
+        {formatAmount(currentAmount, baseCurrency)}
       </Text>
 
-      {data.balanceBeforeCalculation != null ? (
-        <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
+      {!compact ? (
+        <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600" }}>
+          Solde disponible maintenant
+        </Text>
+      ) : null}
+
+      {compact ? (
+        <View style={[styles.compactForecast, { borderTopColor: withAlpha(cardLabel, "66") }]}>
+          <View style={styles.compactForecastHeader}>
+            <Text style={{ color: cardLabel, fontSize: 11, fontWeight: "600", letterSpacing: 0.4 }}>
+              APRÈS ÉCHÉANCES PRÉVUES
+            </Text>
+            {forecastMatchesCurrent ? (
+              <Text style={{ color: cardText, fontSize: 13, fontWeight: "600" }}>
+                Identique au solde actuel
+              </Text>
+            ) : (
+              <Text
+                style={{
+                  color: forecastIsNegative ? expenseColor : cardText,
+                  fontSize: 15,
+                  fontWeight: "700",
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {formatAmount(data.amount, baseCurrency)}
+              </Text>
+            )}
+          </View>
+          {data.plannedIncome > 0 || data.plannedOutflows > 0 ? (
+            <Text style={{ color: cardLabel, fontSize: 12 }}>
+              {data.plannedIncome > 0 ? `+${formatAmount(data.plannedIncome, baseCurrency)} à venir` : ""}
+              {data.plannedIncome > 0 && data.plannedOutflows > 0 ? " · " : ""}
+              {data.plannedOutflows > 0 ? `−${formatAmount(data.plannedOutflows, baseCurrency)} prévues` : ""}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {!compact && (data.plannedIncome > 0 || data.plannedOutflows > 0) ? (
+        <View style={styles.forecastLine}>
+          <Text style={{ color: cardLabel, fontSize: 12 }}>
+            Prévision :
+          </Text>
+          {data.plannedIncome > 0 ? (
+            <Text style={{ color: incomeColor, fontSize: 12, fontWeight: "600" }}>
+              +{formatAmount(data.plannedIncome, baseCurrency)} à venir
+            </Text>
+          ) : null}
+          {data.plannedOutflows > 0 ? (
+            <Text style={{ color: expenseColor, fontSize: 12, fontWeight: "600" }}>
+              −{formatAmount(data.plannedOutflows, baseCurrency)} prévues
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {data.balanceBeforeCalculation != null && !compact ? (
+        <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
           Solde avant calcul : {formatAmount(data.balanceBeforeCalculation, baseCurrency)}
         </Text>
       ) : null}
 
-      {isNegative && !compact ? (
+      {forecastIsNegative && !compact ? (
         <Text style={{ color: cardLabel, lineHeight: 18 }}>
-          Il manque {formatAmount(Math.abs(data.amount), baseCurrency)} pour couvrir les échéances prévues.
+          Prévision déficitaire : il manque {formatAmount(Math.abs(data.amount), baseCurrency)} après les échéances prévues.
         </Text>
       ) : null}
 
@@ -180,7 +240,7 @@ export function SafeToSpendCard({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Disponible estimé : ${formatAmount(data.amount, baseCurrency)}`}
+        accessibilityLabel={`Solde disponible maintenant : ${formatAmount(currentAmount, baseCurrency)}. Prévision après échéances : ${formatAmount(data.amount, baseCurrency)}`}
         accessibilityHint="Ouvre le détail du calcul du solde disponible."
         style={({ pressed }) => [
           styles.card,
@@ -227,7 +287,8 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   compactAmount: {
-    fontSize: 22,
+    fontSize: 36,
+    lineHeight: 42,
   },
   footer: {
     flexDirection: "row",
@@ -250,6 +311,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.sm,
   },
+  forecastLine: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    alignItems: "center",
+  },
+  compactForecast: {
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  compactForecastHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
   footerItem: {
     flex: 1,
     gap: spacing.xs,
@@ -263,7 +341,7 @@ const styles = StyleSheet.create({
   },
   footerValue: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     fontVariant: ["tabular-nums"],
     maxWidth: "100%",
   },

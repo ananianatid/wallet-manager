@@ -12,10 +12,19 @@ describe("category icon registry", () => {
   });
 
   it("keeps the catalog finite and stable", () => {
-    expect(CATEGORY_ICON_NAMES).toHaveLength(56);
+    expect(CATEGORY_ICON_NAMES).toHaveLength(61);
     expect(new Set(CATEGORY_ICON_NAMES).size).toBe(CATEGORY_ICON_NAMES.length);
     expect(CATEGORY_ICON_NAMES).toContain("tag");
     expect(CATEGORY_ICON_NAMES).toContain("banknote-arrow-up");
     expect(CATEGORY_ICON_NAMES).toContain("piggy-bank");
+    expect(CATEGORY_ICON_NAMES).toEqual(
+      expect.arrayContaining([
+        "laptop",
+        "users-round",
+        "washing-machine",
+        "party-popper",
+        "sparkles",
+      ]),
+    );
   });
 });

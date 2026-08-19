@@ -61,6 +61,7 @@ const reservedSum = (accountRef: string): string => `
 const txAccountsActive = `
   AND (SELECT a2.deleted_at FROM accounts a2 WHERE a2.id = t.account_id) IS NULL
   AND (SELECT a2.deleted_at FROM accounts a2 WHERE a2.id = t.destination_account_id) IS NULL
+  AND t.transaction_date <= CAST(strftime('%s', 'now') AS INTEGER) * 1000
 `;
 
 const accountSelect = (where: string): string => `

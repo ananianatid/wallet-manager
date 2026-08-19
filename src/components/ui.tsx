@@ -26,6 +26,39 @@ interface ActionButtonProps {
   accessibilityLabel?: string;
 }
 
+interface ContentSectionProps {
+  title: string;
+  action?: { label: string; onPress: () => void };
+  children: ReactNode;
+}
+
+export function ContentSection({ title, action, children }: ContentSectionProps) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.contentSection, { borderTopColor: theme.separator }]}>
+      <View style={styles.contentSectionHeader}>
+        <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: theme.label }]}>
+          {title}
+        </Text>
+        {action ? (
+          <Pressable
+            onPress={action.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            style={({ pressed }) => [styles.contentSectionAction, pressed && styles.pressed]}
+          >
+            <Text style={[styles.contentSectionActionLabel, { color: theme.accent }]}>
+              {action.label}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.contentSectionBody}>{children}</View>
+    </View>
+  );
+}
+
 export function ActionButton({
   label,
   onPress,
@@ -251,6 +284,36 @@ export function KeyboardAwareScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  contentSection: {
+    gap: spacing.md,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  contentSectionHeader: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  contentSectionTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  contentSectionAction: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  contentSectionActionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  contentSectionBody: {
+    gap: spacing.md,
+  },
   actionButton: {
     minHeight: 48,
     alignItems: "center",
@@ -265,7 +328,7 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 20,
   },
   iconButton: {
@@ -286,7 +349,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
   },
-  screenStateTitle: { fontSize: 16, fontWeight: "700", textAlign: "center" },
+  screenStateTitle: { fontSize: 16, fontWeight: "600", textAlign: "center" },
   screenStateMessage: { textAlign: "center", lineHeight: 19 },
   inlineError: {
     flexDirection: "row",
@@ -297,6 +360,6 @@ const styles = StyleSheet.create({
   },
   inlineErrorText: { flex: 1, lineHeight: 18 },
   inlineRetry: { minHeight: 48, justifyContent: "center" },
-  inlineRetryText: { fontWeight: "800", lineHeight: 18 },
+  inlineRetryText: { fontWeight: "600", lineHeight: 18 },
   keyboardContent: { paddingBottom: spacing.xxl },
 });

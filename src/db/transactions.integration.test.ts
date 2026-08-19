@@ -160,6 +160,41 @@ describe("transactions integration (real SQLite)", () => {
       expect(a.availableBalance).toBe(950);
     });
 
+    it("ignore les opérations futures dans le solde réel du compte", async () => {
+      const accountId = await createAccount(db, {
+        name: "Compte futur",
+        groupId: null,
+      });
+      await income(db, accountId, 75_000, {
+        transactionDate: Date.now() + DAY,
+      });
+
+      expect(await getAccountBalance(db, accountId)).toBe(0);
+      expect(await getAccountAvailableBalance(db, accountId)).toBe(0);
+      expect((await listAccounts(db)).find((account) => account.id === accountId)).toMatchObject({
+        balance: 0,
+        availableBalance: 0,
+      });
+    });
+
+    it("masque les opérations futures de l'historique du compte", async () => {
+      const accountId = await createAccount(db, {
+        name: "Historique réel",
+        groupId: null,
+      });
+      await income(db, accountId, 25_000, {
+        transactionDate: Date.now() - DAY,
+      });
+      await income(db, accountId, 75_000, {
+        transactionDate: Date.now() + DAY,
+      });
+
+      const rows = await listTransactionsByAccount(db, accountId);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].amount).toBe(25_000);
+    });
+
     it("returns zero for an account without transactions", async () => {
       const accountId = await createAccount(db, {
         name: "Vide",

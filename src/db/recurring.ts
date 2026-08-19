@@ -267,6 +267,37 @@ export async function applyDueRecurring(
     now,
   );
 
+  // Resolve exchange rates before opening the write transaction. A rate lookup
+  // may refresh its cache, which has its own transaction and must not be nested
+  // inside the transaction that materializes recurring rows.
+  const resolvedRates = new Map<
+    number,
+    NonNullable<Awaited<ReturnType<typeof getRateForPair>>>
+  >();
+  for (const row of due) {
+    const sameCurrency =
+      row.destinationCurrencyCode == null ||
+      row.sourceCurrencyCode === row.destinationCurrencyCode;
+    if (sameCurrency) {
+      continue;
+    }
+    const rate = await getRateForPair(
+      db,
+      row.sourceCurrencyCode,
+      row.destinationCurrencyCode!,
+    );
+    if (!rate) {
+      throw new Error(
+        `Taux indisponible pour ${row.sourceCurrencyCode}/${row.destinationCurrencyCode}.`,
+      );
+    }
+    resolvedRates.set(row.id, rate);
+  }
+
+  if (due.length === 0) {
+    return 0;
+  }
+
   let generated = 0;
   await db.withTransactionAsync(async () => {
     for (const row of due) {
@@ -282,11 +313,7 @@ export async function applyDueRecurring(
           row.sourceCurrencyCode === row.destinationCurrencyCode;
         const rate = sameCurrency
           ? { rate: 1, date: new Date(next).toISOString().slice(0, 10), provider: "same currency" }
-          : await getRateForPair(
-              db,
-              row.sourceCurrencyCode,
-              row.destinationCurrencyCode!,
-            );
+          : resolvedRates.get(row.id);
         if (!rate) {
           throw new Error(
             `Taux indisponible pour ${row.sourceCurrencyCode}/${row.destinationCurrencyCode}.`,

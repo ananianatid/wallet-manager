@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Stack } from "expo-router/stack";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -7,7 +8,7 @@ import {
 } from "expo-router/react-navigation";
 import { ThemeProvider as AppThemeProvider, useTheme, useThemeControl } from "@/theme";
 import { StatusBar } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CompactStackHeader } from "@/components/compact-stack-header";
 import { LockScreen } from "@/components/lock-screen";
@@ -98,8 +99,10 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onb
 }
 
 export default function RootLayout() {
+  const router = useRouter();
   const [isReady, setIsReady] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const hasRoutedToDashboard = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -145,6 +148,15 @@ export default function RootLayout() {
       void SplashScreen.hideAsync();
     }
   }, [isReady]);
+
+  useEffect(() => {
+    if (!isReady || needsOnboarding || hasRoutedToDashboard.current) {
+      return;
+    }
+
+    hasRoutedToDashboard.current = true;
+    router.replace("/(tabs)/(dashboard)");
+  }, [isReady, needsOnboarding, router]);
 
   if (!isReady) {
     return null;

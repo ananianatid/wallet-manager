@@ -146,11 +146,11 @@ const styles = StyleSheet.create({
   },
   label: {
     maxWidth: "100%",
-    fontSize: 9,
-    fontWeight: "600",
+    fontSize: 10,
+    fontWeight: "500",
     letterSpacing: -0.15,
   },
   labelFocused: {
-    fontWeight: "800",
+    fontWeight: "600",
   },
 });
