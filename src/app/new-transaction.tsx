@@ -65,6 +65,7 @@ export default function NewTransactionScreen() {
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [exchangeRateDate, setExchangeRateDate] = useState<string | null>(null);
   const [exchangeRateProvider, setExchangeRateProvider] = useState<string | null>(null);
+  const [rateError, setRateError] = useState<string | null>(null);
   const [destinationEdited, setDestinationEdited] = useState(false);
   const [preserveStoredConversion, setPreserveStoredConversion] = useState(false);
   const [accountId, setAccountId] = useState<number | null>(null);
@@ -93,6 +94,9 @@ export default function NewTransactionScreen() {
       transactionId ? getTransaction(db, transactionId) : Promise.resolve(null),
     ]);
     setAccounts(accs);
+    if (!existing && accs.length === 1) {
+      setAccountId(accs[0].id);
+    }
     setCategories(cats);
     setGoals(goalRows);
     if (existing) {
@@ -205,7 +209,14 @@ export default function NewTransactionScreen() {
     void getDatabase()
       .then((db) => getRateForPair(db, sourceCurrency, destinationCurrency, { signal: controller.signal }))
       .then((rate) => {
-        if (!rate) return;
+        if (!rate) {
+          setDestinationAmount("");
+          setExchangeRate(null);
+          setExchangeRateDate(null);
+          setExchangeRateProvider(null);
+          setRateError(`Équivalent indisponible : aucun taux ${sourceCurrency}/${destinationCurrency} n’est disponible.`);
+          return;
+        }
         const target = Math.round(
           (sourceAmount / 10 ** currencyDigits(sourceCurrency)) *
             rate.rate *
@@ -218,7 +229,11 @@ export default function NewTransactionScreen() {
         setExchangeRateDate(rate.date);
         setExchangeRateProvider(rate.provider);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setRateError(`Équivalent indisponible : aucun taux ${sourceCurrency}/${destinationCurrency} n’est disponible.`);
+        }
+      });
     return () => controller.abort();
   }, [accountId, amount, destinationCurrency, destinationEdited, destinationId, isCrossCurrency, preserveStoredConversion, sourceCurrency]);
 
@@ -234,6 +249,9 @@ export default function NewTransactionScreen() {
       setDebitedAmount("");
       setDestinationAmount("");
       setExchangeRate(null);
+      setExchangeRateDate(null);
+      setExchangeRateProvider(null);
+      setRateError(null);
       setDestinationEdited(false);
     }
   };
@@ -578,6 +596,7 @@ export default function NewTransactionScreen() {
             value={amount}
             onChangeText={(value) => {
               setAmount(value);
+              setRateError(null);
               setErrors((current) => ({ ...current, amount: "" }));
             }}
             placeholder="0"
@@ -625,6 +644,7 @@ export default function NewTransactionScreen() {
                   setDestinationId(id);
                   setDestinationEdited(false);
                   setPreserveStoredConversion(false);
+                  setRateError(null);
                   setGoalReservationId(null);
                   setFeeMode("manual");
                   setDebitedAmount("");
@@ -651,6 +671,7 @@ export default function NewTransactionScreen() {
                     onChangeText={(value) => {
                       setDestinationAmount(value);
                       setDestinationEdited(true);
+                      setRateError(null);
                       setPreserveStoredConversion(false);
                       setErrors((current) => ({ ...current, destinationAmount: "" }));
                     }}
@@ -671,6 +692,9 @@ export default function NewTransactionScreen() {
                     {exchangeRateDate ? ` · taux du ${exchangeRateDate}` : ""}
                     {destinationEdited ? " · manuel" : ""}
                   </Text>
+                ) : null}
+                {isCrossCurrency && rateError ? (
+                  <Text style={{ color: theme.expense, fontSize: 12 }}>{rateError}</Text>
                 ) : null}
               </FormField>
             ) : null}

@@ -8,7 +8,6 @@ import type { Totals } from "@/utils/statistics";
 
 export function MonthlySummaryCard({
   totals,
-  totalLabel = "Total du mois",
   fullWidth = false,
   loading = false,
 }: {
@@ -42,19 +41,7 @@ export function MonthlySummaryCard({
           </Text>
         </View>
       ) : (
-        <>
-          <View style={styles.summaryHeading}>
-            <View style={styles.titleBlock}>
-              <Text style={{ color: cardLabel, fontSize: 12, fontWeight: "700" }}>
-                BILAN DE LA PÉRIODE
-              </Text>
-              <Text selectable style={[styles.summaryNet, { color: theme.accentSurfaceText }]}>
-                {formatAmount(totals.net, baseCurrency)}
-              </Text>
-            </View>
-            <Text style={{ color: cardLabel, fontSize: 12 }}>{totalLabel}</Text>
-          </View>
-          <View style={[styles.summaryFooter, { borderTopColor: withAlpha(cardLabel, "55") }]}>
+        <View style={styles.summaryFooter}>
           <View style={styles.footerItem}>
             <Text style={{ color: cardLabel, fontSize: 11 }}>Revenus</Text>
             <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceIncome }]}>
@@ -84,8 +71,7 @@ export function MonthlySummaryCard({
               {formatAmount(totals.net, baseCurrency)}
             </Text>
           </View>
-          </View>
-        </>
+        </View>
       )}
     </View>
   );
@@ -315,21 +301,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  summaryHeading: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  summaryNet: {
-    marginTop: spacing.xs,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "800",
-    fontVariant: ["tabular-nums"],
   },
   summaryLoading: {
     minHeight: 40,

@@ -7,6 +7,7 @@ import {
   MIGRATION_V12,
   MIGRATION_V13,
   MIGRATION_V14,
+  MIGRATION_V15,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -69,6 +70,7 @@ const MIGRATIONS: Record<number, string> = {
   12: MIGRATION_V12,
   13: MIGRATION_V13,
   14: MIGRATION_V14,
+  15: MIGRATION_V15,
 };
 
 class SqliteDb {
@@ -291,9 +293,10 @@ function assertMigratedState(db: SqliteDb, era: number): void {
     "Salaire",
     "Nourriture",
   ]);
-  for (const category of categories.slice(2)) {
-    expect(category.icon).toBe("tag");
-  }
+  expect(categories.slice(2).map((category) => category.icon)).toEqual([
+    "banknote-arrow-up",
+    "utensils",
+  ]);
 
   expect(tableNames(db)).toContain("account_groups");
   const groups = db.db

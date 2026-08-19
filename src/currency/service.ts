@@ -37,6 +37,10 @@ interface ApiCurrency {
 
 export const RATE_CACHE_TTL_MS = CACHE_TTL_MS;
 
+export function isValidExchangeRate(rate: number): boolean {
+  return Number.isFinite(rate) && rate > 0;
+}
+
 function mapCurrency(row: {
   code: string;
   name: string;
@@ -140,8 +144,13 @@ export async function refreshLatestRates(
       provider: PROVIDER,
       fetchedAt,
     },
-    ...payload.map((item) => ({ ...item, provider: PROVIDER, fetchedAt })),
+    ...payload
+      .filter((item) => isValidExchangeRate(item.rate))
+      .map((item) => ({ ...item, provider: PROVIDER, fetchedAt })),
   ];
+  if (rates.length === 1) {
+    throw new Error("Frankfurter n’a fourni aucun taux de change valide.");
+  }
   await db.withTransactionAsync(async () => {
     for (const item of rates) {
       await db.runAsync(
@@ -184,7 +193,7 @@ export async function ensureCurrentRates(
       base,
       cachedCount: cached.length,
     });
-    return { rates: cached, stale: cached.length > 0, refreshed: false };
+    return { rates: cached, stale: true, refreshed: false };
   }
 }
 
@@ -204,10 +213,17 @@ function rateFromRows(
     };
   }
   const direct = rows.find((row) => row.base === from && row.quote === to);
-  if (direct) return direct;
+  if (direct && isValidExchangeRate(direct.rate)) return direct;
   const fromBase = rows.find((row) => row.base === rows[0]?.base && row.quote === from);
   const toBase = rows.find((row) => row.base === rows[0]?.base && row.quote === to);
-  if (!fromBase || !toBase || fromBase.rate === 0) return null;
+  if (
+    !fromBase ||
+    !toBase ||
+    !isValidExchangeRate(fromBase.rate) ||
+    !isValidExchangeRate(toBase.rate)
+  ) {
+    return null;
+  }
   return {
     base: from,
     quote: to,
@@ -239,12 +255,15 @@ export async function getRateForPair(
     from,
     to,
   );
-  if (cachedDirect) return cachedDirect;
+  if (cachedDirect && isValidExchangeRate(cachedDirect.rate)) return cachedDirect;
   try {
     const item = await fetchJson<ApiRate>(
       `${API_BASE}/rate/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
       options.signal,
     );
+    if (!isValidExchangeRate(item.rate)) {
+      throw new Error("Le taux reçu est invalide.");
+    }
     const rate: CurrencyRate = { ...item, provider: PROVIDER, fetchedAt: Date.now() };
     await db.runAsync(
       `INSERT INTO fx_rates (base_code, quote_code, rate, rate_date, provider, fetched_at)

@@ -614,64 +614,6 @@ export default function StatisticsScreen() {
             }
           />
 
-          {comparison ? (
-            <View
-              style={[styles.card, { backgroundColor: theme.surface }]}
-              accessible
-              accessibilityRole="summary"
-              accessibilityLabel={`Comparaison avec la période précédente. Revenus ${formatSignedAmount(comparison.income.delta, baseCurrency)}. Dépenses ${formatSignedAmount(comparison.expense.delta + comparison.fees.delta, baseCurrency)}. Total net ${formatSignedAmount(comparison.net.delta, baseCurrency)}.`}
-            >
-              <View style={styles.sectionHeadingRow}>
-                <Text style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}>
-                  Comparaison
-                </Text>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                  Période précédente
-                </Text>
-              </View>
-              {!hasComparisonActivity ? (
-                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                  Aucune transaction dans la période précédente : les pourcentages marquent les nouvelles données.
-                </Text>
-              ) : null}
-              <View style={styles.comparisonGrid}>
-                <ComparisonMetricView
-                  label="Revenus"
-                  metric={comparison.income}
-                  currency={baseCurrency}
-                  kind="income"
-                  theme={theme}
-                />
-                <ComparisonMetricView
-                  label="Dépenses"
-                  metric={{
-                    ...comparison.expense,
-                    current: comparison.expense.current + comparison.fees.current,
-                    previous: comparison.expense.previous + comparison.fees.previous,
-                    delta: comparison.expense.delta + comparison.fees.delta,
-                    percent:
-                      comparison.expense.previous + comparison.fees.previous === 0
-                        ? null
-                        : ((comparison.expense.current + comparison.fees.current -
-                            comparison.expense.previous - comparison.fees.previous) /
-                            (comparison.expense.previous + comparison.fees.previous)) *
-                          100,
-                  }}
-                  currency={baseCurrency}
-                  kind="expense"
-                  theme={theme}
-                />
-                <ComparisonMetricView
-                  label="Total net"
-                  metric={comparison.net}
-                  currency={baseCurrency}
-                  kind="net"
-                  theme={theme}
-                />
-              </View>
-            </View>
-          ) : null}
-
           <View>
             <View style={[styles.typeControl, { backgroundColor: theme.surface }]}>
               {TYPE_OPTIONS.map((option) => {
@@ -847,6 +789,64 @@ export default function StatisticsScreen() {
               </>
             )}
           </View>
+
+          {comparison ? (
+            <View
+              style={[styles.card, { backgroundColor: theme.surface }]}
+              accessible
+              accessibilityRole="summary"
+              accessibilityLabel={`Comparaison avec la période précédente. Revenus ${formatSignedAmount(comparison.income.delta, baseCurrency)}. Dépenses ${formatSignedAmount(comparison.expense.delta + comparison.fees.delta, baseCurrency)}. Total net ${formatSignedAmount(comparison.net.delta, baseCurrency)}.`}
+            >
+              <View style={styles.sectionHeadingRow}>
+                <Text style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}>
+                  Comparaison
+                </Text>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                  Période précédente
+                </Text>
+              </View>
+              {!hasComparisonActivity ? (
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                  Aucune transaction dans la période précédente : les pourcentages marquent les nouvelles données.
+                </Text>
+              ) : null}
+              <View style={styles.comparisonGrid}>
+                <ComparisonMetricView
+                  label="Revenus"
+                  metric={comparison.income}
+                  currency={baseCurrency}
+                  kind="income"
+                  theme={theme}
+                />
+                <ComparisonMetricView
+                  label="Dépenses"
+                  metric={{
+                    ...comparison.expense,
+                    current: comparison.expense.current + comparison.fees.current,
+                    previous: comparison.expense.previous + comparison.fees.previous,
+                    delta: comparison.expense.delta + comparison.fees.delta,
+                    percent:
+                      comparison.expense.previous + comparison.fees.previous === 0
+                        ? null
+                        : ((comparison.expense.current + comparison.fees.current -
+                            comparison.expense.previous - comparison.fees.previous) /
+                            (comparison.expense.previous + comparison.fees.previous)) *
+                          100,
+                  }}
+                  currency={baseCurrency}
+                  kind="expense"
+                  theme={theme}
+                />
+                <ComparisonMetricView
+                  label="Total net"
+                  metric={comparison.net}
+                  currency={baseCurrency}
+                  kind="net"
+                  theme={theme}
+                />
+              </View>
+            </View>
+          ) : null}
 
           {comparison && hasComparisonActivity && changes.length > 0 ? (
             <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.sm }]}>

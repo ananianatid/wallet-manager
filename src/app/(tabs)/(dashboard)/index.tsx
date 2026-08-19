@@ -24,9 +24,9 @@ import { listGoals } from "@/db/goals";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, typography, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { budgetProgress } from "@/utils/dashboard";
-import { formatAmount, formatDate, formatDayLabel, formatTime } from "@/utils/format";
+import { formatAmount, formatDate, formatDayLabel, formatShortDate, formatTime } from "@/utils/format";
 import { savingsByRule } from "@/utils/statistics";
 import { userMessage } from "@/utils/user-message";
 import { goalTotals } from "@/utils/goals";
@@ -36,6 +36,31 @@ interface RecentDayGroup {
   key: string;
   title: string;
   data: Transaction[];
+}
+
+function DashboardStatCard({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor: string;
+}) {
+  const theme = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={`${label} : ${value}`}
+      style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.separator }]}
+    >
+      <Text style={[styles.statLabel, { color: theme.secondaryLabel }]}>{label}</Text>
+      <Text selectable numberOfLines={1} style={[styles.statValue, { color: valueColor }]}>
+        {value}
+      </Text>
+    </View>
+  );
 }
 
 function groupTransactionsByDay(transactions: Transaction[]): RecentDayGroup[] {
@@ -66,6 +91,7 @@ export default function DashboardScreen() {
     const nowMs = now.getTime();
     const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
     const [
       forecast,
       accounts,
@@ -73,6 +99,7 @@ export default function DashboardScreen() {
       budgets,
       savingsRules,
       monthTx,
+      previousMonthTx,
       allTransactions,
       recent,
       upcoming,
@@ -84,6 +111,7 @@ export default function DashboardScreen() {
         listBudgets(db),
         listSavingsRules(db),
         listTransactions(db, { startMs, endMs, order: "asc" }),
+        listTransactions(db, { startMs: previousMonthStart, endMs: startMs, order: "asc" }),
         listTransactions(db, { order: "asc" }),
         listTransactions(db, { endMs: nowMs, order: "desc", limit: 5 }),
         listTransactions(db, { startMs: nowMs, order: "asc", limit: 3 }),
@@ -101,6 +129,7 @@ export default function DashboardScreen() {
       budgets,
       savingsRules,
       monthTx,
+      previousMonthTx,
       recent,
       upcoming,
       savingsTotal,
@@ -129,12 +158,13 @@ export default function DashboardScreen() {
   const recent = useMemo(() => data?.recent ?? [], [data?.recent]);
   const upcoming = useMemo(() => data?.upcoming ?? [], [data?.upcoming]);
   const monthTx = useMemo(() => data?.monthTx ?? [], [data?.monthTx]);
+  const previousMonthTx = useMemo(() => data?.previousMonthTx ?? [], [data?.previousMonthTx]);
   const savingsTotal = data?.savingsTotal ?? 0;
   const totals = useMemo(() => goalTotals(goals, convert), [convert, goals]);
   const recentGroups = useMemo(() => groupTransactionsByDay(recent), [recent]);
   const upcomingGroups = useMemo(() => groupTransactionsByDay(upcoming), [upcoming]);
 
-  const { spentByCategory, totalExpense } = useMemo(() => {
+  const { spentByCategory, totalExpense, previousMonthExpense } = useMemo(() => {
     const map = new Map<number, number>();
     let total = 0;
     for (const t of monthTx) {
@@ -147,13 +177,55 @@ export default function DashboardScreen() {
         map.set(t.categoryId, (map.get(t.categoryId) ?? 0) + converted);
       }
     }
-    return { spentByCategory: map, totalExpense: total };
-  }, [monthTx, convert, baseCurrency]);
+    const previousTotal = previousMonthTx.reduce((sum, transaction) => {
+      if (transaction.type !== "expense") {
+        return sum;
+      }
+      return sum + (convert(transaction.amount, transaction.accountCurrencyCode ?? baseCurrency) ?? 0);
+    }, 0);
+    return {
+      spentByCategory: map,
+      totalExpense: total,
+      previousMonthExpense: previousTotal,
+    };
+  }, [baseCurrency, convert, monthTx, previousMonthTx]);
 
   const budgetRows = useMemo(
     () => budgetProgress(budgets, spentByCategory, totalExpense),
     [budgets, spentByCategory, totalExpense],
   );
+  const budgetRemaining = useMemo(() => {
+    if (budgetRows.length === 0) {
+      return null;
+    }
+    return budgetRows.reduce((sum, row) => {
+      const budgetAmount = convert(row.budget.amount, row.budget.currencyCode) ?? row.budget.amount;
+      return sum + Math.max(budgetAmount - row.spent, 0);
+    }, 0);
+  }, [budgetRows, convert]);
+  const insight = useMemo(() => {
+    if (previousMonthExpense > 0) {
+      const change = Math.round(((totalExpense - previousMonthExpense) / previousMonthExpense) * 100);
+      if (change < 0) {
+        return `Vos dépenses sont ${Math.abs(change)} % plus faibles que le mois dernier. Vous êtes sur la bonne trajectoire.`;
+      }
+      if (change > 0) {
+        return `Vos dépenses sont ${change} % plus élevées que le mois dernier. Vérifiez vos prochains paiements.`;
+      }
+      return "Vos dépenses restent stables par rapport au mois dernier.";
+    }
+    return totalExpense > 0
+      ? "Vos dépenses commencent à se dessiner ce mois-ci."
+      : "Ajoutez vos premières dépenses pour voir votre trajectoire.";
+  }, [previousMonthExpense, totalExpense]);
+  const insightTitle =
+    monthTx.length === 0 && previousMonthTx.length === 0
+      ? "Votre suivi commence ici"
+      : previousMonthExpense > 0 && totalExpense > previousMonthExpense
+        ? "À surveiller ce mois-ci"
+        : previousMonthExpense > 0
+          ? "Tout va bien ce mois-ci"
+          : "Continuez votre suivi";
 
   const openEdit = (id: number) =>
     router.push({ pathname: "/new-transaction", params: { id: String(id) } });
@@ -212,6 +284,43 @@ export default function DashboardScreen() {
                   />
                 </MotionEntrance>
               ) : null}
+
+              <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
+                  <DashboardStatCard
+                    label="Dépenses ce mois"
+                    value={formatAmount(totalExpense, baseCurrency)}
+                    valueColor={theme.label}
+                  />
+                  <DashboardStatCard
+                    label="Budget restant"
+                    value={budgetRemaining == null ? "—" : formatAmount(budgetRemaining, baseCurrency)}
+                    valueColor={theme.income}
+                  />
+                </View>
+                <View style={styles.statsRow}>
+                  <DashboardStatCard
+                    label="Épargne"
+                    value={formatAmount(savingsTotal, baseCurrency)}
+                    valueColor={theme.label}
+                  />
+                  <DashboardStatCard
+                    label="Prochaine échéance"
+                    value={upcoming[0] ? formatShortDate(upcoming[0].transactionDate) : "—"}
+                    valueColor={theme.label}
+                  />
+                </View>
+              </View>
+
+              <View
+                accessible
+                accessibilityRole="summary"
+                accessibilityLabel={`Insight : ${insight}`}
+                style={[styles.insightCard, { backgroundColor: withAlpha(theme.income, "18") }]}
+              >
+                <Text style={[styles.insightTitle, { color: theme.label }]}>{insightTitle}</Text>
+                <Text style={[styles.insightBody, { color: theme.secondaryLabel }]}>{insight}</Text>
+              </View>
 
               {budgetRows.length > 0 ? (
                 <ContentSection
@@ -338,7 +447,10 @@ export default function DashboardScreen() {
                   }}
                 >
                   {recentGroups.map((group) => (
-                    <View key={group.key} style={styles.recentDayGroup}>
+                    <View
+                      key={group.key}
+                      style={[styles.recentDayGroup, { backgroundColor: theme.surface, borderColor: theme.separator }]}
+                    >
                       <View
                         style={[
                           styles.recentDayHeader,
@@ -363,8 +475,6 @@ export default function DashboardScreen() {
                               style={{
                                 height: StyleSheet.hairlineWidth,
                                 backgroundColor: theme.separator,
-                                marginLeft: spacing.lg + 22,
-                                marginRight: spacing.lg,
                               }}
                             />
                           ) : null}
@@ -384,7 +494,10 @@ export default function DashboardScreen() {
                   }}
                 >
                   {upcomingGroups.map((group) => (
-                    <View key={group.key} style={styles.recentDayGroup}>
+                    <View
+                      key={group.key}
+                      style={[styles.recentDayGroup, { backgroundColor: theme.surface, borderColor: theme.separator }]}
+                    >
                       <View
                         style={[
                           styles.recentDayHeader,
@@ -409,8 +522,6 @@ export default function DashboardScreen() {
                               style={{
                                 height: StyleSheet.hairlineWidth,
                                 backgroundColor: theme.separator,
-                                marginLeft: spacing.lg + 22,
-                                marginRight: spacing.lg,
                               }}
                             />
                           ) : null}
@@ -564,14 +675,57 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   recentDayGroup: {
-    gap: spacing.xs,
+    overflow: "hidden",
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   recentDayHeader: {
-    paddingTop: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   recentDayTitle: {
     fontSize: 12,
+    fontWeight: "600",
+  },
+  statsGrid: {
+    gap: spacing.md,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 100,
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: "continuous",
+  },
+  statLabel: {
+    fontSize: 12,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  insightCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    gap: spacing.xs,
+    borderCurve: "continuous",
+  },
+  insightTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  insightBody: {
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

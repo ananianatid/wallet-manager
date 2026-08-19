@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, PiggyBank, Plus, X } from "lucide-react-native";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Plus, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
@@ -50,9 +50,10 @@ export function QuickAddMenu({ visible, onClose }: QuickAddMenuProps) {
     router.push({ pathname: "/new-transaction", params: { type } });
   };
 
-  const openSavings = () => {
-    onClose();
-    router.push("/savings");
+  const actionAccessibilityLabel = (type: (typeof ACTIONS)[number]["type"]) => {
+    if (type === "expense") return "Ajouter une dépense";
+    if (type === "income") return "Ajouter un revenu";
+    return "Ajouter un transfert";
   };
 
   return (
@@ -86,7 +87,7 @@ export function QuickAddMenu({ visible, onClose }: QuickAddMenuProps) {
                 key={type}
                 onPress={() => openTransaction(type)}
                 accessibilityRole="button"
-                accessibilityLabel={`Ajouter un ${label.toLowerCase()}`}
+                accessibilityLabel={actionAccessibilityLabel(type)}
                 style={[styles.action, { borderColor: theme.separator }]}
               >
                 <View style={[styles.icon, { backgroundColor: withAlpha(type === "expense" ? theme.expense : type === "income" ? theme.income : theme.accent, "18") }]}>
@@ -95,17 +96,6 @@ export function QuickAddMenu({ visible, onClose }: QuickAddMenuProps) {
                 <Text style={[styles.actionLabel, { color: theme.label }]}>{label}</Text>
               </AnimatedPressable>
             ))}
-            <AnimatedPressable
-              onPress={openSavings}
-              accessibilityRole="button"
-              accessibilityLabel="Configurer une épargne"
-              style={[styles.action, { borderColor: theme.separator }]}
-            >
-              <View style={[styles.icon, { backgroundColor: withAlpha(theme.income, "18") }]}>
-                <PiggyBank size={20} color={theme.income} />
-              </View>
-              <Text style={[styles.actionLabel, { color: theme.label }]}>Épargne</Text>
-            </AnimatedPressable>
           </View>
         </Animated.View>
       </Animated.View>
@@ -119,7 +109,7 @@ export function AddFab({ onPress, bottom }: { onPress: () => void; bottom: numbe
     <AnimatedPressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Ajouter"
+      accessibilityLabel="Ajouter une opération"
       accessibilityHint="Ouvre les actions pour ajouter une opération."
       style={[
         styles.fab,

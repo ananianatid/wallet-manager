@@ -32,15 +32,18 @@ function makeData(amount: number): SafeToSpend {
 }
 
 describe("SafeToSpendCard", () => {
-  it("labels the summary total according to the selected period", async () => {
-    const { getByText } = await render(
+  it("affiche uniquement le détail du bilan", async () => {
+    const { getByText, queryByText } = await render(
       <MonthlySummaryCard
         totals={{ income: 120_000, expense: 45_000, fees: 0, net: 75_000 }}
         totalLabel="Total de la période"
       />,
     );
 
-    expect(getByText("Total de la période")).toBeTruthy();
+    expect(queryByText("Total de la période")).toBeNull();
+    expect(getByText("Revenus")).toBeTruthy();
+    expect(getByText("Dépenses")).toBeTruthy();
+    expect(getByText("Écart")).toBeTruthy();
   });
 
   it("hides period totals while the selected period is loading", async () => {

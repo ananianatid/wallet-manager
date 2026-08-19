@@ -75,9 +75,11 @@ Le premier écran suit cet ordre :
 
 1. contexte du jour ;
 2. carte **Patrimoine disponible** avec montant actuel, évolution ou prévision après échéances ;
-3. budgets et plans utiles ;
-4. activité récente ;
-5. premiers réglages uniquement lorsqu’ils sont nécessaires.
+3. grille 2 × 2 de cartes synthétiques : dépenses du mois, budget restant, épargne et prochaine échéance ;
+4. insight calme comparant les dépenses au mois précédent lorsque cette donnée existe ;
+5. budgets et plans utiles ;
+6. activité récente ;
+7. premiers réglages uniquement lorsqu’ils sont nécessaires.
 
 La carte patrimoine conserve le calcul « disponible sans risque » existant. La formulation explique le périmètre au lieu de présenter une prévision comme un solde brut.
 
@@ -98,6 +100,8 @@ Une ligne est immédiatement lisible :
 `icône · nom · catégorie/date · montant`
 
 Le nom domine, la catégorie et la date sont secondaires, le montant est aligné et tabulaire. Une dépense normale n’est pas rouge ; le négatif est réservé à une information demandant une décision.
+
+Les transactions sont regroupées par jour. Chaque groupe utilise une surface blanche bordée, un en-tête de date discret et des séparateurs pleine largeur entre les lignes. Les icônes utilisent un fond neutre de surface élevée, jamais une couleur différente selon la catégorie.
 
 ## Responsive et accessibilité
 

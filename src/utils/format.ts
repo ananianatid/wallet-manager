@@ -15,6 +15,13 @@ export function formatDate(ms: number): string {
   });
 }
 
+export function formatShortDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+  });
+}
+
 const startOfLocalDay = (date: Date): number =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 

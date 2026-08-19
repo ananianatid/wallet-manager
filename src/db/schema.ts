@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 14;
+export const DATABASE_VERSION = 15;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -186,6 +186,21 @@ export const SEED_CATEGORIES: Record<string, string[]> = {
     "Shopping",
     "Autre",
   ],
+};
+
+const SEED_CATEGORY_ICONS: Record<string, string> = {
+  Salaire: "banknote-arrow-up",
+  "Virement reçu": "banknote",
+  Cadeau: "gift",
+  Remboursement: "rotate-ccw",
+  Nourriture: "utensils",
+  Transport: "car-front",
+  Logement: "house",
+  Factures: "receipt-text",
+  Santé: "heart-pulse",
+  Éducation: "graduation-cap",
+  Loisirs: "gamepad-2",
+  Shopping: "shopping-bag",
 };
 
 export const MIGRATION_V2 = `
@@ -379,6 +394,26 @@ export const MIGRATION_V14 = `
   ALTER TABLE goals ADD COLUMN link_url TEXT;
 `;
 
+export const MIGRATION_V15 = `
+  UPDATE categories
+  SET icon = CASE name
+    WHEN 'Salaire' THEN 'banknote-arrow-up'
+    WHEN 'Virement reçu' THEN 'banknote'
+    WHEN 'Cadeau' THEN 'gift'
+    WHEN 'Remboursement' THEN 'rotate-ccw'
+    WHEN 'Nourriture' THEN 'utensils'
+    WHEN 'Transport' THEN 'car-front'
+    WHEN 'Logement' THEN 'house'
+    WHEN 'Factures' THEN 'receipt-text'
+    WHEN 'Santé' THEN 'heart-pulse'
+    WHEN 'Éducation' THEN 'graduation-cap'
+    WHEN 'Loisirs' THEN 'gamepad-2'
+    WHEN 'Shopping' THEN 'shopping-bag'
+    ELSE icon
+  END
+  WHERE is_seed = 1 AND type IN ('income', 'expense') AND icon = 'tag';
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -386,7 +421,7 @@ export async function seedCategories(db: SQLiteDatabase): Promise<void> {
         "INSERT INTO categories (type, name, is_seed, icon) VALUES (?, ?, 1, ?)",
         type,
         name,
-        type === "account" ? null : "tag",
+        type === "account" ? null : SEED_CATEGORY_ICONS[name] ?? "tag",
       );
     }
   }
@@ -483,6 +518,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 13) {
       await db.execAsync(MIGRATION_V14);
+    }
+    if (currentDbVersion <= 14) {
+      await db.execAsync(MIGRATION_V15);
     }
   }
 

@@ -42,14 +42,7 @@ interface DaySection {
   data: Transaction[];
 }
 
-interface MonthSection {
-  key: string;
-  title: string;
-  total: number;
-  data: Transaction[];
-}
-
-type TransactionSection = DaySection | MonthSection;
+type TransactionSection = DaySection;
 
 export default function TransactionsScreen() {
   const theme = useTheme();
@@ -146,71 +139,34 @@ export default function TransactionsScreen() {
 
   const sections = useMemo<TransactionSection[]>(() => {
     const rows = transactions ?? [];
-
-    if (filters.mode === "all") {
-      const groups = new Map<string, MonthSection>();
-      for (const t of rows) {
-        const date = new Date(t.transactionDate);
-        const key = `${date.getFullYear()}-${date.getMonth()}`;
-        let section = groups.get(key);
-        if (!section) {
-          const label = formatMonthLabel(
-            date.getFullYear(),
-            date.getMonth(),
-          );
-          section = {
-            key,
-            title: label.charAt(0).toUpperCase() + label.slice(1),
-            total: 0,
-            data: [],
-          };
-          groups.set(key, section);
-        }
-        section.data.push(t);
-        const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        section.total +=
-          t.type === "income"
-            ? amount
-            : t.type === "expense"
-              ? -amount
-              : fee
-                ? -fee
-                : 0;
-      }
-      const sorted = [...groups.values()];
-      sorted.sort((a, b) => (b.key < a.key ? -1 : b.key > a.key ? 1 : 0));
-      return sorted;
-    }
-
     const groups = new Map<string, DaySection>();
     for (const t of rows) {
       const date = new Date(t.transactionDate);
       const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
       let section = groups.get(key);
-        if (!section) {
-          section = {
-            key,
-            title: formatDayLabel(t.transactionDate),
-            income: 0,
-            expense: 0,
-            data: [],
-          };
-          groups.set(key, section);
-        }
-        section.data.push(t);
-        const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        if (t.type === "income") {
-          section.income += amount;
-        } else if (t.type === "expense") {
-          section.expense += amount;
-        } else if (fee) {
-          section.expense += fee;
-        }
+      if (!section) {
+        section = {
+          key,
+          title: formatDayLabel(t.transactionDate),
+          income: 0,
+          expense: 0,
+          data: [],
+        };
+        groups.set(key, section);
+      }
+      section.data.push(t);
+      const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+      const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+      if (t.type === "income") {
+        section.income += amount;
+      } else if (t.type === "expense") {
+        section.expense += amount;
+      } else if (fee) {
+        section.expense += fee;
+      }
     }
     return [...groups.values()];
-  }, [baseCurrency, convert, filters, transactions]);
+  }, [baseCurrency, convert, transactions]);
 
   const monthRows = transactions ?? [];
 
@@ -281,7 +237,7 @@ export default function TransactionsScreen() {
             <View
               style={[
                 styles.sectionCardRow,
-                { backgroundColor: theme.surface },
+                { backgroundColor: theme.surface, borderColor: theme.separator },
                 isLast && styles.sectionCardRowLast,
               ]}
             >
@@ -295,8 +251,6 @@ export default function TransactionsScreen() {
                   style={{
                     height: StyleSheet.hairlineWidth,
                     backgroundColor: theme.separator,
-                    marginLeft: spacing.lg + 22,
-                    marginRight: spacing.lg,
                   }}
                 />
               ) : null}
@@ -307,7 +261,7 @@ export default function TransactionsScreen() {
           <View
             style={[
               styles.dayHeader,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.surface, borderColor: theme.separator },
             ]}
           >
             <Text
@@ -316,32 +270,14 @@ export default function TransactionsScreen() {
             >
               {section.title}
             </Text>
-            {"income" in section ? (
-              <View style={styles.daySummary}>
-                {section.income > 0 ? (
-                  <Text style={[styles.dayAmount, { color: theme.income }]}>
-                    + {formatAmount(section.income, baseCurrency)}
-                  </Text>
-                ) : null}
-                {section.expense > 0 ? (
-                  <Text style={[styles.dayAmount, { color: theme.expense }]}>
-                    −{formatAmount(section.expense, baseCurrency)}
-                  </Text>
-                ) : null}
-              </View>
-            ) : (
-              <Text
-                style={[
-                  styles.dayTotal,
-                  {
-                    color:
-                      section.total >= 0 ? theme.label : theme.expense,
-                  },
-                ]}
-              >
-                {formatAmount(section.total, baseCurrency)}
-              </Text>
-            )}
+            <View style={styles.daySummary}>
+              {section.income > 0 ? (
+                <Text style={[styles.dayAmount, { color: theme.income }]}>+ {formatAmount(section.income, baseCurrency)}</Text>
+              ) : null}
+              {section.expense > 0 ? (
+                <Text style={[styles.dayAmount, { color: theme.label }]}>−{formatAmount(section.expense, baseCurrency)}</Text>
+              ) : null}
+            </View>
           </View>
         )}
         stickySectionHeadersEnabled={false}
@@ -425,13 +361,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
-  },
-  dayTotal: {
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
   },
   daySummary: {
     flexDirection: "row",
@@ -445,8 +379,11 @@ const styles = StyleSheet.create({
   },
   sectionCardRow: {
     marginHorizontal: spacing.lg,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
   },
   sectionCardRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomLeftRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
     paddingBottom: spacing.md + spacing.sm,
