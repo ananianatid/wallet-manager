@@ -10,6 +10,14 @@ import { useColorScheme } from "react-native";
 import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 
+/*
+THESIS: Wallet is a pocket cash desk: decide what is safe now, then record it fast.
+OWN-WORLD: Indigo ledger surfaces, lime decision markers, coral outflows, compact Android type.
+STORY: See the available amount, understand the next pressure, and take one clear action.
+FIRST VIEWPORT: A calm daily header, the available-now decision card, then three quick actions.
+FORM: Dense operate layout with tonal elevation, full-width Android navigation, and no ornamental card grid.
+*/
+
 export interface ThemeColors {
   background: string;
   surface: string;
@@ -42,17 +50,17 @@ export type AccentTheme = "blue" | "midnight" | "green";
 
 export const palettes: Record<"dark" | "light", ThemeColors> = {
   dark: {
-    background: "#0A0A0B",
-    surface: "#141417",
-    surfaceMuted: "#101013",
-    surfaceElevated: "#1D1D22",
-    label: "#F5F5F7",
-    secondaryLabel: "#9B9BA3",
-    separator: "#2A2A2E",
-    outline: "#4A4A52",
+    background: "#0A1020",
+    surface: "#111A2B",
+    surfaceMuted: "#0E1728",
+    surfaceElevated: "#182541",
+    label: "#F3F6FF",
+    secondaryLabel: "#9EAAC4",
+    separator: "#263452",
+    outline: "#516181",
     scrim: "#00000080",
     accent: "#34D399",
-    onAccent: "#0A0A0B",
+    onAccent: "#0A1020",
     warning: "#F59E0B",
     income: "#4ADE80",
     expense: "#F87171",
@@ -68,14 +76,14 @@ export const palettes: Record<"dark" | "light", ThemeColors> = {
     dangerSurfaceExpense: "#FFB0B0",
   },
   light: {
-    background: "#FFFFFF",
-    surface: "#F5F5F7",
-    surfaceMuted: "#FAFAFB",
-    surfaceElevated: "#FFFFFF",
-    label: "#1C1C1E",
-    secondaryLabel: "#6E6E73",
-    separator: "#E5E5EA",
-    outline: "#B8B8C0",
+    background: "#F4F6F1",
+    surface: "#FFFFFF",
+    surfaceMuted: "#EDF1EA",
+    surfaceElevated: "#F8FAF5",
+    label: "#16213A",
+    secondaryLabel: "#5F6D83",
+    separator: "#D9E1D6",
+    outline: "#99A8A0",
     scrim: "#00000080",
     accent: "#059669",
     onAccent: "#FFFFFF",
@@ -150,10 +158,10 @@ const ACCENT_PALETTES: Record<
   },
   midnight: {
     dark: {
-      accent: "#7CC2FF",
-      onAccent: "#07111F",
-      accentSurface: "#123A60",
-      accentSurfaceLabel: "#B7DBFF",
+      accent: "#D8F36A",
+      onAccent: "#17213A",
+      accentSurface: "#202D5A",
+      accentSurfaceLabel: "#E6EDB2",
       accentSurfaceText: "#FFFFFF",
       dangerSurface: "#5A232B",
       dangerSurfaceLabel: "#FFD0D6",
@@ -164,10 +172,10 @@ const ACCENT_PALETTES: Record<
       dangerSurfaceExpense: "#FFB0B0",
     },
     light: {
-      accent: "#123A60",
+      accent: "#263A77",
       onAccent: "#FFFFFF",
-      accentSurface: "#123A60",
-      accentSurfaceLabel: "#B7DBFF",
+      accentSurface: "#263A77",
+      accentSurfaceLabel: "#D7E0FF",
       accentSurfaceText: "#FFFFFF",
       dangerSurface: "#5A232B",
       dangerSurfaceLabel: "#FFD0D6",
@@ -224,30 +232,30 @@ type MidnightNeutralPalette = Pick<
 
 const MIDNIGHT_NEUTRALS: Record<"dark" | "light", MidnightNeutralPalette> = {
   dark: {
-    background: "#07111F",
-    surface: "#0C1C2B",
-    surfaceMuted: "#091622",
-    surfaceElevated: "#10283D",
-    label: "#F2F8FF",
-    secondaryLabel: "#9FB6CC",
-    separator: "#1D3952",
-    outline: "#3D607C",
+    background: "#0A1020",
+    surface: "#111A2B",
+    surfaceMuted: "#0E1728",
+    surfaceElevated: "#182541",
+    label: "#F3F6FF",
+    secondaryLabel: "#9EAAC4",
+    separator: "#263452",
+    outline: "#516181",
   },
   light: {
-    background: "#F3F7FC",
+    background: "#F4F6F1",
     surface: "#FFFFFF",
-    surfaceMuted: "#F8FBFF",
-    surfaceElevated: "#EAF3FC",
-    label: "#102B45",
-    secondaryLabel: "#55708B",
-    separator: "#D7E6F5",
-    outline: "#9DB8D0",
+    surfaceMuted: "#EDF1EA",
+    surfaceElevated: "#F8FAF5",
+    label: "#16213A",
+    secondaryLabel: "#5F6D83",
+    separator: "#D9E1D6",
+    outline: "#99A8A0",
   },
 };
 
 export function getThemePalette(
   scheme: "dark" | "light",
-  accentTheme: AccentTheme = "blue",
+  accentTheme: AccentTheme = "midnight",
 ): ThemeColors {
   return {
     ...palettes[scheme],
@@ -289,7 +297,7 @@ const MODE_VALUES: ThemeMode[] = ["system", "light", "dark"];
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>("system");
-  const [accentTheme, setAccentThemeState] = useState<AccentTheme>("blue");
+  const [accentTheme, setAccentThemeState] = useState<AccentTheme>("midnight");
 
   useEffect(() => {
     let cancelled = false;
@@ -372,7 +380,17 @@ export const spacing = {
 } as const;
 
 export const radius = {
+  sm: 8,
   md: 12,
   lg: 16,
   xl: 24,
+} as const;
+
+export const typography = {
+  display: { fontSize: 34, lineHeight: 40, fontWeight: "800" as const, letterSpacing: -0.8 },
+  title: { fontSize: 22, lineHeight: 28, fontWeight: "700" as const, letterSpacing: -0.35 },
+  section: { fontSize: 16, lineHeight: 22, fontWeight: "700" as const, letterSpacing: -0.15 },
+  body: { fontSize: 15, lineHeight: 21, fontWeight: "400" as const },
+  label: { fontSize: 12, lineHeight: 16, fontWeight: "600" as const, letterSpacing: 0.15 },
+  amount: { fontSize: 30, lineHeight: 36, fontWeight: "800" as const },
 } as const;

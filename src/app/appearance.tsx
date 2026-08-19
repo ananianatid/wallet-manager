@@ -20,7 +20,7 @@ const OPTIONS: { value: ThemeMode; label: string; hint: string }[] = [
 
 const ACCENT_OPTIONS: { value: AccentTheme; label: string; hint: string }[] = [
   { value: "blue", label: "Bleu", hint: "Accent #339CFF" },
-  { value: "midnight", label: "Bleu nuit", hint: "Thème général #123A60" },
+  { value: "midnight", label: "Indigo citron", hint: "Décisions en citron sur un fond indigo" },
   { value: "green", label: "Vert", hint: "Accent vert d’origine" },
 ];
 

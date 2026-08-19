@@ -1,6 +1,7 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -48,9 +49,10 @@ const FEE_MODES: { value: TransferFeeMode; label: string }[] = [
 
 export default function NewTransactionScreen() {
   const theme = useTheme();
-  const { id, goalId: goalParam } = useLocalSearchParams<{
+  const { id, goalId: goalParam, type: typeParam } = useLocalSearchParams<{
     id?: string;
     goalId?: string;
+    type?: TransactionType;
   }>();
   const transactionId = id ? Number(id) : null;
 
@@ -121,6 +123,8 @@ export default function NewTransactionScreen() {
       setDebitedAmount("");
       setNote(existing.note ?? "");
       setDate(new Date(existing.transactionDate));
+    } else if (typeParam === "income" || typeParam === "expense" || typeParam === "transfer") {
+      setType(typeParam);
     } else if (goalParam) {
       const parsedGoalId = Number(goalParam);
       if (Number.isInteger(parsedGoalId) && parsedGoalId > 0) {
@@ -128,7 +132,7 @@ export default function NewTransactionScreen() {
         setGoalReservationId(parsedGoalId);
       }
     }
-  }, [goalParam, transactionId]);
+  }, [goalParam, transactionId, typeParam]);
 
   useFocusEffect(
     useCallback(() => {
@@ -505,6 +509,18 @@ export default function NewTransactionScreen() {
         <View accessible accessibilityRole="radiogroup" style={styles.typeRow}>
           {TYPES.map((t) => {
             const active = type === t.value;
+            const semanticColor =
+              t.value === "income"
+                ? theme.income
+                : t.value === "expense"
+                  ? theme.expense
+                  : theme.accent;
+            const Icon =
+              t.value === "income"
+                ? ArrowUpRight
+                : t.value === "expense"
+                  ? ArrowDownLeft
+                  : ArrowLeftRight;
             return (
               <Pressable
                 key={t.value}
@@ -521,8 +537,13 @@ export default function NewTransactionScreen() {
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={t.label}
                 accessibilityHint="Change le type de transaction."
-              >
-                <Text
+                >
+                  <Icon
+                    size={17}
+                    strokeWidth={2.4}
+                    color={active ? theme.onAccent : semanticColor}
+                  />
+                  <Text
                   style={{
                     color: active ? theme.onAccent : theme.secondaryLabel,
                     fontWeight: "600",
@@ -919,6 +940,8 @@ const styles = StyleSheet.create({
   },
   typeButton: {
     flex: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 48,

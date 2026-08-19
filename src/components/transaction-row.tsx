@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowLeftRight } from "lucide-react-native";
 import { CategoryIcon } from "@/components/category-icons";
-import { spacing, useTheme, withAlpha } from "@/theme";
+import { spacing, typography, useTheme, withAlpha } from "@/theme";
 import type { Transaction } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 
@@ -48,10 +48,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
           {title}
         </Text>
         <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
-          {transaction.accountName}
-        </Text>
-        <Text style={[styles.dateDetail, { color: theme.secondaryLabel }]} numberOfLines={1}>
-          {dateLabel}
+          {transaction.accountName} · {dateLabel}
         </Text>
         {transaction.note ? (
           <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
@@ -102,17 +99,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    minHeight: 64,
+    minHeight: 72,
     borderCurve: "continuous",
   },
   categoryIcon: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
+    borderRadius: 10,
     borderCurve: "continuous",
   },
   body: {
@@ -120,17 +117,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontWeight: "500",
+    ...typography.body,
+    fontWeight: "600",
+    lineHeight: 20,
   },
   detail: {
     fontSize: 12,
-  },
-  dateDetail: {
-    fontSize: 12,
+    lineHeight: 17,
     fontVariant: ["tabular-nums"],
   },
   amount: {
-    fontWeight: "600",
+    fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
 });

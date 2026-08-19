@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react-native";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { useCurrency } from "@/currency/context";
 import type { SafeToSpend } from "@/types";
 import { formatAmount } from "@/utils/format";
@@ -42,7 +42,19 @@ export function MonthlySummaryCard({
           </Text>
         </View>
       ) : (
-        <View style={styles.summaryFooter}>
+        <>
+          <View style={styles.summaryHeading}>
+            <View style={styles.titleBlock}>
+              <Text style={{ color: cardLabel, fontSize: 12, fontWeight: "700" }}>
+                BILAN DE LA PÉRIODE
+              </Text>
+              <Text selectable style={[styles.summaryNet, { color: theme.accentSurfaceText }]}>
+                {formatAmount(totals.net, baseCurrency)}
+              </Text>
+            </View>
+            <Text style={{ color: cardLabel, fontSize: 12 }}>{totalLabel}</Text>
+          </View>
+          <View style={[styles.summaryFooter, { borderTopColor: withAlpha(cardLabel, "55") }]}>
           <View style={styles.footerItem}>
             <Text style={{ color: cardLabel, fontSize: 11 }}>Revenus</Text>
             <Text selectable style={[styles.footerValue, { color: theme.accentSurfaceIncome }]}>
@@ -56,7 +68,7 @@ export function MonthlySummaryCard({
             </Text>
           </View>
           <View style={[styles.footerItem, styles.footerItemRight]}>
-            <Text style={{ color: cardLabel, fontSize: 11 }}>{totalLabel}</Text>
+            <Text style={{ color: cardLabel, fontSize: 11 }}>Écart</Text>
             <Text
               selectable
               style={[
@@ -72,7 +84,8 @@ export function MonthlySummaryCard({
               {formatAmount(totals.net, baseCurrency)}
             </Text>
           </View>
-        </View>
+          </View>
+        </>
       )}
     </View>
   );
@@ -114,7 +127,7 @@ export function SafeToSpendCard({
       <View style={styles.heading}>
         <View style={styles.titleBlock}>
           <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600" }}>
-            SOLDE DISPONIBLE
+            À DÉPENSER SANS RISQUE
           </Text>
         </View>
         {interactive && onPress ? (
@@ -131,7 +144,7 @@ export function SafeToSpendCard({
 
       {!compact ? (
         <Text style={{ color: cardLabel, fontSize: 13, fontWeight: "600" }}>
-          Solde disponible maintenant
+          Maintenant, sans toucher aux échéances
         </Text>
       ) : null}
 
@@ -139,7 +152,7 @@ export function SafeToSpendCard({
         <View style={[styles.compactForecast, { borderTopColor: withAlpha(cardLabel, "66") }]}>
           <View style={styles.compactForecastHeader}>
             <Text style={{ color: cardLabel, fontSize: 11, fontWeight: "600", letterSpacing: 0.4 }}>
-              APRÈS ÉCHÉANCES PRÉVUES
+              APRÈS LES ÉCHÉANCES
             </Text>
             {forecastMatchesCurrent ? (
               <Text style={{ color: cardText, fontSize: 13, fontWeight: "600" }}>
@@ -258,16 +271,16 @@ export function SafeToSpendCard({
 
 const styles = StyleSheet.create({
   card: {
-    gap: spacing.sm,
+    gap: spacing.md,
     marginHorizontal: spacing.lg,
-    padding: spacing.md,
-    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
     borderCurve: "continuous",
   },
   summaryCard: {
     marginHorizontal: spacing.lg,
-    padding: spacing.md,
-    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
     borderCurve: "continuous",
   },
   fullWidthSummaryCard: {
@@ -282,13 +295,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   amount: {
-    fontSize: 28,
-    fontWeight: "800",
+    ...typography.amount,
     fontVariant: ["tabular-nums"],
   },
   compactAmount: {
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 38,
+    lineHeight: 44,
   },
   footer: {
     flexDirection: "row",
@@ -303,6 +315,21 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  summaryHeading: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  summaryNet: {
+    marginTop: spacing.xs,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   summaryLoading: {
     minHeight: 40,
@@ -327,6 +354,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.md,
+    minHeight: 24,
   },
   footerItem: {
     flex: 1,

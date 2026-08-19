@@ -23,10 +23,10 @@ describe("accent themes", () => {
     expect(ACCENT_THEME_VALUES).toContain("midnight");
   });
 
-  it("uses blue as the default accent with dark action text", () => {
+  it("uses indigo citron as the default accent", () => {
     expect(getThemePalette("light")).toMatchObject({
-      accent: "#339CFF",
-      onAccent: "#07111F",
+      accent: "#263A77",
+      onAccent: "#FFFFFF",
     });
   });
 
@@ -48,17 +48,17 @@ describe("accent themes", () => {
 
   it("exposes navy as an additional global accent theme", () => {
     expect(getThemePalette("light", "midnight")).toMatchObject({
-      accent: "#123A60",
-      accentSurface: "#123A60",
+      accent: "#263A77",
+      accentSurface: "#263A77",
       accentSurfaceText: "#FFFFFF",
-      background: "#F3F7FC",
-      surfaceElevated: "#EAF3FC",
+      background: "#F4F6F1",
+      surfaceElevated: "#F8FAF5",
     });
     expect(getThemePalette("dark", "midnight")).toMatchObject({
-      accent: "#7CC2FF",
-      accentSurface: "#123A60",
-      background: "#07111F",
-      surface: "#0C1C2B",
+      accent: "#D8F36A",
+      accentSurface: "#202D5A",
+      background: "#0A1020",
+      surface: "#111A2B",
     });
   });
 

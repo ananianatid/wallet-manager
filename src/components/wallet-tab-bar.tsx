@@ -8,6 +8,7 @@ import {
 } from "lucide-react-native";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useTheme, withAlpha } from "@/theme";
 
 interface TabDefinition {
@@ -25,16 +26,20 @@ const TAB_DEFINITIONS: Record<string, TabDefinition> = {
 
 export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View pointerEvents="box-none" style={styles.host}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.host, { backgroundColor: theme.background, paddingBottom: Math.max(insets.bottom, spacing.sm) }]}
+    >
       <View
         accessibilityRole="tablist"
           style={[
             styles.bar,
             {
-              backgroundColor: theme.surfaceElevated,
-              borderColor: withAlpha(theme.label, "16"),
+              backgroundColor: theme.surface,
+              borderColor: theme.separator,
             },
           ]}
         accessibilityLabel="Navigation principale"
@@ -91,7 +96,7 @@ export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarPro
               accessibilityState={{ selected: focused }}
               style={({ pressed }) => [
                 styles.item,
-                focused && { backgroundColor: withAlpha(theme.accent, "1F") },
+                focused && { backgroundColor: withAlpha(theme.accent, "22") },
                 pressed && { opacity: 0.68 },
               ]}
             >
@@ -123,30 +128,33 @@ export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarPro
 const styles = StyleSheet.create({
   host: {
     width: "100%",
+    paddingTop: spacing.sm,
   },
   bar: {
-    width: "100%",
-    minHeight: 56,
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
+    marginHorizontal: spacing.sm,
+    width: "auto",
     padding: spacing.xs,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 24,
     overflow: "hidden",
   },
   item: {
     flex: 1,
     minWidth: 0,
-    minHeight: 48,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
     paddingHorizontal: 2,
-    borderRadius: 999,
+    borderRadius: 18,
     borderCurve: "continuous",
   },
   label: {
     maxWidth: "100%",
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "500",
     letterSpacing: -0.15,
   },

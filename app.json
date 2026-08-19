@@ -15,7 +15,7 @@
       "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/wallet-logo-square.png",
-        "backgroundColor": "#050B3D"
+        "backgroundColor": "#0A1020"
       },
       "package": "com.ananianatid.wallettheapp"
     },
@@ -29,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFFFFF",
+          "backgroundColor": "#F4F6F1",
           "image": "./assets/images/wallet-logo-square.png",
           "imageWidth": 76
         }

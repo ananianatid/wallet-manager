@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 
 type ActionButtonVariant = "primary" | "secondary" | "destructive";
 
@@ -69,13 +69,13 @@ export function ActionButton({
   const theme = useTheme();
   const backgroundColor =
     variant === "primary"
-      ? theme.accentSurface
+      ? theme.accent
       : variant === "destructive"
         ? withAlpha(theme.expense, "18")
-        : theme.surface;
+        : theme.surfaceElevated;
   const labelColor =
     variant === "primary"
-      ? theme.accentSurfaceText
+      ? theme.onAccent
       : variant === "destructive"
         ? theme.expense
         : theme.label;
@@ -89,7 +89,7 @@ export function ActionButton({
       accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.actionButton,
-        { backgroundColor, borderColor: theme.outline },
+        { backgroundColor, borderColor: variant === "secondary" ? theme.outline : backgroundColor },
         variant === "secondary" && styles.secondaryButton,
         (pressed || disabled) && styles.pressed,
       ]}
@@ -286,8 +286,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   contentSection: {
     gap: spacing.md,
-    paddingTop: spacing.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.sm,
   },
   contentSectionHeader: {
     minHeight: 32,
@@ -298,9 +297,7 @@ const styles = StyleSheet.create({
   },
   contentSectionTitle: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: -0.2,
+    ...typography.section,
   },
   contentSectionAction: {
     minHeight: 48,
@@ -315,11 +312,11 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   actionButton: {
-    minHeight: 48,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderCurve: "continuous",
   },
@@ -327,8 +324,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   actionLabel: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
     lineHeight: 20,
   },
   iconButton: {
@@ -339,7 +336,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.65 },
   field: { gap: spacing.xs + 2 },
-  fieldLabel: { fontSize: 13 },
+  fieldLabel: { ...typography.label },
   fieldHint: { fontSize: 12, lineHeight: 17 },
   fieldError: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
   screenState: {
@@ -349,8 +346,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
   },
-  screenStateTitle: { fontSize: 16, fontWeight: "600", textAlign: "center" },
-  screenStateMessage: { textAlign: "center", lineHeight: 19 },
+  screenStateTitle: { ...typography.section, textAlign: "center" },
+  screenStateMessage: { ...typography.body, textAlign: "center" },
   inlineError: {
     flexDirection: "row",
     alignItems: "center",
