@@ -345,6 +345,10 @@ export default function DashboardScreen() {
               {goals.length > 0 || savingsRules.length > 0 ? (
                 <ContentSection
                   title="Vos plans"
+                  action={{
+                    label: "Tout voir",
+                    onPress: () => router.push("/(tabs)/(plans)"),
+                  }}
                 >
                   {goals.length > 0 ? (
                     <Pressable

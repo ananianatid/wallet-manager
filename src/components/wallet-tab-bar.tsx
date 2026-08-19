@@ -1,6 +1,7 @@
 import {
   ChartBar,
   LayoutDashboard,
+  ListChecks,
   ReceiptText,
   Settings,
   WalletCards,
@@ -19,9 +20,10 @@ interface TabDefinition {
 const TAB_DEFINITIONS: Record<string, TabDefinition> = {
   "(dashboard)": { label: "Accueil", icon: LayoutDashboard },
   "(transactions)": { label: "Transactions", icon: ReceiptText },
+  "(plans)": { label: "Plans", icon: ListChecks },
   "(statistics)": { label: "Statistiques", icon: ChartBar },
   "(accounts)": { label: "Comptes", icon: WalletCards },
-  "(settings)": { label: "Paramètres", icon: Settings },
+  "(settings)": { label: "Réglages", icon: Settings },
 };
 
 export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -45,6 +47,9 @@ export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarPro
         accessibilityLabel="Navigation principale"
       >
         {state.routes.map((route, index) => {
+          if (route.name === "(statistics)") {
+            return null;
+          }
           const focused = state.index === index;
           const definition = TAB_DEFINITIONS[route.name];
           const options = descriptors[route.key]?.options;

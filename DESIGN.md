@@ -52,7 +52,7 @@ L'app est en mode Operate : la situation financière doit être comprise en quel
 - Indigo profond, surfaces tonales, accent citron rare.
 - Chiffres tabulaires et hiérarchie Android lisible.
 - Décision « à dépenser sans risque » au premier plan.
-- Navigation flottante mais conforme aux attentes Android.
+- Navigation flottante mais conforme aux attentes Android, structurée autour de l'usage quotidien.
 
 ## Colors
 
@@ -136,7 +136,7 @@ Les contrôles principaux utilisent 12 dp, les groupes de contenu 16 dp et la ca
 
 ### Navigation
 
-La barre principale est une navigation Android pleine largeur visuellement flottante, avec cinq destinations, libellé et icône. L'état actif utilise une tonalité de l'accent ; le retour système et les insets restent prioritaires.
+La barre principale est une navigation Android pleine largeur visuellement flottante, avec cinq destinations : Accueil, Transactions, Plans, Comptes et Réglages. Les Statistiques restent accessibles depuis Plans comme outil d'analyse secondaire, plutôt que de concurrencer les tâches quotidiennes. L'état actif utilise une tonalité de l'accent ; le retour système et les insets restent prioritaires.
 
 ### Carte de décision
 

@@ -53,6 +53,8 @@ L'utilisateur alterne entre une vue d'ensemble, la saisie rapide d'une transacti
 - Toujours relier un chiffre à son périmètre et à sa prochaine action.
 - Garder les données privées, locales et récupérables par une sauvegarde explicite.
 - Préférer une hiérarchie calme et une information dense mais respirable.
+- Séparer les décisions quotidiennes des engagements futurs : l'accueil sert à décider et enregistrer, Plans sert à préparer et ajuster.
+- Réserver la navigation primaire aux espaces visités fréquemment ; les analyses avancées restent accessibles au moment où elles éclairent une décision.
 
 ## Accessibility & Inclusion
 

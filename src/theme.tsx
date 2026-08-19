@@ -11,11 +11,11 @@ import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 
 /*
-THESIS: Wallet is a pocket cash desk: decide what is safe now, then record it fast.
-OWN-WORLD: Indigo ledger surfaces, lime decision markers, coral outflows, compact Android type.
-STORY: See the available amount, understand the next pressure, and take one clear action.
+THESIS: Wallet is a pocket cash desk: decide what is safe now, record it fast, then prepare what comes next.
+OWN-WORLD: Indigo ledger surfaces, lime decision markers, coral outflows, mint inflows, compact Android type.
+STORY: See the available amount, record a movement, then find every future commitment in Plans.
 FIRST VIEWPORT: A calm daily header, the available-now decision card, then three quick actions.
-FORM: Dense operate layout with tonal elevation, full-width Android navigation, and no ornamental card grid.
+FORM: Five Android destinations split daily operation from planning and configuration; lists stay dense, calm, and actionable.
 */
 
 export interface ThemeColors {
