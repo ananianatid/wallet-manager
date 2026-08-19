@@ -72,6 +72,13 @@ export interface Transaction {
   createdAt: number;
 }
 
+export interface TransactionAmountRow {
+  type: TransactionType;
+  amount: number;
+  fee: number | null;
+  accountCurrencyCode: string;
+}
+
 export interface CategoryInput {
   type: CategoryType;
   name: string;

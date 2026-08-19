@@ -15,15 +15,16 @@ import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { ContentSection, ScreenState } from "@/components/ui";
 import { MotionEntrance } from "@/components/motion";
-import { listAccounts } from "@/db/accounts";
 import { listBudgets } from "@/db/budgets";
-import { calculateSafeToSpend } from "@/db/cashflow";
+import {
+  calculateSafeToSpendFromInputs,
+  loadSafeToSpendInputs,
+} from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { listGoals } from "@/db/goals";
-import { listSavingsRules } from "@/db/savings";
-import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { budgetProgress } from "@/utils/dashboard";
 import { formatAmount, formatDate, formatDayLabel, formatShortDate, formatTime } from "@/utils/format";
@@ -81,8 +82,9 @@ function groupTransactionsByDay(transactions: Transaction[]): RecentDayGroup[] {
 
 export default function DashboardScreen() {
   const theme = useTheme();
-  const { lastRefresh, stale, baseCurrency } = useCurrency();
+  const { lastRefresh, stale, baseCurrency, rates } = useCurrency();
   const convert = useCurrencyConverter();
+  const onScroll = useScrollPerformance("dashboard.scroll");
   const insets = useSafeAreaInsets();
 
   const load = useCallback(async () => {
@@ -92,49 +94,54 @@ export default function DashboardScreen() {
     const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
     const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-    const [
-      forecast,
-      accounts,
-      goals,
-      budgets,
-      savingsRules,
-      monthTx,
-      previousMonthTx,
-      allTransactions,
-      recent,
-      upcoming,
-    ] =
-      await Promise.all([
-        calculateSafeToSpend(db),
-        listAccounts(db),
-        listGoals(db),
-        listBudgets(db),
-        listSavingsRules(db),
-        listTransactions(db, { startMs, endMs, order: "asc" }),
-        listTransactions(db, { startMs: previousMonthStart, endMs: startMs, order: "asc" }),
-        listTransactions(db, { order: "asc" }),
-        listTransactions(db, { endMs: nowMs, order: "desc", limit: 5 }),
-        listTransactions(db, { startMs: nowMs, order: "asc", limit: 3 }),
-      ]);
+    const [inputs, budgets] = await Promise.all([
+      loadSafeToSpendInputs(db, nowMs, {
+        referenceCurrency: baseCurrency,
+        currencyRates: rates,
+      }),
+      listBudgets(db),
+    ]);
+    const allTransactions = [...inputs.transactions].reverse();
+    const monthTx = inputs.transactions
+      .filter(
+        (transaction) =>
+          transaction.transactionDate >= startMs &&
+          transaction.transactionDate < endMs,
+      )
+      .reverse();
+    const previousMonthTx = inputs.transactions
+      .filter(
+        (transaction) =>
+          transaction.transactionDate >= previousMonthStart &&
+          transaction.transactionDate < startMs,
+      )
+      .reverse();
+    const recent = inputs.transactions
+      .filter((transaction) => transaction.transactionDate < nowMs)
+      .slice(0, 5);
+    const upcoming = inputs.transactions
+      .filter((transaction) => transaction.transactionDate >= nowMs)
+      .reverse()
+      .slice(0, 3);
 
-    const savingsTotal = savingsByRule(allTransactions, savingsRules, 0, convert).reduce(
+    const savingsTotal = savingsByRule(allTransactions, inputs.savingsRules, 0, convert).reduce(
       (sum, contribution) => sum + contribution.amount,
       0,
     );
 
     return {
-      safeToSpend: forecast,
-      accounts,
-      goals,
+      safeToSpend: calculateSafeToSpendFromInputs(inputs, nowMs),
+      accounts: inputs.accountsRows,
+      goals: inputs.goals,
       budgets,
-      savingsRules,
+      savingsRules: inputs.savingsRules,
       monthTx,
       previousMonthTx,
       recent,
       upcoming,
       savingsTotal,
     };
-  }, [convert]);
+  }, [baseCurrency, convert, rates]);
 
   const resource = useAsyncResource(load, "dashboard.load");
   const reload = resource.reload;
@@ -227,8 +234,11 @@ export default function DashboardScreen() {
           ? "Tout va bien ce mois-ci"
           : "Continuez votre suivi";
 
-  const openEdit = (id: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(id) } });
+  const openEdit = useCallback(
+    (id: number) =>
+      router.push({ pathname: "/new-transaction", params: { id: String(id) } }),
+    [],
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -241,6 +251,8 @@ export default function DashboardScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
+          onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+          scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{
             paddingTop: insets.top + spacing.sm,
@@ -468,7 +480,7 @@ export default function DashboardScreen() {
                           <TransactionRow
                             transaction={transaction}
                             hideDate
-                            onPress={() => openEdit(transaction.id)}
+                            onPress={openEdit}
                           />
                           {index < group.data.length - 1 ? (
                             <View
@@ -515,7 +527,7 @@ export default function DashboardScreen() {
                           <TransactionRow
                             transaction={transaction}
                             hideDate
-                            onPress={() => openEdit(transaction.id)}
+                            onPress={openEdit}
                           />
                           {index < group.data.length - 1 ? (
                             <View

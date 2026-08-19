@@ -16,7 +16,9 @@ import { deleteAccount, getAccount } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { listTransactionsByAccount } from "@/db/transactions";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDayLabel } from "@/utils/format";
 import { log } from "@/utils/logger";
@@ -31,6 +33,7 @@ interface AccountDaySection {
 
 export default function AccountDetailScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("account.scroll");
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -65,8 +68,11 @@ export default function AccountDetailScreen() {
     return [...groups.values()];
   }, [transactions]);
 
-  const openEdit = (transactionId: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(transactionId) } });
+  const openEdit = useCallback(
+    (transactionId: number) =>
+      router.push({ pathname: "/new-transaction", params: { id: String(transactionId) } }),
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -138,6 +144,8 @@ export default function AccountDetailScreen() {
       ) : (
       <SectionList
         style={{ flex: 1 }}
+        onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+        scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
         sections={sections}
@@ -159,7 +167,7 @@ export default function AccountDetailScreen() {
                 isLast && styles.transactionGroupRowLast,
               ]}
             >
-              <TransactionRow transaction={item} onPress={() => openEdit(item.id)} />
+              <TransactionRow transaction={item} onPress={openEdit} />
               {!isLast ? (
                 <View
                   style={{

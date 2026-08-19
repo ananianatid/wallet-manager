@@ -32,6 +32,8 @@ import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Account } from "@/types";
 import { formatAmount } from "@/utils/format";
@@ -40,6 +42,7 @@ import { userMessage } from "@/utils/user-message";
 
 export default function AccountsScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("accounts.scroll");
   const { baseCurrency, currencies } = useCurrency();
   const convert = useCurrencyConverter();
   const summaryLabel = theme.accentSurfaceLabel;
@@ -292,6 +295,8 @@ export default function AccountsScreen() {
       <KeyboardAwareView>
         <SectionList
         style={{ flex: 1 }}
+        onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+        scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
         keyboardDismissMode="on-drag"

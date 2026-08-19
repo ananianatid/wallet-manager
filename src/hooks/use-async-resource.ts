@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { measureAsync } from "@/services/performance";
 import { log } from "@/utils/logger";
 
 export type AsyncResourceStatus = "loading" | "ready" | "error";
@@ -30,7 +31,7 @@ export function useAsyncResource<T>(
     }));
 
     try {
-      const data = await loader();
+      const data = await measureAsync(context, loader);
       if (requestId.current !== currentRequest) {
         return;
       }

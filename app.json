@@ -4,33 +4,34 @@
     "slug": "wallet-manager",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/wallet-logo-square.png",
+    "icon": "./assets/images/wallet-logo-green-v4.png",
     "scheme": "wallettheapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/wallet-logo-square.png"
+      "icon": "./assets/images/wallet-logo-green-v4.png"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/wallet-logo-square.png",
-        "backgroundColor": "#0A1020"
+        "foregroundImage": "./assets/images/wallet-logo-foreground-v4.png",
+        "monochromeImage": "./assets/images/wallet-logo-monochrome-android-v4.png",
+        "backgroundColor": "#26352D"
       },
       "package": "com.ananianatid.wallettheapp"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/wallet-logo-square.png"
+      "favicon": "./assets/images/wallet-logo-green-v4.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F4F6F1",
-          "image": "./assets/images/wallet-logo-square.png",
+          "backgroundColor": "#F5F5F2",
+          "image": "./assets/images/wallet-logo-green-v4.png",
           "imageWidth": 76
         }
       ],

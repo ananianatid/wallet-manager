@@ -76,6 +76,31 @@ export default function DiagnosticsScreen() {
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>Profilage des chargements</Text>
+          <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+            Activé uniquement avec EXPO_PUBLIC_PERF_PROFILE=1. Les mesures ne contiennent aucune donnée financière.
+          </Text>
+          {report.performance.length === 0 ? (
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              Aucune mesure disponible.
+            </Text>
+          ) : (
+            report.performance.map((entry) => (
+              <View key={entry.label} style={styles.itemRow}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: theme.label, fontWeight: "600" }}>{entry.label}</Text>
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                    {entry.label.includes(".frame")
+                      ? `${entry.count} intervalles · P50 ${entry.p50Ms} ms · P95 ${entry.p95Ms} ms`
+                      : `${entry.count} chargements · P50 ${entry.p50Ms} ms · P95 ${entry.p95Ms} ms`}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.surface }]}>
           <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>Journal récent</Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Les {report.logs.length} dernières entrées (session {report.sessionId.slice(0, 8)}…)

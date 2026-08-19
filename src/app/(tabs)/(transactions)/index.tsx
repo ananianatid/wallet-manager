@@ -18,12 +18,14 @@ import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { applyDueRecurring } from "@/db/recurring";
 import { getSetting, setSetting } from "@/db/settings";
-import { listTransactions } from "@/db/transactions";
-import { filterTransactions, setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
+import { listTransactionAmountRows, listTransactions } from "@/db/transactions";
+import { setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Transaction } from "@/types";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   formatAmount,
@@ -49,30 +51,43 @@ export default function TransactionsScreen() {
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const insets = useSafeAreaInsets();
+  const onScroll = useScrollPerformance("transactions.scroll");
   const filters = useTransactionFilters();
   const [recurringError, setRecurringError] = useState<string | null>(null);
   const [recurringNotice, setRecurringNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [rows, accs] = await Promise.all([
+    const startMs =
+      filters.mode === "month"
+        ? new Date(filters.year, filters.month, 1).getTime()
+        : null;
+    const endMs =
+      filters.mode === "month"
+        ? new Date(filters.year, filters.month + 1, 1).getTime()
+        : null;
+    const hasDisplayFilters =
+      filters.accountIds != null ||
+      filters.types.length !== 3 ||
+      filters.categoryIds != null;
+    const [rows, accs, summaryRows] = await Promise.all([
       listTransactions(db, {
-        startMs:
-          filters.mode === "month"
-            ? new Date(filters.year, filters.month, 1).getTime()
-            : null,
-        endMs:
-          filters.mode === "month"
-            ? new Date(filters.year, filters.month + 1, 1).getTime()
-            : null,
+        startMs,
+        endMs,
+        accountIds: filters.accountIds,
+        types: filters.types,
+        categoryIds: filters.categoryIds,
         order: "desc",
       }),
       listAccounts(db),
+      hasDisplayFilters
+        ? listTransactionAmountRows(db, { startMs, endMs })
+        : Promise.resolve(null),
     ]);
     return {
-      transactions: filterTransactions(rows, filters),
+      transactions: rows,
       accounts: accs,
-      monthTotals: totals(rows, convert),
+      monthTotals: totals(summaryRows ?? rows, convert),
     };
   }, [filters, convert]);
 
@@ -171,8 +186,11 @@ export default function TransactionsScreen() {
   const monthRows = transactions ?? [];
 
   const openNew = () => router.push("/new-transaction");
-  const openEdit = (id: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(id) } });
+  const openEdit = useCallback(
+    (id: number) =>
+      router.push({ pathname: "/new-transaction", params: { id: String(id) } }),
+    [],
+  );
 
   const hasTransactions = monthRows.length > 0;
   const openSearch = () => router.push("/search");
@@ -227,6 +245,8 @@ export default function TransactionsScreen() {
       ) : (
       <SectionList<Transaction, TransactionSection>
         style={{ flex: 1 }}
+        onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+        scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl, flexGrow: 1 }}
         sections={sections}
@@ -244,7 +264,7 @@ export default function TransactionsScreen() {
               <TransactionRow
                 transaction={item}
                 hideDate={filters.mode === "month"}
-                onPress={() => openEdit(item.id)}
+                onPress={openEdit}
               />
               {!isLast ? (
                 <View

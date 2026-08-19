@@ -1,5 +1,9 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-import { listTransactions, searchTransactions } from "./transactions";
+import {
+  listTransactionAmountRows,
+  listTransactions,
+  searchTransactions,
+} from "./transactions";
 import type { TransactionSearchCriteria } from "@/types";
 
 function criteria(
@@ -93,5 +97,37 @@ describe("listTransactions", () => {
     expect(() => listTransactions(db, { limit: 1.5 })).toThrow(
       "La limite de transactions doit être un entier positif.",
     );
+  });
+
+  it("pushes account, type and category filters into SQL", async () => {
+    const getAllAsync = jest.fn().mockResolvedValue([]);
+    const db = { getAllAsync } as unknown as SQLiteDatabase;
+
+    await listTransactions(db, {
+      accountIds: [2, 3],
+      types: ["expense"],
+      categoryIds: [7],
+    });
+
+    const [sql, params] = getAllAsync.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("t.account_id IN (?, ?)");
+    expect(sql).toContain("t.type IN (?)");
+    expect(sql).toContain("t.category_id IN (?)");
+    expect(params).toEqual([2, 3, 2, 3, "expense", 7]);
+  });
+});
+
+describe("listTransactionAmountRows", () => {
+  it("returns only the columns needed for an unfiltered summary", async () => {
+    const getAllAsync = jest.fn().mockResolvedValue([]);
+    const db = { getAllAsync } as unknown as SQLiteDatabase;
+
+    await listTransactionAmountRows(db, { startMs: 10, endMs: 20 });
+
+    const [sql, params] = getAllAsync.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("t.type");
+    expect(sql).toContain("a.currency_code AS accountCurrencyCode");
+    expect(sql).not.toContain("t.note");
+    expect(params).toEqual([10, 20]);
   });
 });

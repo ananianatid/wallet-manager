@@ -15,11 +15,14 @@ import { userMessage } from "@/utils/user-message";
 
 export default function CashflowScreen() {
   const theme = useTheme();
-  const { baseCurrency, lastRefresh, stale } = useCurrency();
+  const { baseCurrency, lastRefresh, rates, stale } = useCurrency();
   const load = useCallback(async () => {
     const db = await getDatabase();
-    return calculateSafeToSpend(db);
-  }, []);
+    return calculateSafeToSpend(db, Date.now(), {
+      referenceCurrency: baseCurrency,
+      currencyRates: rates,
+    });
+  }, [baseCurrency, rates]);
 
   const resource = useAsyncResource(load, "cashflow.load");
   const reload = resource.reload;

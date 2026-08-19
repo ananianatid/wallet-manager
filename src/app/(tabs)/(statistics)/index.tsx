@@ -17,6 +17,8 @@ import { getDatabase } from "@/db/database";
 import { getSetting } from "@/db/settings";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { listTransactions, listTransactionsByRange } from "@/db/transactions";
 import { chartColors, radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
@@ -197,6 +199,7 @@ function CategoryChangeRow({
 
 export default function StatisticsScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("statistics.scroll");
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const now = new Date();
@@ -597,6 +600,8 @@ export default function StatisticsScreen() {
         />
       ) : (
         <ScrollView
+          onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+          scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
           style={{ flex: 1 }}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{

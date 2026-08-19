@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import { normalizeCategoryIcon } from "@/constants/category-icons";
 import type {
   Transaction,
+  TransactionAmountRow,
   TransactionInput,
   TransactionSearchCriteria,
   TransactionType,
@@ -197,6 +198,9 @@ async function normalizeTransfer(
 
 export interface TransactionFilter {
   accountId?: number | null;
+  accountIds?: readonly number[] | null;
+  types?: readonly TransactionType[] | null;
+  categoryIds?: readonly number[] | null;
   startMs?: number | null;
   endMs?: number | null;
   order?: "asc" | "desc";
@@ -213,6 +217,35 @@ export function listTransactions(
   if (filter.accountId != null) {
     conditions.push("(t.account_id = ? OR t.destination_account_id = ?)");
     params.push(filter.accountId, filter.accountId);
+  }
+  if (filter.accountIds != null) {
+    if (filter.accountIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.accountIds.map(() => "?").join(", ");
+      conditions.push(
+        `(t.account_id IN (${placeholders}) OR t.destination_account_id IN (${placeholders}))`,
+      );
+      params.push(...filter.accountIds, ...filter.accountIds);
+    }
+  }
+  if (filter.types != null) {
+    if (filter.types.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.types.map(() => "?").join(", ");
+      conditions.push(`t.type IN (${placeholders})`);
+      params.push(...filter.types);
+    }
+  }
+  if (filter.categoryIds != null) {
+    if (filter.categoryIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.categoryIds.map(() => "?").join(", ");
+      conditions.push(`t.category_id IN (${placeholders})`);
+      params.push(...filter.categoryIds);
+    }
   }
   if (filter.startMs != null) {
     conditions.push("t.transaction_date >= ?");
@@ -244,6 +277,33 @@ export function listTransactions(
       params,
     )
     .then((rows) => rows.map(mapTransaction));
+}
+
+export function listTransactionAmountRows(
+  db: SQLiteDatabase,
+  filter: Pick<TransactionFilter, "startMs" | "endMs"> = {},
+): Promise<TransactionAmountRow[]> {
+  const conditions: string[] = [];
+  const params: number[] = [];
+  if (filter.startMs != null) {
+    conditions.push("t.transaction_date >= ?");
+    params.push(filter.startMs);
+  }
+  if (filter.endMs != null) {
+    conditions.push("t.transaction_date < ?");
+    params.push(filter.endMs);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return db.getAllAsync<TransactionAmountRow>(
+    `SELECT t.type,
+            t.amount,
+            t.fee,
+            a.currency_code AS accountCurrencyCode
+     FROM transactions t
+     JOIN accounts a ON a.id = t.account_id AND a.deleted_at IS NULL
+     ${where}`,
+    params,
+  );
 }
 
 export function listTransactionsByMonth(

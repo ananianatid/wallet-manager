@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowLeftRight } from "lucide-react-native";
 import { CategoryIcon } from "@/components/category-icons";
@@ -7,11 +8,15 @@ import { formatAmount, formatDate, formatTime } from "@/utils/format";
 
 interface Props {
   transaction: Transaction;
-  onPress?: () => void;
+  onPress?: (transactionId: number) => void;
   hideDate?: boolean;
 }
 
-export function TransactionRow({ transaction, onPress, hideDate = false }: Props) {
+export const TransactionRow = memo(function TransactionRow({
+  transaction,
+  onPress,
+  hideDate = false,
+}: Props) {
   const theme = useTheme();
   const isIncome = transaction.type === "income";
   const isExpense = transaction.type === "expense";
@@ -83,7 +88,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(transaction.id)}
       accessible
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -93,7 +98,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
       {content}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {
