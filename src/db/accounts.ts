@@ -112,6 +112,7 @@ const accountListSelect = (where: string): string => `
     LEFT JOIN accounts destination_account ON destination_account.id = t.destination_account_id
     WHERE source_account.deleted_at IS NULL
       AND destination_account.deleted_at IS NULL
+      AND t.transaction_date <= CAST(strftime('%s', 'now') AS INTEGER) * 1000
     GROUP BY a2.id
   ), reservation_totals AS (
     SELECT source_account_id AS accountId,
