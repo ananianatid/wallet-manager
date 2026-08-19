@@ -24,7 +24,7 @@ import {
   listSavingsRules,
   setSavingsRule,
 } from "@/db/savings";
-import { radius, spacing, useTheme, withAlpha, type ThemeColors } from "@/theme";
+import { radius, spacing, typography, useTheme, withAlpha, type ThemeColors } from "@/theme";
 import type { Category, SavingsRule } from "@/types";
 import { formatDate } from "@/utils/format";
 import { log } from "@/utils/logger";
@@ -323,11 +323,10 @@ export default function SavingsScreen() {
           gap: spacing.md,
         }}
       >
-          <Text style={[styles.intro, { color: theme.secondaryLabel }]}>
-          Projetez combien vous économisez : un pourcentage de vos revenus par
-          catégorie. La cible est calculée en temps réel depuis la date de
-          départ de chaque règle.
-        </Text>
+        <View style={styles.introBlock}>
+          <Text style={[styles.introTitle, { color: theme.label }]}>Épargnez sans y penser.</Text>
+          <Text style={[styles.intro, { color: theme.secondaryLabel }]}>Un pourcentage de vos revenus est mis de côté par catégorie. Le disponible estimé reste lisible, règle par règle.</Text>
+        </View>
 
         <Pressable
           onPress={() => router.push("/savings/history")}
@@ -367,7 +366,7 @@ export default function SavingsScreen() {
         <View
           style={{
             backgroundColor: theme.surface,
-            borderRadius: radius.lg,
+            borderRadius: radius.xl,
             borderCurve: "continuous",
           }}
         >
@@ -524,15 +523,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     minHeight: 64,
   },
   intro: {
-    lineHeight: 20,
+    ...typography.body,
+  },
+  introBlock: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  introTitle: {
+    ...typography.title,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "800",
+    ...typography.section,
     marginTop: spacing.sm,
   },
   ruleToggle: {
@@ -547,7 +552,7 @@ const styles = StyleSheet.create({
     height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: 10,
   },
   switchBody: {
     flex: 1,
@@ -570,7 +575,7 @@ const styles = StyleSheet.create({
     height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: 10,
   },
   name: {
     fontWeight: "600",

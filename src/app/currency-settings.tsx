@@ -7,7 +7,7 @@ import { useCurrency } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
 import { changeReferenceCurrency } from "@/currency/service";
 import { getDatabase } from "@/db/database";
-import { spacing, useTheme } from "@/theme";
+import { spacing, typography, useTheme } from "@/theme";
 import { formatDate, formatTime } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
@@ -104,6 +104,6 @@ export default function CurrencySettingsScreen() {
 
 const styles = {
   intro: { gap: spacing.xs, paddingHorizontal: spacing.xs },
-  title: { fontSize: 22, fontWeight: "800" as const, letterSpacing: -0.2 },
-  subtitle: { fontSize: 14, lineHeight: 20 },
+  title: typography.title,
+  subtitle: typography.body,
 };

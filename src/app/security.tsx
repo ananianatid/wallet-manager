@@ -12,7 +12,7 @@ import {
   setLockEnabled,
 } from "@/security/store";
 import { lockNow, refreshLockConfig, useLockState } from "@/state/lock";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 
 function formatDelay(seconds: number): string {
   if (seconds < 60) {
@@ -124,7 +124,7 @@ export default function SecurityScreen() {
           <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Contrôlez l’accès à vos données financières avec un code ou la biométrie.</Text>
         </View>
         {error ? <InlineError message={error} /> : null}
-        <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
+        <View style={{ backgroundColor: theme.surface, borderRadius: radius.xl }}>
           <View style={[styles.row, styles.switchRow]}>
             <View style={styles.switchText}>
               <Text style={{ color: theme.label, fontWeight: "600" }}>
@@ -170,7 +170,7 @@ export default function SecurityScreen() {
             <Text style={[styles.sectionTitle, { color: theme.secondaryLabel }]}>
               CAPTURES D&apos;ÉCRAN
             </Text>
-            <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: radius.xl }}>
               <View style={[styles.row, styles.switchRow]}>
                 <View style={styles.switchText}>
                   <Text style={{ color: theme.label, fontWeight: "600" }}>
@@ -197,7 +197,7 @@ export default function SecurityScreen() {
             <Text style={[styles.sectionTitle, { color: theme.secondaryLabel }]}>
               VERROUILLAGE AUTOMATIQUE
             </Text>
-            <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: radius.xl }}>
               {LOCK_DELAY_OPTIONS_SECONDS.map((seconds, index) => (
                 <View key={seconds}>
                   {index > 0 ? (
@@ -234,7 +234,7 @@ export default function SecurityScreen() {
             <Text style={[styles.sectionTitle, { color: theme.secondaryLabel }]}>
               PROTECTION
             </Text>
-            <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm }}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.sm }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                 {biometricAvailable ? (
                   <ShieldCheck size={18} strokeWidth={2} color={theme.income} />
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   intro: { gap: spacing.xs, paddingHorizontal: spacing.xs },
-  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
+  title: { ...typography.title },
   subtitle: { fontSize: 14, lineHeight: 20 },
   sectionTitle: {
     fontSize: 13,

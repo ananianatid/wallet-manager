@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 import { InlineError, ScreenState } from "@/components/ui";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import {
   DEFAULT_WEEK_START_DAY,
   parseWeekStartDay,
@@ -92,7 +92,7 @@ export default function CalendarSettingsScreen() {
           contentContainerStyle={styles.content}
         >
           <View style={styles.intro}>
-            <Text accessibilityRole="header" style={{ color: theme.label, fontSize: 22, fontWeight: "800" }}>
+            <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>
               Début de la semaine
             </Text>
             <Text style={{ color: theme.secondaryLabel, lineHeight: 19 }}>
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   section: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     overflow: "hidden",
   },
   row: {
@@ -160,4 +160,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
   },
+  title: typography.title,
 });

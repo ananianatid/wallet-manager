@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { ActionButton, ScreenState } from "@/components/ui";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { runDiagnostics, type DiagnosticReport } from "@/utils/diagnostics";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import { userMessage } from "@/utils/user-message";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -106,12 +106,12 @@ export default function DiagnosticsScreen() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.lg,
     gap: spacing.md,
     borderCurve: "continuous",
   },
-  cardTitle: { fontSize: 16, fontWeight: "700" },
+  cardTitle: typography.section,
   itemRow: {
     flexDirection: "row",
     alignItems: "center",

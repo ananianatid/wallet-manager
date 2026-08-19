@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { router, Stack } from "expo-router";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 
 export default function AboutScreen() {
   const theme = useTheme();
@@ -22,7 +22,7 @@ export default function AboutScreen() {
           resizeMode="contain"
           style={styles.logo}
         />
-        <Text accessibilityRole="header" style={{ color: theme.label, fontSize: 26, fontWeight: "800" }}>
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>
           {name}
         </Text>
         <Text style={{ color: theme.secondaryLabel }}>Version {version}</Text>
@@ -81,6 +81,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 2,
     padding: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
   },
+  title: typography.display,
 });

@@ -17,7 +17,7 @@ import {
   deleteRecurring,
   listRecurring,
 } from "@/db/recurring";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import type { RecurringTransaction } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
@@ -195,6 +195,10 @@ export default function RecurringScreen() {
         )}
         ListHeaderComponent={
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
+              <View style={styles.intro}>
+                <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>Automatisez les échéances</Text>
+                <Text style={[styles.introBody, { color: theme.secondaryLabel }]}>Les revenus, dépenses et transferts prévisibles se créent au bon moment.</Text>
+              </View>
               {actionError ? <InlineError message={actionError} onRetry={() => void generateNow()} /> : null}
               {items.length > 0 ? (
                 <>
@@ -261,18 +265,24 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
+    borderRadius: 10,
   },
   body: {
     flex: 1,
     gap: 2,
   },
   title: {
-    fontWeight: "600",
+    ...typography.section,
   },
   detail: {
-    fontSize: 13,
+    ...typography.label,
+    fontWeight: "400",
   },
+  intro: {
+    gap: spacing.xs,
+  },
+  introTitle: typography.title,
+  introBody: typography.body,
   generateButton: {
     alignSelf: "center",
     minHeight: 48,

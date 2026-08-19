@@ -20,7 +20,7 @@ import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme, type ThemeColors } from "@/theme";
+import { radius, spacing, typography, useTheme, type ThemeColors } from "@/theme";
 import type { Budget, Category } from "@/types";
 import { formatAmount } from "@/utils/format";
 import { log } from "@/utils/logger";
@@ -230,6 +230,10 @@ export default function BudgetsScreen() {
           gap: spacing.md,
         }}
       >
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>Plafonds du mois</Text>
+          <Text style={[styles.introBody, { color: theme.secondaryLabel }]}>Décidez combien chaque catégorie peut absorber avant que le mois ne commence.</Text>
+        </View>
         {budgets.length === 0 && editingKey === null ? (
           <EmptyState
             title="Aucun budget"
@@ -242,7 +246,7 @@ export default function BudgetsScreen() {
         <View
           style={{
             backgroundColor: theme.surface,
-            borderRadius: radius.lg,
+            borderRadius: radius.xl,
             borderCurve: "continuous",
           }}
         >
@@ -281,7 +285,9 @@ export default function BudgetsScreen() {
                 ) : (
                   <View style={styles.row}>
                     {budget.categoryIcon ? (
-                      <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
+                      <View
+                        style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}
+                      >
                         <CategoryIcon name={budget.categoryIcon} size={19} color={theme.accent} />
                       </View>
                     ) : null}
@@ -388,8 +394,14 @@ const styles = StyleSheet.create({
     height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: 10,
   },
+  intro: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  introTitle: typography.title,
+  introBody: typography.body,
   name: {
     fontWeight: "600",
   },
@@ -403,14 +415,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   progressTrack: {
-    height: 6,
+    height: 8,
     overflow: "hidden",
-    borderRadius: 3,
+    borderRadius: 4,
     marginTop: spacing.xs,
   },
   progressFill: {
     height: "100%",
-    borderRadius: 3,
+    borderRadius: 4,
   },
   button: {
     alignItems: "center",

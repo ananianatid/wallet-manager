@@ -18,7 +18,7 @@ import { getSetting } from "@/db/settings";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listTransactions, listTransactionsByRange } from "@/db/transactions";
-import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
+import { chartColors, radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
 import { userMessage } from "@/utils/user-message";
 import {
@@ -1123,8 +1123,7 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     flexShrink: 1,
-    fontSize: 16,
-    fontWeight: "700",
+    ...typography.section,
   },
   granularityChip: {
     flexDirection: "row",
@@ -1140,7 +1139,7 @@ const styles = StyleSheet.create({
   typeControl: {
     flexDirection: "row",
     gap: spacing.xs,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: 4,
   },
   typeSegment: {
@@ -1148,10 +1147,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 48,
-    borderRadius: radius.lg - 4,
+    borderRadius: radius.lg,
   },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.lg,
   },
   sectionHeadingRow: {
