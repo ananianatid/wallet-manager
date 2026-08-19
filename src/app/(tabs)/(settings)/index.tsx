@@ -22,7 +22,7 @@ import { getSetting } from "@/db/settings";
 import { applyImportPlan, readMoneyManagerBackup, type ImportReport } from "@/db/import";
 import type { ImportPlan } from "@/db/money-manager";
 import { ActionButton, InlineError } from "@/components/ui";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { formatDate } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
@@ -155,9 +155,13 @@ export default function SettingsScreen() {
     <ScrollView
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.lg }}
+      contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.xl }}
     >
-      <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg }}>
+      <View style={styles.intro}>
+        <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>Réglages</Text>
+        <Text style={[styles.introText, { color: theme.secondaryLabel }]}>Les outils pour organiser, protéger et comprendre vos données.</Text>
+      </View>
+      <View style={[styles.menu, { backgroundColor: theme.surface }]}>
         {ENTRIES.map((entry, index) => (
           <View key={entry.href}>
             {index === 0 || ENTRIES[index - 1].section !== entry.section ? (
@@ -172,7 +176,9 @@ export default function SettingsScreen() {
               accessibilityHint={`Ouvrir ${entry.label.toLowerCase()}`}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
-              <View style={{ width: 24 }}><entry.icon size={22} strokeWidth={2} color={theme.accent} /></View>
+              <View style={[styles.entryIcon, { backgroundColor: withAlpha(theme.accent, "16") }]}>
+                <entry.icon size={19} strokeWidth={2.1} color={theme.accent} />
+              </View>
               <Text style={[styles.label, { color: theme.label }]}>{entry.label}</Text>
               <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
             </Pressable>
@@ -187,8 +193,8 @@ export default function SettingsScreen() {
         >
           DONNÉES
         </Text>
-        <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
-          <Text accessibilityRole="header" style={{ color: theme.label, fontWeight: "700", fontSize: 16 }}>
+        <View style={[styles.dataCard, { backgroundColor: theme.surface }]}>
+          <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>
             Sauvegarde chiffrée
           </Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
@@ -212,9 +218,9 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <View style={{ backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
+        <View style={[styles.dataCard, { backgroundColor: theme.surface }]}>
           {importError ? <InlineError message={importError} onRetry={() => setImportStatus("idle")} /> : null}
-          <Text accessibilityRole="header" style={{ color: theme.label, fontWeight: "700", fontSize: 16 }}>
+          <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>
             Importer Money Manager
           </Text>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
@@ -240,8 +246,15 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  sectionTitle: { fontSize: 13, fontWeight: "600", paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
-  row: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg },
+  intro: { gap: spacing.xs, paddingHorizontal: spacing.xs },
+  introTitle: { ...typography.display },
+  introText: { ...typography.body },
+  menu: { borderRadius: radius.xl, overflow: "hidden" },
+  dataCard: { borderRadius: radius.xl, padding: spacing.lg, gap: spacing.md },
+  cardTitle: { ...typography.section },
+  sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.4, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
+  row: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md + 2, paddingHorizontal: spacing.lg },
+  entryIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 10 },
   label: { flex: 1, fontWeight: "600" },
   pressed: { opacity: 0.6 },
   successText: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
