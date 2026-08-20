@@ -1,8 +1,6 @@
 import {
   ArrowDownToLine,
-  ArrowUpRight,
   BarChart3,
-  CalendarDays,
   Check,
   CircleDollarSign,
   LockKeyhole,
@@ -10,11 +8,23 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react-native";
+import { Image } from "expo-image";
 import { useEffect, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { radius } from "@/theme";
 
 const DOWNLOAD_PATH = "/app-release.apk";
+
+const appScreens = {
+  home: require("../../docs/images for the web/Screenshot_20260820-102453_Wallet Manager.png"),
+  goals: require("../../docs/images for the web/Screenshot_20260820-102508_Wallet Manager.png"),
+  savings: require("../../docs/images for the web/Screenshot_20260820-102515_Wallet Manager.png"),
+  activity: require("../../docs/images for the web/Screenshot_20260820-102521_Wallet Manager.png"),
+  planning: require("../../docs/images for the web/Screenshot_20260820-102524_Wallet Manager.png"),
+  statistics: require("../../docs/images for the web/Screenshot_20260820-102529_Wallet Manager.png"),
+  statisticsDetail: require("../../docs/images for the web/Screenshot_20260820-102543_Wallet Manager.png"),
+  accounts: require("../../docs/images for the web/Screenshot_20260820-102547_Wallet Manager.png"),
+};
 
 function AppMark({ inverse = false }: { inverse?: boolean }) {
   return (
@@ -53,98 +63,75 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-function Metric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "income" | "expense" }) {
+function ScreenshotFrame({
+  source,
+  label,
+  prominent = false,
+}: {
+  source: number;
+  label: string;
+  prominent?: boolean;
+}) {
   return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={[styles.metricValue, tone === "income" && styles.incomeText, tone === "expense" && styles.expenseText]}>
-        {value}
-      </Text>
+    <View style={[styles.screenshotFrame, prominent && styles.screenshotFrameProminent]}>
+      <Image
+        source={source}
+        alt={label}
+        accessibilityLabel={label}
+        contentFit="contain"
+        cachePolicy="disk"
+        loading={prominent ? "eager" : "lazy"}
+        style={styles.screenshotImage}
+      />
     </View>
   );
 }
 
-function DashboardPreview({ narrow }: { narrow: boolean }) {
+function ScreenshotFeature({
+  eyebrow,
+  title,
+  children,
+  source,
+  label,
+  narrow = false,
+  reverse = false,
+}: {
+  eyebrow: string;
+  title: string;
+  children: string;
+  source: number;
+  label: string;
+  narrow?: boolean;
+  reverse?: boolean;
+}) {
   return (
-    <View style={[styles.previewShell, narrow && styles.previewShellNarrow]}>
-      <View style={styles.previewTopBar}>
-        <View>
-          <Text style={styles.previewKicker}>MARDI 20 AOÛT</Text>
-          <Text style={styles.previewGreeting}>Bonjour, Ana</Text>
-        </View>
-        <View style={styles.previewAvatar}>
-          <Text style={styles.previewAvatarText}>A</Text>
-        </View>
+    <View style={[styles.screenshotFeature, reverse && styles.screenshotFeatureReverse, narrow && styles.screenshotFeatureNarrow]}>
+      <View style={styles.screenshotFeatureCopy}>
+        <SectionLabel>{eyebrow}</SectionLabel>
+        <Text style={styles.screenshotFeatureTitle}>{title}</Text>
+        <Text style={styles.screenshotFeatureBody}>{children}</Text>
       </View>
+      <ScreenshotFrame source={source} label={label} />
+    </View>
+  );
+}
 
-      <View style={styles.availableCard}>
-        <View style={styles.availableHeader}>
-          <Text style={styles.availableLabel}>DISPONIBLE ESTIMÉ</Text>
-          <ArrowUpRight size={17} color="#CFE1D2" strokeWidth={2.3} />
-        </View>
-        <Text style={styles.availableAmount}>485 000 <Text style={styles.availableCurrency}>XOF</Text></Text>
-        <Text style={styles.availableHint}>Après les engagements connus</Text>
-        <View style={styles.availableRule} />
-        <View style={styles.availableFooter}>
-          <Text style={styles.availableFooterLabel}>À dépenser avec confiance</Text>
-          <View style={styles.statusPill}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusPillText}>Serein</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.previewMetrics}>
-        <Metric label="Dépenses ce mois" value="185 000 XOF" tone="expense" />
-        <Metric label="Budget restant" value="65 000 XOF" tone="income" />
-      </View>
-
-      <View style={styles.previewSectionHeader}>
-        <Text style={styles.previewSectionTitle}>Derniers mouvements</Text>
-        <Text style={styles.previewSectionAction}>Tout voir</Text>
-      </View>
-      <View style={styles.transactionCard}>
-        <View style={styles.transactionRow}>
-          <View style={[styles.transactionIcon, styles.incomeIcon]}>
-            <ArrowDownToLine size={15} color="#4C6656" strokeWidth={2.2} />
-          </View>
-          <View style={styles.transactionCopy}>
-            <Text style={styles.transactionTitle}>Salaire</Text>
-            <Text style={styles.transactionMeta}>Aujourd’hui · Compte courant</Text>
-          </View>
-          <Text style={styles.transactionIncome}>+350 000</Text>
-        </View>
-        <View style={styles.transactionDivider} />
-        <View style={styles.transactionRow}>
-          <View style={[styles.transactionIcon, styles.expenseIcon]}>
-            <ArrowUpRight size={15} color="#B75C52" strokeWidth={2.2} />
-          </View>
-          <View style={styles.transactionCopy}>
-            <Text style={styles.transactionTitle}>Courses</Text>
-            <Text style={styles.transactionMeta}>Hier · Compte courant</Text>
-          </View>
-          <Text style={styles.transactionExpense}>−28 500</Text>
-        </View>
-      </View>
-
-      <View style={styles.previewTabBar}>
-        <View style={[styles.previewTab, styles.previewTabActive]}>
-          <BarChart3 size={16} color="#26352D" strokeWidth={2.2} />
-          <Text style={styles.previewTabActiveText}>Accueil</Text>
-        </View>
-        <View style={styles.previewTab}>
-          <CalendarDays size={16} color="#85877F" strokeWidth={2.1} />
-          <Text style={styles.previewTabText}>Activité</Text>
-        </View>
-        <View style={styles.previewTab}>
-          <PiggyBank size={16} color="#85877F" strokeWidth={2.1} />
-          <Text style={styles.previewTabText}>Plans</Text>
-        </View>
-        <View style={styles.previewTab}>
-          <WalletCards size={16} color="#85877F" strokeWidth={2.1} />
-          <Text style={styles.previewTabText}>Comptes</Text>
-        </View>
-      </View>
+function ScreenshotCard({
+  title,
+  children,
+  source,
+  label,
+}: {
+  title: string;
+  children: string;
+  source: number;
+  label: string;
+}) {
+  return (
+    <View style={styles.screenshotCard}>
+      <ScreenshotFrame source={source} label={label} />
+      <Text style={styles.screenshotCardTitle}>{title}</Text>
+      <Text style={styles.screenshotCardBody}>{children}</Text>
     </View>
   );
 }
@@ -247,10 +234,14 @@ export default function LandingPage() {
         </View>
         <View style={[styles.heroVisual, narrow && styles.heroVisualNarrow]}>
           <View style={styles.visualCaption}>
-            <Text style={styles.visualCaptionText}>L’écran d’accueil</Text>
+            <Text style={styles.visualCaptionText}>L’écran réel de Wallet</Text>
             <View style={styles.visualCaptionLine} />
           </View>
-          <DashboardPreview narrow={narrow} />
+          <ScreenshotFrame
+            source={appScreens.home}
+            label="Capture de l’écran d’accueil de Wallet : patrimoine disponible, budgets et activité récente"
+            prominent
+          />
         </View>
       </View>
 
@@ -295,6 +286,84 @@ export default function LandingPage() {
           <Step number="01" title="Enregistrer">Ajoutez les comptes et les mouvements qui font votre quotidien.</Step>
           <Step number="02" title="Observer">L’écran d’accueil met en évidence le disponible et les changements du mois.</Step>
           <Step number="03" title="Décider">Budgétez, épargnez ou réservez une somme avec une information compréhensible.</Step>
+        </View>
+      </View>
+
+      <View style={styles.screenshotSection}>
+        <SectionLabel>VOIR CE QUI SE PASSE</SectionLabel>
+        <View style={[styles.sectionHeadingRow, narrow && styles.sectionHeadingRowNarrow]}>
+          <Text style={styles.sectionTitle}>Une lecture simple, du compte à la décision.</Text>
+          <Text style={styles.sectionIntro}>Les écrans importants restent reliés : vos mouvements expliquent votre patrimoine, et votre patrimoine donne du contexte à chaque choix.</Text>
+        </View>
+        <View style={styles.screenshotFeatureStack}>
+          <ScreenshotFeature
+            eyebrow="ACTIVITÉ"
+            title="Retrouvez chaque mouvement sans fouiller."
+            source={appScreens.activity}
+            label="Capture de l’écran Activité avec les revenus, dépenses et échéances du mois"
+            narrow={narrow}
+          >
+            Les opérations sont regroupées par date, avec le compte, la catégorie et le montant visibles au même endroit.
+          </ScreenshotFeature>
+          <ScreenshotFeature
+            eyebrow="COMPTES"
+            title="Sachez où se trouve votre argent."
+            source={appScreens.accounts}
+            label="Capture de l’écran Comptes avec le patrimoine, le disponible et les comptes par groupe"
+            narrow={narrow}
+            reverse
+          >
+            Espèces, banque et épargne restent distincts, tandis que le patrimoine total et le disponible gardent leur propre sens.
+          </ScreenshotFeature>
+        </View>
+      </View>
+
+      <View style={[styles.planningSection, narrow && styles.planningSectionNarrow]}>
+        <View style={styles.planningIntro}>
+          <SectionLabel>PRÉPARER LA SUITE</SectionLabel>
+          <Text style={styles.storyTitle}>Donnez une destination à votre argent.</Text>
+          <Text style={styles.storyBody}>Objectifs, réserves et règles d’épargne rendent les dépenses futures visibles sans cacher ce qui reste vraiment disponible.</Text>
+        </View>
+        <View style={[styles.screenshotCardGrid, narrow && styles.screenshotCardGridNarrow]}>
+          <ScreenshotCard
+            title="Objectifs"
+            source={appScreens.goals}
+            label="Capture de l’écran Objectifs avec les cibles actives et leur progression"
+          >
+            Suivez ce qui est déjà réservé et ce qu’il reste à construire.
+          </ScreenshotCard>
+          <ScreenshotCard
+            title="Planification"
+            source={appScreens.planning}
+            label="Capture de l’écran Planification avec les budgets et objectifs actifs"
+          >
+            Transformez le mois en décisions concrètes, par catégorie et par projet.
+          </ScreenshotCard>
+          <ScreenshotCard
+            title="Épargne"
+            source={appScreens.savings}
+            label="Capture de l’écran Suivi de l’épargne avec les montants estimés et retirés du disponible"
+          >
+            Rendez l’épargne automatique lisible, sans réduire artificiellement le disponible estimé.
+          </ScreenshotCard>
+        </View>
+      </View>
+
+      <View style={styles.screenshotSection}>
+        <SectionLabel>LIRE LE MOIS</SectionLabel>
+        <View style={[styles.sectionHeadingRow, narrow && styles.sectionHeadingRowNarrow]}>
+          <Text style={styles.sectionTitle}>Des statistiques qui éclairent une action.</Text>
+          <Text style={styles.sectionIntro}>Passez de la vue d’ensemble aux détails utiles pour comprendre une évolution, sans transformer votre argent en tableau de chiffres.</Text>
+        </View>
+        <View style={[styles.statisticsShowcase, narrow && styles.statisticsShowcaseNarrow]}>
+          <ScreenshotFrame
+            source={appScreens.statistics}
+            label="Capture de l’écran Statistiques avec la répartition des dépenses par catégorie"
+          />
+          <ScreenshotFrame
+            source={appScreens.statisticsDetail}
+            label="Capture du détail des statistiques avec la comparaison aux périodes précédentes"
+          />
         </View>
       </View>
 
@@ -358,50 +427,9 @@ const styles = StyleSheet.create({
   visualCaption: { position: "absolute", top: 0, right: 30, zIndex: 2, flexDirection: "row", alignItems: "center", gap: 9 },
   visualCaptionText: { color: "#85877F", fontSize: 11, fontWeight: "700", letterSpacing: 0.6 },
   visualCaptionLine: { width: 38, height: 1, backgroundColor: "#B75C52" },
-  previewShell: { width: "100%", maxWidth: 460, alignSelf: "center", padding: 18, borderRadius: 28, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E6E6E0", shadowColor: "#26352D", shadowOpacity: 0.11, shadowRadius: 30, shadowOffset: { width: 0, height: 18 }, elevation: 5 },
-  previewShellNarrow: { maxWidth: 510 },
-  previewTopBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
-  previewKicker: { color: "#85877F", fontSize: 9, fontWeight: "800", letterSpacing: 0.9 },
-  previewGreeting: { color: "#181916", fontSize: 21, fontWeight: "800", letterSpacing: -0.8, marginTop: 4 },
-  previewAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#DDEADF", alignItems: "center", justifyContent: "center" },
-  previewAvatarText: { color: "#4C6656", fontSize: 13, fontWeight: "800" },
-  availableCard: { padding: 18, borderRadius: 19, backgroundColor: "#26352D" },
-  availableHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  availableLabel: { color: "#CFE1D2", fontSize: 9, fontWeight: "800", letterSpacing: 1.05 },
-  availableAmount: { color: "#FFFFFF", fontSize: 32, lineHeight: 37, fontWeight: "800", letterSpacing: -1.3, marginTop: 13 },
-  availableCurrency: { color: "#CFE1D2", fontSize: 13, letterSpacing: 0 },
-  availableHint: { color: "#AFC8B4", fontSize: 11, marginTop: 3 },
-  availableRule: { height: StyleSheet.hairlineWidth, backgroundColor: "#567061", marginVertical: 15 },
-  availableFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  availableFooterLabel: { color: "#CFE1D2", fontSize: 10 },
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 99, backgroundColor: "#3A5143" },
-  statusDot: { width: 5, height: 5, borderRadius: 99, backgroundColor: "#B9D9C0" },
-  statusPillText: { color: "#DDEADF", fontSize: 9, fontWeight: "700" },
-  previewMetrics: { flexDirection: "row", gap: 10, marginTop: 12 },
-  metric: { flex: 1, padding: 13, borderRadius: 15, backgroundColor: "#F0F1EC" },
-  metricLabel: { color: "#85877F", fontSize: 9, lineHeight: 13 },
-  metricValue: { color: "#181916", fontSize: 13, fontWeight: "800", marginTop: 6, letterSpacing: -0.25 },
-  incomeText: { color: "#4C6656" },
-  expenseText: { color: "#B75C52" },
-  previewSectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 9 },
-  previewSectionTitle: { color: "#181916", fontSize: 13, fontWeight: "800" },
-  previewSectionAction: { color: "#4C6656", fontSize: 10, fontWeight: "700" },
-  transactionCard: { paddingHorizontal: 12, borderRadius: 15, backgroundColor: "#FAFAF7", borderWidth: 1, borderColor: "#E6E6E0" },
-  transactionRow: { flexDirection: "row", alignItems: "center", paddingVertical: 11, gap: 9 },
-  transactionIcon: { width: 28, height: 28, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  incomeIcon: { backgroundColor: "#E4EFE6" },
-  expenseIcon: { backgroundColor: "#F6E5E2" },
-  transactionCopy: { flex: 1 },
-  transactionTitle: { color: "#181916", fontSize: 11, fontWeight: "700" },
-  transactionMeta: { color: "#85877F", fontSize: 9, marginTop: 3 },
-  transactionIncome: { color: "#4C6656", fontSize: 11, fontWeight: "800" },
-  transactionExpense: { color: "#B75C52", fontSize: 11, fontWeight: "800" },
-  transactionDivider: { height: StyleSheet.hairlineWidth, backgroundColor: "#E6E6E0" },
-  previewTabBar: { flexDirection: "row", justifyContent: "space-around", marginTop: 14, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#E6E6E0" },
-  previewTab: { alignItems: "center", gap: 4, paddingHorizontal: 8 },
-  previewTabActive: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 99, backgroundColor: "#E4EFE6" },
-  previewTabText: { color: "#85877F", fontSize: 8 },
-  previewTabActiveText: { color: "#26352D", fontSize: 8, fontWeight: "800" },
+  screenshotFrame: { width: 224, aspectRatio: 720 / 1438, alignSelf: "center", overflow: "hidden", borderRadius: 28, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E6E6E0", shadowColor: "#26352D", shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 4 },
+  screenshotFrameProminent: { width: 340, maxWidth: "100%", borderRadius: 32, shadowOpacity: 0.16, shadowRadius: 30, shadowOffset: { width: 0, height: 18 }, elevation: 5 },
+  screenshotImage: { width: "100%", height: "100%" },
   trustBand: { width: "100%", maxWidth: 1180, alignSelf: "center", flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 24, paddingVertical: 20, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#D9DCD4" },
   trustLead: { color: "#85877F", fontSize: 12, fontWeight: "700" },
   trustItem: { flexDirection: "row", alignItems: "center", gap: 7 },
@@ -417,6 +445,24 @@ const styles = StyleSheet.create({
   featureIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#E4EFE6", marginBottom: 36 },
   featureTitle: { color: "#181916", fontSize: 20, fontWeight: "800", letterSpacing: -0.6 },
   featureBody: { color: "#6B7068", fontSize: 14, lineHeight: 22, marginTop: 9 },
+  screenshotSection: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingTop: 104, paddingBottom: 104 },
+  screenshotFeatureStack: { gap: 56 },
+  screenshotFeature: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 64, padding: 40, borderRadius: 28, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E6E6E0" },
+  screenshotFeatureReverse: { flexDirection: "row-reverse" },
+  screenshotFeatureNarrow: { flexDirection: "column", alignItems: "stretch", gap: 32, padding: 28 },
+  screenshotFeatureCopy: { flex: 1, maxWidth: 440 },
+  screenshotFeatureTitle: { color: "#181916", fontSize: 34, lineHeight: 39, fontWeight: "800", letterSpacing: -1.4 },
+  screenshotFeatureBody: { color: "#6B7068", fontSize: 15, lineHeight: 24, marginTop: 16 },
+  planningSection: { width: "100%", maxWidth: 1180, alignSelf: "center", padding: 56, borderRadius: 28, backgroundColor: "#E4EFE6" },
+  planningSectionNarrow: { padding: 28 },
+  planningIntro: { maxWidth: 610, marginBottom: 36 },
+  screenshotCardGrid: { flexDirection: "row", gap: 16 },
+  screenshotCardGridNarrow: { flexDirection: "column" },
+  screenshotCard: { flex: 1, alignItems: "center", padding: 22, borderRadius: 22, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D4E0D5" },
+  screenshotCardTitle: { alignSelf: "stretch", color: "#26352D", fontSize: 20, fontWeight: "800", letterSpacing: -0.5, marginTop: 22 },
+  screenshotCardBody: { alignSelf: "stretch", color: "#4C6656", fontSize: 13, lineHeight: 20, marginTop: 8 },
+  statisticsShowcase: { flexDirection: "row", justifyContent: "center", gap: 48 },
+  statisticsShowcaseNarrow: { flexDirection: "column", gap: 32 },
   storySection: { width: "100%", maxWidth: 1180, alignSelf: "center", flexDirection: "row", gap: 56, paddingVertical: 76, paddingHorizontal: 56, borderRadius: 28, backgroundColor: "#E4EFE6" },
   storySectionNarrow: { flexDirection: "column", paddingHorizontal: 28 },
   storyPanel: { flex: 1 },
