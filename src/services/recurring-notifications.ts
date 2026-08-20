@@ -1,4 +1,4 @@
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import type { SQLiteDatabase } from "expo-sqlite";
 import {
   listPendingRecurringOccurrences,
@@ -7,8 +7,28 @@ import {
 import { formatAmount } from "@/utils/format";
 
 let handlerConfigured = false;
+let notificationsModule: NotificationsModule | null = null;
+let notificationsLoadAttempted = false;
 
-export function configureRecurringNotifications(): void {
+type NotificationsModule = typeof import("expo-notifications");
+
+async function loadNotifications(): Promise<NotificationsModule | null> {
+  // Expo Go on Android does not include expo-notifications anymore. Keep the
+  // finance app usable there; standalone APKs and development builds still
+  // load the native module normally.
+  if (Constants.expoGoConfig || notificationsLoadAttempted) {
+    return notificationsModule;
+  }
+  notificationsLoadAttempted = true;
+  try {
+    notificationsModule = await import("expo-notifications");
+  } catch {
+    notificationsModule = null;
+  }
+  return notificationsModule;
+}
+
+export function configureRecurringNotifications(Notifications: NotificationsModule): void {
   if (handlerConfigured) return;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -24,7 +44,6 @@ export function configureRecurringNotifications(): void {
 export async function schedulePendingRecurringNotifications(
   db: SQLiteDatabase,
 ): Promise<{ scheduled: number; permissionGranted: boolean }> {
-  configureRecurringNotifications();
   const now = Date.now();
   const pending = await listPendingRecurringOccurrences(db);
   const toSchedule = pending.filter(
@@ -33,6 +52,11 @@ export async function schedulePendingRecurringNotifications(
   if (toSchedule.length === 0) {
     return { scheduled: 0, permissionGranted: true };
   }
+  const Notifications = await loadNotifications();
+  if (!Notifications) {
+    return { scheduled: 0, permissionGranted: false };
+  }
+  configureRecurringNotifications(Notifications);
   const permission = await Notifications.requestPermissionsAsync();
   if (permission.status !== Notifications.PermissionStatus.GRANTED) {
     return { scheduled: 0, permissionGranted: false };

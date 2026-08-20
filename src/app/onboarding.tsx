@@ -215,7 +215,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
       >
         <Image
-          source={require("../../assets/images/wallet-logo-square.png")}
+          source={require("../../assets/images/wallet-logo-green-v4.png")}
           accessible
           accessibilityRole="image"
           accessibilityLabel="Logo Wallet"

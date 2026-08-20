@@ -8,6 +8,14 @@ import { encryptBackup } from "@/security/cipher";
 
 export const BACKUP_FILE_EXTENSION = "wlbak";
 
+function shareableFileUri(file: File): string {
+  // Android needs a content:// URI to grant external apps access to the file.
+  // iOS and web do not expose contentUri, so they keep using the file URI.
+  return (
+    (file as File & { contentUri?: string }).contentUri || file.uri
+  );
+}
+
 export async function serializeDatabaseForBackup(): Promise<Uint8Array> {
   const db = await getDatabase();
   const snapshot = await db.serializeAsync();
@@ -73,9 +81,12 @@ export async function exportEncryptedBackup(
   );
   file.create({ overwrite: true, intermediates: true });
   file.write(encrypted);
+  if (!file.exists || file.size !== encrypted.byteLength) {
+    throw new Error("Le fichier de sauvegarde n'a pas pu être écrit.");
+  }
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, {
+    await Sharing.shareAsync(shareableFileUri(file), {
       mimeType: "application/octet-stream",
       dialogTitle: "Sauvegarde Wallet",
     });
