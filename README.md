@@ -35,6 +35,12 @@ You can start developing by editing the files inside the **app** directory. This
 
 La racine web présente Wallet Manager dans la même direction visuelle que l'application et propose le téléchargement de l'APK Android depuis la dernière GitHub Release.
 
+L'application utilisable sur grand écran est disponible sous `/app`. Elle conserve le même cœur local-first que la version Android : tableau de bord, activité, planification, statistiques, comptes, réglages, import CSV, sauvegardes et récurrences réutilisent les modules métier existants. À partir de 1080 px, la navigation devient une barre latérale ; les écrans plus étroits gardent une barre de navigation basse adaptée au tactile.
+
+La base du navigateur est indépendante de la base Android et reste stockée localement. La version web utilise SQLite WASM ; l'hébergement doit donc envoyer `Cross-Origin-Embedder-Policy: credentialless` et `Cross-Origin-Opener-Policy: same-origin`. La configuration Nginx du dépôt applique également le type MIME `application/wasm`.
+
+En développement, ouvrez `http://localhost:8081/app` après avoir lancé le serveur web Expo. En production, le chemin attendu est `https://votre-domaine/app`.
+
 Pour produire l'APK puis l'export web statique :
 
 ```bash

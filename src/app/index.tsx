@@ -1,5 +1,6 @@
 import {
   ArrowDownToLine,
+  ArrowUpRight,
   BarChart3,
   Check,
   CircleDollarSign,
@@ -52,6 +53,20 @@ function DownloadButton({ compact = false }: { compact?: boolean }) {
       <Text style={[styles.downloadButtonText, compact && styles.downloadButtonTextCompact]}>
         Télécharger l’APK
       </Text>
+    </Pressable>
+  );
+}
+
+function OpenWebButton() {
+  return (
+    <Pressable
+      accessibilityLabel="Ouvrir Wallet sur ordinateur"
+      accessibilityRole="link"
+      onPress={() => void Linking.openURL("/app")}
+      style={({ pressed }) => [styles.webAppButton, pressed && styles.pressed]}
+    >
+      <ArrowUpRight size={18} color="#26352D" strokeWidth={2.3} />
+      <Text style={styles.webAppButtonText}>Ouvrir Wallet sur PC</Text>
     </Pressable>
   );
 }
@@ -240,6 +255,7 @@ export default function LandingPage() {
             Wallet Manager rassemble vos comptes, vos dépenses et vos projets dans une seule vue calme. Vos données restent sur votre appareil, pour garder la main même sans connexion.
           </Text>
           <View style={styles.heroActions}>
+            <OpenWebButton />
             {downloadAvailable ? <DownloadButton /> : null}
             {downloadAvailable ? <Text style={styles.heroActionNote}>Android · APK gratuit · XOF par défaut</Text> : null}
           </View>
@@ -457,6 +473,8 @@ const styles = StyleSheet.create({
   downloadButtonCompact: { minHeight: 42, paddingHorizontal: 16 },
   downloadButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700", letterSpacing: -0.15 },
   downloadButtonTextCompact: { fontSize: 13 },
+  webAppButton: { minHeight: 50, paddingHorizontal: 20, borderRadius: 999, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, backgroundColor: "#E4EFE6", borderWidth: 1, borderColor: "#D4E0D5" },
+  webAppButtonText: { color: "#26352D", fontSize: 14, fontWeight: "800", letterSpacing: -0.15 },
   pressed: { opacity: 0.72 },
   hero: { width: "100%", maxWidth: 1180, alignSelf: "center", flexDirection: "row", alignItems: "flex-start", gap: 64, paddingBottom: 80 },
   heroNarrow: { flexDirection: "column", alignItems: "stretch", gap: 44 },
