@@ -11,6 +11,7 @@ import {
   MIGRATION_V16,
   MIGRATION_V17,
   MIGRATION_V18,
+  MIGRATION_V19,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -77,6 +78,7 @@ const MIGRATIONS: Record<number, string> = {
   16: MIGRATION_V16,
   17: MIGRATION_V17,
   18: MIGRATION_V18,
+  19: MIGRATION_V19,
 };
 
 class SqliteDb {
@@ -328,6 +330,11 @@ function assertMigratedState(db: SqliteDb, era: number): void {
 
   if (era >= 3) {
     expect(row(db, "budgets", 1)).toMatchObject({ amount: 50000 });
+    expect(row(db, "budget_plans", 1)).toMatchObject({
+      amount: 50000,
+      rollover_enabled: 0,
+      is_active: 1,
+    });
     expect(row(db, "recurring_transactions", 1)).toMatchObject({
       amount: 15000,
       is_active: 1,
@@ -380,6 +387,8 @@ describe("migrations versionnées", () => {
         "accounts",
         "transactions",
         "budgets",
+        "budget_plans",
+        "budget_periods",
         "recurring_transactions",
         "savings_rules",
         "goals",

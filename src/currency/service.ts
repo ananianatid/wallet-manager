@@ -309,6 +309,37 @@ export async function setReferenceCurrency(
         budget.id,
       );
     }
+    const budgetPeriods = await db.getAllAsync<{
+      id: number;
+      amount: number;
+      planCurrencyCode: string;
+    }>(
+      `SELECT bp.id,
+              bp.amount,
+              plans.currency_code AS planCurrencyCode
+       FROM budget_periods bp
+       JOIN budget_plans plans ON plans.id = bp.plan_id`,
+    );
+    for (const period of budgetPeriods) {
+      await db.runAsync(
+        "UPDATE budget_periods SET amount = ? WHERE id = ?",
+        convertMinorAmount(period.amount, period.planCurrencyCode, nextCurrency, rate.rate),
+        period.id,
+      );
+    }
+    const budgetPlans = await db.getAllAsync<{
+      id: number;
+      amount: number;
+      currencyCode: string;
+    }>("SELECT id, amount, currency_code AS currencyCode FROM budget_plans");
+    for (const plan of budgetPlans) {
+      await db.runAsync(
+        "UPDATE budget_plans SET amount = ?, currency_code = ? WHERE id = ?",
+        convertMinorAmount(plan.amount, plan.currencyCode, nextCurrency, rate.rate),
+        nextCurrency,
+        plan.id,
+      );
+    }
     const goals = await db.getAllAsync<{
       id: number;
       amount: number;

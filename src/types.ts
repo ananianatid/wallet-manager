@@ -272,6 +272,32 @@ export interface Budget {
   createdAt: number;
 }
 
+export interface BudgetPlan {
+  id: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
+  amount: number;
+  currencyCode: string;
+  rolloverEnabled: boolean;
+  isActive: boolean;
+  createdAt: number;
+}
+
+export interface BudgetPeriodSnapshot {
+  planId: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
+  month: string;
+  currencyCode: string;
+  plannedAmount: number;
+  rolloverIn: number;
+  spent: number;
+  available: number;
+  rolloverOut: number;
+}
+
 export interface RecurringTransaction {
   id: number;
   type: TransactionType;

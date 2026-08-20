@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 18;
+export const DATABASE_VERSION = 19;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -161,6 +161,35 @@ CREATE TABLE budgets (
 );
 
 CREATE UNIQUE INDEX ux_budgets_category ON budgets (category_id) WHERE category_id IS NOT NULL;
+
+CREATE TABLE budget_plans (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id     INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+  amount          INTEGER NOT NULL CHECK (amount > 0),
+  currency_code   TEXT NOT NULL DEFAULT 'XOF',
+  rollover_enabled INTEGER NOT NULL DEFAULT 0 CHECK (rollover_enabled IN (0, 1)),
+  is_active       INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  created_at      INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX ux_budget_plans_active_category
+  ON budget_plans (category_id)
+  WHERE category_id IS NOT NULL AND is_active = 1;
+
+CREATE UNIQUE INDEX ux_budget_plans_active_global
+  ON budget_plans (COALESCE(category_id, 0))
+  WHERE category_id IS NULL AND is_active = 1;
+
+CREATE TABLE budget_periods (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_id     INTEGER NOT NULL REFERENCES budget_plans(id) ON DELETE CASCADE,
+  month       TEXT NOT NULL CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
+  amount      INTEGER NOT NULL CHECK (amount > 0),
+  created_at  INTEGER NOT NULL,
+  UNIQUE (plan_id, month)
+);
+
+CREATE INDEX idx_budget_periods_month ON budget_periods (month);
 
 CREATE TABLE recurring_transactions (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -607,6 +636,46 @@ export const MIGRATION_V18 = `
     WHERE import_fingerprint IS NOT NULL;
 `;
 
+export const MIGRATION_V19 = `
+  CREATE TABLE budget_plans (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id      INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+    amount           INTEGER NOT NULL CHECK (amount > 0),
+    currency_code    TEXT NOT NULL DEFAULT 'XOF',
+    rollover_enabled INTEGER NOT NULL DEFAULT 0 CHECK (rollover_enabled IN (0, 1)),
+    is_active        INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at       INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX ux_budget_plans_active_category
+    ON budget_plans (category_id)
+    WHERE category_id IS NOT NULL AND is_active = 1;
+
+  CREATE UNIQUE INDEX ux_budget_plans_active_global
+    ON budget_plans (COALESCE(category_id, 0))
+    WHERE category_id IS NULL AND is_active = 1;
+
+  CREATE TABLE budget_periods (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id     INTEGER NOT NULL REFERENCES budget_plans(id) ON DELETE CASCADE,
+    month       TEXT NOT NULL CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
+    amount      INTEGER NOT NULL CHECK (amount > 0),
+    created_at  INTEGER NOT NULL,
+    UNIQUE (plan_id, month)
+  );
+
+  CREATE INDEX idx_budget_periods_month ON budget_periods (month);
+
+  INSERT INTO budget_plans (id, category_id, amount, currency_code, created_at)
+  SELECT b.id, b.category_id, b.amount, b.currency_code, b.created_at
+  FROM budgets b
+  JOIN (
+    SELECT category_id, MAX(id) AS id
+    FROM budgets
+    GROUP BY category_id
+  ) latest ON latest.id = b.id;
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -723,6 +792,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 17) {
       await db.execAsync(MIGRATION_V18);
+    }
+    if (currentDbVersion <= 18) {
+      await db.execAsync(MIGRATION_V19);
     }
   }
 

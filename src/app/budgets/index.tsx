@@ -1,10 +1,11 @@
 import { Stack, useFocusEffect } from "expo-router";
-import { Pencil, Trash } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Pencil, Trash } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -13,18 +14,40 @@ import { SelectField } from "@/components/select-field";
 import { CategoryIcon } from "@/components/category-icons";
 import { EmptyState } from "@/components/empty-state";
 import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
-import { deleteBudget, listBudgets, setBudget } from "@/db/budgets";
+import {
+  deleteBudgetPlan,
+  getBudgetSnapshot,
+  listBudgetPlans,
+  setBudgetPlan,
+} from "@/db/budgets";
 import { listCategories } from "@/db/categories";
 import { getDatabase } from "@/db/database";
-import { useCurrency, useCurrencyConverter } from "@/currency/context";
+import { useCurrency } from "@/currency/context";
 import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
-import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, typography, useTheme, type ThemeColors } from "@/theme";
-import type { Budget, Category } from "@/types";
+import type { BudgetPeriodSnapshot, BudgetPlan, Category } from "@/types";
 import { formatAmount } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
+
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function shiftMonth(month: string, offset: number): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber - 1 + offset, 1);
+  return monthKey(date);
+}
+
+function monthLabel(month: string): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric",
+  });
+}
 
 interface EditRowProps {
   categories: Category[];
@@ -34,6 +57,8 @@ interface EditRowProps {
   onAmountChange: (value: string) => void;
   onCancel: () => void;
   onSave: () => void;
+  rolloverEnabled: boolean;
+  onRolloverChange: (enabled: boolean) => void;
   theme: ThemeColors;
 }
 
@@ -45,6 +70,8 @@ function EditRow({
   onAmountChange,
   onCancel,
   onSave,
+  rolloverEnabled,
+  onRolloverChange,
   theme,
 }: EditRowProps) {
   const options = [
@@ -80,6 +107,22 @@ function EditRow({
         />
       </View>
       <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
+        <View style={[styles.rolloverRow, { borderColor: theme.separator }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.label, fontWeight: "600" }}>Reporter le solde</Text>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+              Le dépassement réduit le mois suivant.
+            </Text>
+          </View>
+          <Switch
+            value={rolloverEnabled}
+            onValueChange={onRolloverChange}
+            accessibilityLabel="Activer le report du budget"
+            trackColor={{ false: theme.separator, true: theme.accent }}
+          />
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: spacing.sm, width: "100%" }}>
         <Pressable
           onPress={onCancel}
           style={({ pressed }) => [
@@ -108,44 +151,28 @@ function EditRow({
 export default function BudgetsScreen() {
   const theme = useTheme();
   const { baseCurrency } = useCurrency();
-  const convert = useCurrencyConverter();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
+  const [rolloverEnabled, setRolloverEnabled] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(() => monthKey(new Date()));
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const now = new Date();
-    const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-    const [b, cats, tx] = await Promise.all([
-      listBudgets(db),
+    const [plans, cats, snapshots] = await Promise.all([
+      listBudgetPlans(db),
       listCategories(db, "expense"),
-      listTransactions(db, { startMs, endMs }),
+      getBudgetSnapshot(db, selectedMonth),
     ]);
-    const spentByCategory = new Map<number, number>();
-    let totalExpense = 0;
-    for (const t of tx) {
-      if (t.type !== "expense") {
-        continue;
-      }
-      totalExpense += convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-      if (t.categoryId != null) {
-        spentByCategory.set(
-          t.categoryId,
-          (spentByCategory.get(t.categoryId) ?? 0) + (convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0),
-        );
-      }
-    }
-    return { budgets: b, expenseCategories: cats, spentByCategory, totalExpense };
-  }, [baseCurrency, convert]);
+    return { plans, expenseCategories: cats, snapshots };
+  }, [selectedMonth]);
 
   const resource = useAsyncResource(load, "budgets.load");
   const reload = resource.reload;
-  const budgets = resource.data?.budgets ?? [];
+  const plans = resource.data?.plans ?? [];
   const expenseCategories = resource.data?.expenseCategories ?? [];
-  const spentByCategory = resource.data?.spentByCategory ?? new Map<number, number>();
-  const totalExpense = resource.data?.totalExpense ?? 0;
+  const snapshots = resource.data?.snapshots ?? [];
+  const snapshotByPlan = new Map(snapshots.map((snapshot) => [snapshot.planId, snapshot]));
 
   useFocusEffect(
     useCallback(() => {
@@ -155,25 +182,28 @@ export default function BudgetsScreen() {
 
   const editingBudget =
     editingKey !== null && editingKey !== "new"
-      ? budgets.find((b) => String(b.id) === editingKey) ?? null
+      ? plans.find((plan) => String(plan.id) === editingKey) ?? null
       : null;
 
   const startAdd = () => {
     setEditingKey("new");
     setCategoryId(null);
     setAmount("");
+    setRolloverEnabled(false);
   };
 
-  const startEdit = (budget: Budget) => {
-    setEditingKey(String(budget.id));
-    setCategoryId(budget.categoryId);
-    setAmount((budget.amount / 10 ** currencyDigits(budget.currencyCode)).toString());
+  const startEdit = (plan: BudgetPlan) => {
+    setEditingKey(String(plan.id));
+    setCategoryId(plan.categoryId);
+    setAmount((plan.amount / 10 ** currencyDigits(plan.currencyCode)).toString());
+    setRolloverEnabled(plan.rolloverEnabled);
   };
 
   const cancelEdit = () => {
     setEditingKey(null);
     setCategoryId(null);
     setAmount("");
+    setRolloverEnabled(false);
   };
 
   const save = async () => {
@@ -188,7 +218,7 @@ export default function BudgetsScreen() {
     }
     const db = await getDatabase();
     try {
-      await setBudget(db, categoryId, parsed, baseCurrency);
+      await setBudgetPlan(db, categoryId, parsed, baseCurrency, rolloverEnabled);
       cancelEdit();
       await resource.reload();
     } catch (e) {
@@ -197,7 +227,7 @@ export default function BudgetsScreen() {
     }
   };
 
-  const confirmDelete = (budget: Budget) => {
+  const confirmDelete = (plan: BudgetPlan) => {
     Alert.alert("Supprimer ce budget ?", "Cette action est définitive.", [
       { text: "Annuler", style: "cancel" },
       {
@@ -205,7 +235,7 @@ export default function BudgetsScreen() {
         style: "destructive",
         onPress: async () => {
           const db = await getDatabase();
-          await deleteBudget(db, budget.id);
+          await deleteBudgetPlan(db, plan.id);
           await resource.reload();
         },
       },
@@ -232,9 +262,24 @@ export default function BudgetsScreen() {
       >
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>Plafonds du mois</Text>
-          <Text style={[styles.introBody, { color: theme.secondaryLabel }]}>Décidez combien chaque catégorie peut absorber avant que le mois ne commence.</Text>
+          <Text style={[styles.introBody, { color: theme.secondaryLabel }]}>Les dépenses fractionnées sont comptées par allocation et les transferts sont exclus.</Text>
         </View>
-        {budgets.length === 0 && editingKey === null ? (
+        <View style={[styles.monthSelector, { backgroundColor: theme.surface }]}>
+          <IconButton
+            label="Mois précédent"
+            onPress={() => setSelectedMonth((month) => shiftMonth(month, -1))}
+            icon={<ChevronLeft size={20} color={theme.label} />}
+          />
+          <Text accessibilityRole="header" style={[styles.monthLabel, { color: theme.label }]}>
+            {monthLabel(selectedMonth)}
+          </Text>
+          <IconButton
+            label="Mois suivant"
+            onPress={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+            icon={<ChevronRight size={20} color={theme.label} />}
+          />
+        </View>
+        {plans.length === 0 && editingKey === null ? (
           <EmptyState
             title="Aucun budget"
             message="Définissez un montant mensuel par catégorie de dépenses."
@@ -250,16 +295,26 @@ export default function BudgetsScreen() {
             borderCurve: "continuous",
           }}
         >
-          {budgets.map((budget, index) => {
-            const isEditing = editingKey === String(budget.id);
-            const spent =
-              budget.categoryId == null
-                ? totalExpense
-                : (spentByCategory.get(budget.categoryId) ?? 0);
-            const pct = Math.min((spent / budget.amount) * 100, 100);
-            const over = spent > budget.amount;
+          {plans.map((plan, index) => {
+            const isEditing = editingKey === String(plan.id);
+            const snapshot: BudgetPeriodSnapshot = snapshotByPlan.get(plan.id) ?? {
+              planId: plan.id,
+              categoryId: plan.categoryId,
+              categoryName: plan.categoryName,
+              categoryIcon: plan.categoryIcon,
+              month: selectedMonth,
+              currencyCode: plan.currencyCode,
+              plannedAmount: plan.amount,
+              rolloverIn: 0,
+              spent: 0,
+              available: plan.amount,
+              rolloverOut: 0,
+            };
+            const budgetLimit = snapshot.plannedAmount + snapshot.rolloverIn;
+            const pct = budgetLimit <= 0 ? 0 : Math.min(Math.max((snapshot.spent / budgetLimit) * 100, 0), 100);
+            const over = snapshot.available < 0;
             return (
-              <View key={budget.id}>
+              <View key={plan.id}>
                 {index > 0 ? (
                   <View
                     style={{
@@ -273,35 +328,40 @@ export default function BudgetsScreen() {
                   <EditRow
                     categories={expenseCategories}
                     categorySelection={
-                      budget.categoryId != null ? budget.categoryId : categoryId
+                      plan.categoryId != null ? plan.categoryId : categoryId
                     }
                     onCategoryChange={setCategoryId}
                     amount={amount}
                     onAmountChange={setAmount}
                     onCancel={cancelEdit}
                     onSave={save}
+                    rolloverEnabled={rolloverEnabled}
+                    onRolloverChange={setRolloverEnabled}
                     theme={theme}
                   />
                 ) : (
                   <View style={styles.row}>
-                    {budget.categoryIcon ? (
+                    {plan.categoryIcon ? (
                       <View
                         style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}
                       >
-                        <CategoryIcon name={budget.categoryIcon} size={19} color={theme.accent} />
+                        <CategoryIcon name={plan.categoryIcon} size={19} color={theme.accent} />
                       </View>
                     ) : null}
                     <View style={styles.body}>
                       <Text style={[styles.name, { color: theme.label }]}>
-                        {budget.categoryName ?? "Toutes les dépenses"}
+                        {plan.categoryName ?? "Toutes les dépenses"}
                       </Text>
                       <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
-                        {formatAmount(spent, baseCurrency)} / {formatAmount(budget.amount, budget.currencyCode)} ce mois
+                        Prévu {formatAmount(snapshot.plannedAmount, plan.currencyCode)} · Report {formatAmount(snapshot.rolloverIn, plan.currencyCode)}
+                      </Text>
+                      <Text style={{ color: over ? theme.expense : theme.secondaryLabel, fontSize: 13 }}>
+                        Dépensé {formatAmount(snapshot.spent, plan.currencyCode)} · Restant {formatAmount(snapshot.available, plan.currencyCode)}
                       </Text>
                       <View
                         accessible
                         accessibilityRole="progressbar"
-                        accessibilityLabel={`${formatAmount(spent, baseCurrency)} dépensés sur ${formatAmount(budget.amount, budget.currencyCode)}`}
+                        accessibilityLabel={`${formatAmount(snapshot.spent, plan.currencyCode)} dépensés sur ${formatAmount(budgetLimit, plan.currencyCode)}`}
                         style={[styles.progressTrack, { backgroundColor: theme.surfaceElevated }]}
                       >
                         <View
@@ -316,16 +376,16 @@ export default function BudgetsScreen() {
                       </View>
                     </View>
                     <Text style={[styles.amount, { color: theme.label }]}>
-                      {formatAmount(budget.amount, budget.currencyCode)}
+                      {formatAmount(snapshot.available, plan.currencyCode)}
                     </Text>
                     <IconButton
-                      label={`Modifier le budget ${budget.categoryName ?? "global"}`}
-                      onPress={() => startEdit(budget)}
+                      label={`Modifier le budget ${plan.categoryName ?? "global"}`}
+                      onPress={() => startEdit(plan)}
                       icon={<Pencil size={18} color={theme.secondaryLabel} strokeWidth={2} />}
                     />
                     <IconButton
-                      label={`Supprimer le budget ${budget.categoryName ?? "global"}`}
-                      onPress={() => confirmDelete(budget)}
+                      label={`Supprimer le budget ${plan.categoryName ?? "global"}`}
+                      onPress={() => confirmDelete(plan)}
                       icon={<Trash size={18} color={theme.expense} strokeWidth={2} />}
                     />
                   </View>
@@ -351,6 +411,8 @@ export default function BudgetsScreen() {
                 onAmountChange={setAmount}
                 onCancel={cancelEdit}
                 onSave={save}
+                rolloverEnabled={rolloverEnabled}
+                onRolloverChange={setRolloverEnabled}
                 theme={theme}
               />
             </View>
@@ -402,6 +464,27 @@ const styles = StyleSheet.create({
   },
   introTitle: typography.title,
   introBody: typography.body,
+  monthSelector: {
+    minHeight: 56,
+    borderRadius: radius.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.sm,
+  },
+  monthLabel: {
+    textTransform: "capitalize",
+    fontWeight: "700",
+  },
+  rolloverRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
   name: {
     fontWeight: "600",
   },
