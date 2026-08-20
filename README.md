@@ -48,14 +48,20 @@ Le fichier `public/app-release.apk` est ignoré par Git et sera copié dans l'ex
 
 La production web est une image statique Nginx. Elle ne démarre ni Laravel ni un serveur Node, et les données restent locales au navigateur.
 
-Construisez d'abord l'APK, puis l'image web :
+Construisez l'image web :
+
+```bash
+npm run docker:build
+```
+
+L'APK Android est optionnel pour le déploiement web. Pour l'inclure dans un build local, produisez-le avant la construction Docker :
 
 ```bash
 npm run build:apk-sm
 npm run docker:build
 ```
 
-Le build Docker vérifie que `public/app-release.apk` existe avant de construire l'image. Pour lancer l'image localement :
+Sans APK, la vitrine reste fonctionnelle et masque automatiquement les boutons de téléchargement. Pour lancer l'image localement :
 
 ```bash
 docker run --rm \

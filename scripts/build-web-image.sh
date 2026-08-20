@@ -12,9 +12,8 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 if [[ ! -s public/app-release.apk ]]; then
-  echo "ERREUR: public/app-release.apk est absent." >&2
-  echo "Construisez d'abord l'APK avec: npm run build:apk-sm" >&2
-  exit 1
+  echo "INFO: public/app-release.apk absent; l'image sera construite sans téléchargement APK." >&2
+  echo "Pour l'inclure dans un build local: npm run build:apk-sm" >&2
 fi
 
 echo "==> Construction de l'image $image_tag..."

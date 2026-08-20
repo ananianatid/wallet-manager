@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react-native";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { radius } from "@/theme";
 
 const DOWNLOAD_PATH = "/app-release.apk";
@@ -182,6 +183,30 @@ export default function LandingPage() {
   const { width } = useWindowDimensions();
   const narrow = width < 820;
   const phone = width < 560;
+  const [downloadAvailable, setDownloadAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    let active = true;
+    fetch(DOWNLOAD_PATH, { method: "HEAD", cache: "no-store" })
+      .then((response) => {
+        if (active) {
+          setDownloadAvailable(response.ok);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setDownloadAvailable(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
@@ -190,7 +215,7 @@ export default function LandingPage() {
           <AppMark />
           <Text style={styles.brandName}>Wallet Manager</Text>
         </View>
-        {!phone ? (
+        {!phone && downloadAvailable ? (
           <View style={styles.headerActions}>
             <Text style={styles.headerNote}>Finance personnelle, sans bruit.</Text>
             <DownloadButton compact />
@@ -206,8 +231,8 @@ export default function LandingPage() {
             Wallet Manager rassemble vos comptes, vos dépenses et vos projets dans une seule vue calme. Vos données restent sur votre appareil, pour garder la main même sans connexion.
           </Text>
           <View style={styles.heroActions}>
-            <DownloadButton />
-            <Text style={styles.heroActionNote}>Android · APK gratuit · XOF par défaut</Text>
+            {downloadAvailable ? <DownloadButton /> : null}
+            {downloadAvailable ? <Text style={styles.heroActionNote}>Android · APK gratuit · XOF par défaut</Text> : null}
           </View>
           <View style={styles.heroSignals}>
             <View style={styles.signal}>
@@ -273,17 +298,19 @@ export default function LandingPage() {
         </View>
       </View>
 
-      <View nativeID="download" style={[styles.downloadPanel, narrow && styles.downloadPanelNarrow]}>
-        <View style={styles.downloadPanelCopy}>
-          <SectionLabel>COMMENCER MAINTENANT</SectionLabel>
-          <Text style={styles.downloadTitle}>Votre argent mérite un écran plus calme.</Text>
-          <Text style={styles.downloadBody}>Téléchargez la version Android et gardez votre suivi financier avec vous, même lorsque le réseau disparaît.</Text>
+      {downloadAvailable ? (
+        <View nativeID="download" style={[styles.downloadPanel, narrow && styles.downloadPanelNarrow]}>
+          <View style={styles.downloadPanelCopy}>
+            <SectionLabel>COMMENCER MAINTENANT</SectionLabel>
+            <Text style={styles.downloadTitle}>Votre argent mérite un écran plus calme.</Text>
+            <Text style={styles.downloadBody}>Téléchargez la version Android et gardez votre suivi financier avec vous, même lorsque le réseau disparaît.</Text>
+          </View>
+          <View style={[styles.downloadPanelAction, narrow && styles.downloadPanelActionNarrow]}>
+            <DownloadButton />
+            <Text style={styles.downloadFinePrint}>APK Android disponible au téléchargement.</Text>
+          </View>
         </View>
-        <View style={[styles.downloadPanelAction, narrow && styles.downloadPanelActionNarrow]}>
-          <DownloadButton />
-          <Text style={styles.downloadFinePrint}>Le fichier APK sera disponible après le build Android.</Text>
-        </View>
-      </View>
+      ) : null}
 
       <View style={styles.footer}>
         <View style={styles.brand}>

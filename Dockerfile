@@ -12,8 +12,8 @@ COPY . .
 # Apply the repository patches without running an uncontrolled install.
 RUN npm run postinstall
 
-# The public APK is part of the production vitrine download contract.
-RUN test -s public/app-release.apk
+# The APK is optional: Dokploy builds from GitHub, while the APK is ignored by Git.
+# When present in the build context, Expo copies it into the static export.
 RUN npx expo export --platform web
 
 FROM nginx:1.29-alpine AS runtime
