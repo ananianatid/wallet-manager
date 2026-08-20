@@ -33,7 +33,7 @@ You can start developing by editing the files inside the **app** directory. This
 
 ## Vitrine web
 
-La racine web présente Wallet Manager dans la même direction visuelle que l'application et propose le téléchargement de l'APK Android.
+La racine web présente Wallet Manager dans la même direction visuelle que l'application et propose le téléchargement de l'APK Android depuis la dernière GitHub Release.
 
 Pour produire l'APK puis l'export web statique :
 
@@ -42,7 +42,7 @@ npm run build:apk
 npx expo export --platform web
 ```
 
-Le fichier `public/app-release.apk` est ignoré par Git et sera copié dans l'export web. Le bouton de téléchargement de la vitrine pointe vers `/app-release.apk`.
+Le fichier `public/app-release.apk` est ignoré par Git. Après le build, publiez-le comme asset d'une GitHub Release ; le bouton de la vitrine pointe vers l'asset stable `releases/latest/download/app-release.apk`.
 
 ## Déploiement Docker sur un VPS
 
@@ -54,14 +54,16 @@ Construisez l'image web :
 npm run docker:build
 ```
 
-L'APK Android est optionnel pour le déploiement web. Pour l'inclure dans un build local, produisez-le avant la construction Docker :
+L'APK Android est indépendant du déploiement Docker de la vitrine. Pour produire l'asset de release :
 
 ```bash
 npm run build:apk-sm
-npm run docker:build
+gh release create v1.0.0 public/app-release.apk \
+  --title "Wallet Manager 1.0.0" \
+  --notes "Première version Android distribuable."
 ```
 
-Sans APK, la vitrine reste fonctionnelle et masque automatiquement les boutons de téléchargement. Pour lancer l'image localement :
+La vitrine ne dépend pas de la présence locale de l'APK pendant le build Docker. Pour lancer l'image localement :
 
 ```bash
 docker run --rm \
@@ -75,7 +77,7 @@ Vérifications locales :
 ```bash
 curl -I http://localhost:8080/
 curl http://localhost:8080/healthz
-curl -I http://localhost:8080/app-release.apk
+curl -I -L https://github.com/ananianatid/wallet-manager/releases/latest/download/app-release.apk
 ```
 
 Sur le VPS, publiez le port du conteneur uniquement en local afin que le reverse proxy HTTPS existant puisse le joindre :
