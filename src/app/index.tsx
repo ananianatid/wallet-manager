@@ -12,22 +12,51 @@ import {
   WalletCards,
 } from "lucide-react-native";
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { radius } from "@/theme";
 
 const DOWNLOAD_PATH = "https://github.com/ananianatid/wallet-manager/releases/latest/download/app-release.apk";
 
 const appScreens = {
-  home: require("../../docs/images for the web/Screenshot_20260820-102453_Wallet Manager.png"),
-  goals: require("../../docs/images for the web/Screenshot_20260820-102508_Wallet Manager.png"),
-  savings: require("../../docs/images for the web/Screenshot_20260820-102515_Wallet Manager.png"),
-  activity: require("../../docs/images for the web/Screenshot_20260820-102521_Wallet Manager.png"),
-  planning: require("../../docs/images for the web/Screenshot_20260820-102524_Wallet Manager.png"),
-  statistics: require("../../docs/images for the web/Screenshot_20260820-102529_Wallet Manager.png"),
-  statisticsDetail: require("../../docs/images for the web/Screenshot_20260820-102543_Wallet Manager.png"),
-  accounts: require("../../docs/images for the web/Screenshot_20260820-102547_Wallet Manager.png"),
+  home: require("../../docs/images for the web/optimized/Screenshot_20260820-102453_Wallet Manager.webp"),
+  goals: require("../../docs/images for the web/optimized/Screenshot_20260820-102508_Wallet Manager.webp"),
+  savings: require("../../docs/images for the web/optimized/Screenshot_20260820-102515_Wallet Manager.webp"),
+  activity: require("../../docs/images for the web/optimized/Screenshot_20260820-102521_Wallet Manager.webp"),
+  planning: require("../../docs/images for the web/optimized/Screenshot_20260820-102524_Wallet Manager.webp"),
+  statistics: require("../../docs/images for the web/optimized/Screenshot_20260820-102529_Wallet Manager.webp"),
+  statisticsDetail: require("../../docs/images for the web/optimized/Screenshot_20260820-102543_Wallet Manager.webp"),
+  accounts: require("../../docs/images for the web/optimized/Screenshot_20260820-102547_Wallet Manager.webp"),
 };
+
+type ScreenshotQueueValue = {
+  activeIndex: number;
+  markComplete: (index: number) => void;
+};
+
+const ScreenshotQueueContext = createContext<ScreenshotQueueValue>({
+  activeIndex: 0,
+  markComplete: () => undefined,
+});
+
+function ScreenshotQueue({ children }: { children: React.ReactNode }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const completedIndexes = useRef(new Set<number>());
+  const markComplete = useCallback((index: number) => {
+    if (completedIndexes.current.has(index)) {
+      return;
+    }
+
+    completedIndexes.current.add(index);
+    setActiveIndex((currentIndex) => Math.max(currentIndex, index + 1));
+  }, []);
+
+  return (
+    <ScreenshotQueueContext.Provider value={{ activeIndex, markComplete }}>
+      {children}
+    </ScreenshotQueueContext.Provider>
+  );
+}
 
 function AppMark({ inverse = false }: { inverse?: boolean }) {
   return (
@@ -83,23 +112,57 @@ function SectionLabel({ children }: { children: string }) {
 function ScreenshotFrame({
   source,
   label,
+  sequence,
   prominent = false,
 }: {
   source: number;
   label: string;
+  sequence: number;
   prominent?: boolean;
 }) {
+  const { activeIndex, markComplete } = useContext(ScreenshotQueueContext);
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const canLoad = sequence <= activeIndex;
+
+  const complete = (nextStatus: "ready" | "error") => {
+    setStatus(nextStatus);
+    markComplete(sequence);
+  };
+
   return (
     <View style={[styles.screenshotFrame, prominent && styles.screenshotFrameProminent]}>
-      <Image
-        source={source}
-        alt={label}
-        accessibilityLabel={label}
-        contentFit="contain"
-        cachePolicy="disk"
-        loading={prominent ? "eager" : "lazy"}
-        style={styles.screenshotImage}
-      />
+      {canLoad ? (
+        <Image
+          source={source}
+          alt={label}
+          accessibilityLabel={label}
+          contentFit="contain"
+          cachePolicy="disk"
+          loading="eager"
+          onLoadStart={() => setStatus("loading")}
+          onLoad={() => complete("ready")}
+          onError={() => complete("error")}
+          style={styles.screenshotImage}
+        />
+      ) : null}
+      {status !== "ready" ? (
+        <View
+          accessibilityLiveRegion="polite"
+          accessibilityRole={status === "error" ? "alert" : "progressbar"}
+          style={styles.screenshotLoader}
+        >
+          {status === "error" ? (
+            <Text style={styles.screenshotLoaderText}>Aperçu indisponible</Text>
+          ) : (
+            <>
+              {status === "loading" ? <ActivityIndicator color="#4C6656" size="small" /> : null}
+              <Text style={styles.screenshotLoaderText}>
+                {status === "loading" ? "Chargement de l’aperçu…" : "Préparation de l’aperçu…"}
+              </Text>
+            </>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -110,6 +173,7 @@ function ScreenshotFeature({
   children,
   source,
   label,
+  sequence,
   narrow = false,
   reverse = false,
 }: {
@@ -118,6 +182,7 @@ function ScreenshotFeature({
   children: string;
   source: number;
   label: string;
+  sequence: number;
   narrow?: boolean;
   reverse?: boolean;
 }) {
@@ -128,7 +193,7 @@ function ScreenshotFeature({
         <Text style={styles.screenshotFeatureTitle}>{title}</Text>
         <Text style={styles.screenshotFeatureBody}>{children}</Text>
       </View>
-      <ScreenshotFrame source={source} label={label} />
+      <ScreenshotFrame source={source} label={label} sequence={sequence} />
     </View>
   );
 }
@@ -138,15 +203,17 @@ function ScreenshotCard({
   children,
   source,
   label,
+  sequence,
 }: {
   title: string;
   children: string;
   source: number;
   label: string;
+  sequence: number;
 }) {
   return (
     <View style={styles.screenshotCard}>
-      <ScreenshotFrame source={source} label={label} />
+      <ScreenshotFrame source={source} label={label} sequence={sequence} />
       <Text style={styles.screenshotCardTitle}>{title}</Text>
       <Text style={styles.screenshotCardBody}>{children}</Text>
     </View>
@@ -229,11 +296,12 @@ export default function LandingPage() {
   const phone = width < 560;
 
   return (
-    <ScrollView
-      key={narrow ? "landing-narrow" : "landing-wide"}
-      style={styles.page}
-      contentContainerStyle={styles.pageContent}
-    >
+    <ScreenshotQueue>
+      <ScrollView
+        key={narrow ? "landing-narrow" : "landing-wide"}
+        style={styles.page}
+        contentContainerStyle={styles.pageContent}
+      >
       <View style={styles.header}>
         <View style={styles.brand}>
           <AppMark />
@@ -278,6 +346,7 @@ export default function LandingPage() {
           <ScreenshotFrame
             source={appScreens.home}
             label="Capture de l’écran d’accueil de Wallet : patrimoine disponible, budgets et activité récente"
+            sequence={0}
             prominent
           />
         </View>
@@ -367,6 +436,7 @@ export default function LandingPage() {
             title="Retrouvez chaque mouvement sans fouiller."
             source={appScreens.activity}
             label="Capture de l’écran Activité avec les revenus, dépenses et échéances du mois"
+            sequence={1}
             narrow={narrow}
           >
             Les opérations sont regroupées par date, avec le compte, la catégorie et le montant visibles au même endroit.
@@ -376,6 +446,7 @@ export default function LandingPage() {
             title="Sachez où se trouve votre argent."
             source={appScreens.accounts}
             label="Capture de l’écran Comptes avec le patrimoine, le disponible et les comptes par groupe"
+            sequence={2}
             narrow={narrow}
             reverse
           >
@@ -395,6 +466,7 @@ export default function LandingPage() {
             title="Objectifs"
             source={appScreens.goals}
             label="Capture de l’écran Objectifs avec les cibles actives et leur progression"
+            sequence={3}
           >
             Suivez ce qui est déjà réservé et ce qu’il reste à construire.
           </ScreenshotCard>
@@ -402,6 +474,7 @@ export default function LandingPage() {
             title="Planification"
             source={appScreens.planning}
             label="Capture de l’écran Planification avec les budgets et objectifs actifs"
+            sequence={4}
           >
             Transformez le mois en décisions concrètes, par catégorie et par projet.
           </ScreenshotCard>
@@ -409,6 +482,7 @@ export default function LandingPage() {
             title="Épargne"
             source={appScreens.savings}
             label="Capture de l’écran Suivi de l’épargne avec les montants estimés et retirés du disponible"
+            sequence={5}
           >
             Rendez l’épargne automatique lisible, sans réduire artificiellement le disponible estimé.
           </ScreenshotCard>
@@ -425,10 +499,12 @@ export default function LandingPage() {
           <ScreenshotFrame
             source={appScreens.statistics}
             label="Capture de l’écran Statistiques avec la répartition des dépenses par catégorie"
+            sequence={6}
           />
           <ScreenshotFrame
             source={appScreens.statisticsDetail}
             label="Capture du détail des statistiques avec la comparaison aux périodes précédentes"
+            sequence={7}
           />
         </View>
       </View>
@@ -455,7 +531,8 @@ export default function LandingPage() {
         <Text style={styles.footerNote}>Une finance personnelle lisible, locale et maîtrisée.</Text>
         <Text style={styles.footerVersion}>Version 1.0 · Android</Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </ScreenshotQueue>
   );
 }
 
@@ -495,9 +572,11 @@ const styles = StyleSheet.create({
   visualCaption: { position: "absolute", top: 0, right: 30, zIndex: 2, flexDirection: "row", alignItems: "center", gap: 9 },
   visualCaptionText: { color: "#85877F", fontSize: 11, fontWeight: "700", letterSpacing: 0.6 },
   visualCaptionLine: { width: 38, height: 1, backgroundColor: "#B75C52" },
-  screenshotFrame: { width: 224, aspectRatio: 720 / 1438, alignSelf: "center", overflow: "hidden", borderRadius: 28, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E6E6E0", shadowColor: "#26352D", shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 4 },
+  screenshotFrame: { width: 224, aspectRatio: 720 / 1438, alignSelf: "center", overflow: "hidden", position: "relative", borderRadius: 28, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E6E6E0", shadowColor: "#26352D", shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 4 },
   screenshotFrameProminent: { width: 340, maxWidth: "100%", borderRadius: 32, shadowOpacity: 0.16, shadowRadius: 30, shadowOffset: { width: 0, height: 18 }, elevation: 5 },
   screenshotImage: { width: "100%", height: "100%" },
+  screenshotLoader: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center", gap: 10, padding: 20, backgroundColor: "#E4EFE6" },
+  screenshotLoaderText: { color: "#4C6656", fontSize: 12, lineHeight: 17, fontWeight: "700", textAlign: "center" },
   trustBand: { width: "100%", maxWidth: 1180, alignSelf: "center", flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 24, paddingVertical: 20, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#D9DCD4" },
   trustLead: { color: "#85877F", fontSize: 12, fontWeight: "700" },
   trustItem: { flexDirection: "row", alignItems: "center", gap: 7 },
