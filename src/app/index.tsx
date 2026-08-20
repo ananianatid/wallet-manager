@@ -167,10 +167,27 @@ function Step({ number, title, children }: { number: string; title: string; chil
 }
 
 export default function LandingPage() {
-  const { width } = useWindowDimensions();
+  const { width: nativeWidth } = useWindowDimensions();
+  const [webWidth, setWebWidth] = useState<number | null>(() => (
+    Platform.OS === "web" && typeof window !== "undefined" ? window.innerWidth : null
+  ));
+  const [downloadAvailable, setDownloadAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    const updateWidth = () => setWebWidth(window.innerWidth);
+    updateWidth();
+    window.addEventListener("resize", updateWidth);
+
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+
+  const width = webWidth ?? nativeWidth;
   const narrow = width < 820;
   const phone = width < 560;
-  const [downloadAvailable, setDownloadAvailable] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -196,7 +213,11 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
+    <ScrollView
+      key={narrow ? "landing-narrow" : "landing-wide"}
+      style={styles.page}
+      contentContainerStyle={styles.pageContent}
+    >
       <View style={styles.header}>
         <View style={styles.brand}>
           <AppMark />
@@ -408,7 +429,7 @@ const styles = StyleSheet.create({
   downloadButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700", letterSpacing: -0.15 },
   downloadButtonTextCompact: { fontSize: 13 },
   pressed: { opacity: 0.72 },
-  hero: { width: "100%", maxWidth: 1180, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 64, paddingBottom: 80 },
+  hero: { width: "100%", maxWidth: 1180, alignSelf: "center", flexDirection: "row", alignItems: "flex-start", gap: 64, paddingBottom: 80 },
   heroNarrow: { flexDirection: "column", alignItems: "stretch", gap: 44 },
   heroCopy: { flex: 1, maxWidth: 575 },
   heroCopyNarrow: { maxWidth: "100%" },
@@ -422,8 +443,8 @@ const styles = StyleSheet.create({
   heroSignals: { flexDirection: "row", flexWrap: "wrap", gap: 20, marginTop: 28 },
   signal: { flexDirection: "row", alignItems: "center", gap: 7 },
   signalText: { color: "#4C6656", fontSize: 12, fontWeight: "600" },
-  heroVisual: { flex: 1, minWidth: 420, maxWidth: 510, position: "relative", paddingTop: 22 },
-  heroVisualNarrow: { minWidth: 0, maxWidth: "100%", width: "100%", alignSelf: "center" },
+  heroVisual: { width: "44%", maxWidth: 510, position: "relative", paddingTop: 22 },
+  heroVisualNarrow: { maxWidth: "100%", width: "100%", alignSelf: "center" },
   visualCaption: { position: "absolute", top: 0, right: 30, zIndex: 2, flexDirection: "row", alignItems: "center", gap: 9 },
   visualCaptionText: { color: "#85877F", fontSize: 11, fontWeight: "700", letterSpacing: 0.6 },
   visualCaptionLine: { width: 38, height: 1, backgroundColor: "#B75C52" },
