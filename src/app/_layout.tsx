@@ -59,6 +59,12 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tab
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="app" options={{ headerShown: false }} />
+          <Stack.Screen name="app/activity" options={{ headerShown: false }} />
+          <Stack.Screen name="app/planning" options={{ headerShown: false }} />
+          <Stack.Screen name="app/statistics" options={{ headerShown: false }} />
+          <Stack.Screen name="app/accounts" options={{ headerShown: false }} />
+          <Stack.Screen name="app/settings" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen
@@ -207,13 +213,13 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AppThemeProvider>
-        {Platform.OS === "web" ? (
-          <RootNavigator initialRouteName="index" />
-        ) : (
-          <CurrencyProvider>
+        <CurrencyProvider>
+          {Platform.OS === "web" ? (
+            <RootNavigator initialRouteName="index" />
+          ) : (
             <RootNavigator initialRouteName={needsOnboarding ? "onboarding" : "(tabs)"} />
-          </CurrencyProvider>
-        )}
+          )}
+        </CurrencyProvider>
       </AppThemeProvider>
     </SafeAreaProvider>
   );
