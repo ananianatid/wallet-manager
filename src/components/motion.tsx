@@ -16,12 +16,6 @@ export const motion = {
   entrance: 320,
 } as const;
 
-export type TabAnimation = "none" | "shift";
-
-export function getTabAnimation(platform: string, reducedMotion: boolean): TabAnimation {
-  return platform === "android" && !reducedMotion ? "shift" : "none";
-}
-
 export function useReduceMotion(): boolean {
   const [reducedMotion, setReducedMotion] = useState(false);
 

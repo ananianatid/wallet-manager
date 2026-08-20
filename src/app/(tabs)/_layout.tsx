@@ -1,9 +1,8 @@
 import { Tabs } from "expo-router";
 import { WalletTabBar } from "@/components/wallet-tab-bar";
 import { DESKTOP_BREAKPOINT, WebAppShell } from "@/components/web-app-shell";
-import { getTabAnimation, motion, useReduceMotion } from "@/components/motion";
 import { useTheme } from "@/theme";
-import { Easing, Platform, useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
 export const unstable_settings = {
   initialRouteName: "(dashboard)",
 };
@@ -11,9 +10,7 @@ export const unstable_settings = {
 export default function TabsLayout() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const reducedMotion = useReduceMotion();
   const desktop = Platform.OS === "web" && width >= DESKTOP_BREAKPOINT;
-  const tabAnimation = getTabAnimation(Platform.OS, reducedMotion);
   const navigator = (
     <Tabs
       initialRouteName="(dashboard)"
@@ -24,14 +21,6 @@ export default function TabsLayout() {
         tabBarStyle: { backgroundColor: "transparent" },
         sceneStyle: { backgroundColor: theme.background },
         popToTopOnBlur: true,
-        animation: tabAnimation,
-        transitionSpec: {
-          animation: "timing",
-          config: {
-            duration: tabAnimation === "none" ? 0 : motion.standard,
-            easing: Easing.out(Easing.cubic),
-          },
-        },
       }}
     >
       <Tabs.Screen name="(dashboard)" options={{ title: "Accueil", tabBarAccessibilityLabel: "Accueil" }} />
