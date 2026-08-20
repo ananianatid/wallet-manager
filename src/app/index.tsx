@@ -3,8 +3,10 @@ import {
   BarChart3,
   Check,
   CircleDollarSign,
+  FileUp,
   LockKeyhole,
   PiggyBank,
+  Tags,
   ShieldCheck,
   WalletCards,
 } from "lucide-react-native";
@@ -13,7 +15,7 @@ import { useEffect, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { radius } from "@/theme";
 
-const DOWNLOAD_PATH = "/app-release.apk";
+const DOWNLOAD_PATH = "https://github.com/ananianatid/wallet-manager/releases/latest/download/app-release.apk";
 
 const appScreens = {
   home: require("../../docs/images for the web/Screenshot_20260820-102453_Wallet Manager.png"),
@@ -154,6 +156,28 @@ function FeatureCard({
   );
 }
 
+function CapabilityCard({
+  icon,
+  title,
+  children,
+  narrow = false,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: string;
+  narrow?: boolean;
+}) {
+  return (
+    <View style={[styles.capabilityCard, narrow && styles.capabilityCardNarrow]}>
+      <View style={styles.capabilityIcon}>{icon}</View>
+      <View style={styles.capabilityCopy}>
+        <Text style={styles.capabilityTitle}>{title}</Text>
+        <Text style={styles.capabilityBody}>{children}</Text>
+      </View>
+    </View>
+  );
+}
+
 function Step({ number, title, children }: { number: string; title: string; children: string }) {
   return (
     <View style={styles.step}>
@@ -171,7 +195,7 @@ export default function LandingPage() {
   const [webWidth, setWebWidth] = useState<number | null>(() => (
     Platform.OS === "web" && typeof window !== "undefined" ? window.innerWidth : null
   ));
-  const [downloadAvailable, setDownloadAvailable] = useState(false);
+  const downloadAvailable = Platform.OS === "web";
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -188,29 +212,6 @@ export default function LandingPage() {
   const width = webWidth ?? nativeWidth;
   const narrow = width < 820;
   const phone = width < 560;
-
-  useEffect(() => {
-    if (Platform.OS !== "web") {
-      return;
-    }
-
-    let active = true;
-    fetch(DOWNLOAD_PATH, { method: "HEAD", cache: "no-store" })
-      .then((response) => {
-        if (active) {
-          setDownloadAvailable(response.ok);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setDownloadAvailable(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   return (
     <ScrollView
@@ -289,6 +290,34 @@ export default function LandingPage() {
           <FeatureCard icon={<PiggyBank size={22} color="#26352D" strokeWidth={2.1} />} title="Préparer la suite">
             Objectifs, épargne et échéances vous aident à réserver de l’argent pour ce qui compte vraiment.
           </FeatureCard>
+        </View>
+      </View>
+
+      <View style={styles.capabilitySection}>
+        <SectionLabel>AU-DELÀ DES CAPTURES</SectionLabel>
+        <View style={[styles.sectionHeadingRow, narrow && styles.sectionHeadingRowNarrow]}>
+          <Text style={styles.sectionTitle}>Une app complète, même quand l’écran ne raconte pas tout.</Text>
+          <Text style={styles.sectionIntro}>Wallet protège aussi les décisions qui se passent dans les coulisses : importer, prévoir, retrouver et récupérer ses données sans perdre le contrôle.</Text>
+        </View>
+        <View style={[styles.capabilityGrid, narrow && styles.capabilityGridNarrow]}>
+          <CapabilityCard narrow={narrow} icon={<CircleDollarSign size={21} color="#26352D" strokeWidth={2.1} />} title="Un journal vraiment précis">
+            Fractionnez une dépense, rattachez-la à une personne et suivez les règlements sans créer d’écriture cachée.
+          </CapabilityCard>
+          <CapabilityCard narrow={narrow} icon={<Tags size={21} color="#26352D" strokeWidth={2.1} />} title="Marchands, tags et reçus">
+            Retrouvez une opération par marchand ou tag, puis gardez ses justificatifs image ou PDF dans le stockage local.
+          </CapabilityCard>
+          <CapabilityCard narrow={narrow} icon={<FileUp size={21} color="#26352D" strokeWidth={2.1} />} title="Importer sans surprise">
+            Prévisualisez un CSV, corrigez les lignes invalides, repérez les doublons et validez uniquement ce qui doit entrer.
+          </CapabilityCard>
+          <CapabilityCard narrow={narrow} icon={<PiggyBank size={21} color="#26352D" strokeWidth={2.1} />} title="Préparer les mois à venir">
+            Budgets avec report, objectifs et règles d’épargne rendent les engagements futurs visibles sans confondre prévision et solde réel.
+          </CapabilityCard>
+          <CapabilityCard narrow={narrow} icon={<BarChart3 size={21} color="#26352D" strokeWidth={2.1} />} title="Automatiser avec validation">
+            Les échéances récurrentes deviennent des propositions à approuver, ignorer ou reprogrammer : aucune transaction silencieuse.
+          </CapabilityCard>
+          <CapabilityCard narrow={narrow} icon={<ShieldCheck size={21} color="#26352D" strokeWidth={2.1} />} title="Rester privé et récupérable">
+            PIN, biométrie, sauvegarde chiffrée, restauration et données locales : votre suivi reste disponible même hors connexion.
+          </CapabilityCard>
         </View>
       </View>
 
@@ -466,6 +495,15 @@ const styles = StyleSheet.create({
   featureIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#E4EFE6", marginBottom: 36 },
   featureTitle: { color: "#181916", fontSize: 20, fontWeight: "800", letterSpacing: -0.6 },
   featureBody: { color: "#6B7068", fontSize: 14, lineHeight: 22, marginTop: 9 },
+  capabilitySection: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingTop: 0, paddingBottom: 104 },
+  capabilityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  capabilityGridNarrow: { flexDirection: "column" },
+  capabilityCard: { width: "48.8%", minHeight: 146, flexDirection: "row", gap: 18, padding: 22, borderRadius: radius.lg, backgroundColor: "#E4EFE6", borderWidth: 1, borderColor: "#D4E0D5" },
+  capabilityCardNarrow: { width: "100%" },
+  capabilityIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
+  capabilityCopy: { flex: 1 },
+  capabilityTitle: { color: "#26352D", fontSize: 17, fontWeight: "800", letterSpacing: -0.45 },
+  capabilityBody: { color: "#4C6656", fontSize: 13, lineHeight: 20, marginTop: 7 },
   screenshotSection: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingTop: 104, paddingBottom: 104 },
   screenshotFeatureStack: { gap: 56 },
   screenshotFeature: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 64, padding: 40, borderRadius: 28, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E6E6E0" },
