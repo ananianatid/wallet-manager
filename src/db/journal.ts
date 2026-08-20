@@ -134,10 +134,13 @@ async function validateCategories(
 export async function validateJournalRelations(
   db: SQLiteDatabase,
   input: TransactionInput,
+  options: { skipCategoryValidation?: boolean } = {},
 ): Promise<{ allocations: TransactionSplitInput[]; reimbursements: ReimbursementInput[]; tags: string[] }> {
   const allocations = validateAllocations(input);
   const reimbursements = validateReimbursements(input);
-  await validateCategories(db, input, allocations);
+  if (!options.skipCategoryValidation) {
+    await validateCategories(db, input, allocations);
+  }
   const tags = [...new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean))];
   return { allocations, reimbursements, tags };
 }
@@ -197,29 +200,52 @@ export async function insertJournalTransaction(
   db: SQLiteDatabase,
   input: TransactionInput,
   now = Date.now(),
+  options: { skipCategoryValidation?: boolean } = {},
 ): Promise<number> {
-  const { allocations, reimbursements, tags } = await validateJournalRelations(db, input);
-  const result = await db.runAsync(
-    `INSERT INTO transactions
-       (type, amount, category_id, account_id, destination_account_id, fee,
-        note, transaction_date, created_at, destination_amount, exchange_rate,
-        exchange_rate_date, exchange_rate_provider, merchant)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    input.type,
-    input.amount,
-    allocations.length > 0 ? null : input.categoryId,
-    input.accountId,
-    input.destinationAccountId,
-    input.fee,
-    input.note,
-    input.transactionDate,
-    now,
-    input.destinationAmount ?? null,
-    input.exchangeRate ?? null,
-    input.exchangeRateDate ?? null,
-    input.exchangeRateProvider ?? null,
-    input.merchant?.trim() || null,
-  );
+  const { allocations, reimbursements, tags } = await validateJournalRelations(db, input, options);
+  const categoryId = allocations.length > 0 ? null : input.categoryId;
+  const result = input.merchant?.trim()
+    ? await db.runAsync(
+        `INSERT INTO transactions
+           (type, amount, category_id, account_id, destination_account_id, fee,
+            note, transaction_date, created_at, destination_amount, exchange_rate,
+            exchange_rate_date, exchange_rate_provider, merchant)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        input.type,
+        input.amount,
+        categoryId,
+        input.accountId,
+        input.destinationAccountId,
+        input.fee,
+        input.note,
+        input.transactionDate,
+        now,
+        input.destinationAmount ?? null,
+        input.exchangeRate ?? null,
+        input.exchangeRateDate ?? null,
+        input.exchangeRateProvider ?? null,
+        input.merchant.trim(),
+      )
+    : await db.runAsync(
+        `INSERT INTO transactions
+           (type, amount, category_id, account_id, destination_account_id, fee,
+            note, transaction_date, created_at, destination_amount, exchange_rate,
+            exchange_rate_date, exchange_rate_provider)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        input.type,
+        input.amount,
+        categoryId,
+        input.accountId,
+        input.destinationAccountId,
+        input.fee,
+        input.note,
+        input.transactionDate,
+        now,
+        input.destinationAmount ?? null,
+        input.exchangeRate ?? null,
+        input.exchangeRateDate ?? null,
+        input.exchangeRateProvider ?? null,
+      );
   const transactionId = Number(result.lastInsertRowId);
   for (const allocation of allocations) {
     await db.runAsync(

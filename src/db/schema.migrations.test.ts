@@ -10,6 +10,7 @@ import {
   MIGRATION_V15,
   MIGRATION_V16,
   MIGRATION_V17,
+  MIGRATION_V18,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -75,6 +76,7 @@ const MIGRATIONS: Record<number, string> = {
   15: MIGRATION_V15,
   16: MIGRATION_V16,
   17: MIGRATION_V17,
+  18: MIGRATION_V18,
 };
 
 class SqliteDb {
@@ -245,6 +247,9 @@ function assertMigratedState(db: SqliteDb, era: number): void {
   }
   expect(tableColumns(db, "categories")).toContain("icon");
   expect(tableColumns(db, "transactions")).toContain("merchant");
+  expect(tableColumns(db, "transactions")).toEqual(
+    expect.arrayContaining(["import_batch_id", "import_row_number", "import_fingerprint"]),
+  );
   expect(tableColumns(db, "budgets")).toContain("currency_code");
   expect(tableColumns(db, "goals")).toContain("currency_code");
   expect(tableColumns(db, "goals")).toEqual(
@@ -273,6 +278,7 @@ function assertMigratedState(db: SqliteDb, era: number): void {
       "tags",
       "transaction_tags",
       "transaction_attachments",
+      "import_batches",
     ]),
   );
   if (era >= 10) {
@@ -388,6 +394,7 @@ describe("migrations versionnées", () => {
         "tags",
         "transaction_tags",
         "transaction_attachments",
+        "import_batches",
       ]),
     );
     const categoryCount = db.db

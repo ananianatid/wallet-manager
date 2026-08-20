@@ -46,6 +46,7 @@ jest.mock("@/db/transactions", () => ({
   createTransaction: jest.fn(),
   deleteTransaction: jest.fn(),
   getTransaction: jest.fn(),
+  getTransactionDetail: jest.fn(),
   updateTransaction: jest.fn(),
 }));
 
@@ -109,6 +110,9 @@ const mockCreateGoalReservation = (jest.requireMock("@/db/goals") as {
 const mockGetTransaction = (jest.requireMock("@/db/transactions") as {
   getTransaction: jest.Mock;
 }).getTransaction;
+const mockGetTransactionDetail = (jest.requireMock("@/db/transactions") as {
+  getTransactionDetail: jest.Mock;
+}).getTransactionDetail;
 const mockListAccountsByUsage = (jest.requireMock("@/db/accounts") as {
   listAccountsByUsage: jest.Mock;
 }).listAccountsByUsage;
@@ -167,6 +171,7 @@ describe("NewTransactionScreen", () => {
     mockCreateTransaction.mockReset().mockResolvedValue(1);
     mockCreateGoalReservation.mockReset().mockResolvedValue(1);
     mockGetTransaction.mockReset().mockResolvedValue(null);
+    mockGetTransactionDetail.mockReset().mockResolvedValue(null);
     mockListAccountsByUsage.mockReset().mockResolvedValue([account]);
     mockListCategoriesByUsage.mockReset().mockResolvedValue(categories);
     mockListGoals.mockReset().mockResolvedValue([]);
@@ -243,21 +248,34 @@ describe("NewTransactionScreen", () => {
 
   it("only offers Enregistrer while editing", async () => {
     mockParams = { id: "42" };
-    mockGetTransaction.mockResolvedValue({
-      id: 42,
-      type: "expense",
-      amount: 1000,
-      categoryId: 2,
-      categoryName: "Nourriture",
-      categoryIcon: null,
-      accountId: 1,
-      accountName: "Compte courant",
-      destinationAccountId: null,
-      destinationAccountName: null,
-      fee: null,
-      note: null,
-      transactionDate: Date.now(),
-      createdAt: Date.now(),
+    mockGetTransactionDetail.mockResolvedValue({
+      transaction: {
+        id: 42,
+        type: "expense",
+        amount: 1000,
+        categoryId: 2,
+        categoryName: "Nourriture",
+        categoryIcon: null,
+        accountId: 1,
+        accountName: "Compte courant",
+        accountCurrencyCode: "XOF",
+        destinationAccountId: null,
+        destinationAccountName: null,
+        destinationCurrencyCode: null,
+        fee: null,
+        destinationAmount: null,
+        exchangeRate: null,
+        exchangeRateDate: null,
+        exchangeRateProvider: null,
+        note: null,
+        merchant: null,
+        transactionDate: Date.now(),
+        createdAt: Date.now(),
+      },
+      splits: [],
+      reimbursements: [],
+      tags: [],
+      attachments: [],
     });
 
     const screen = await renderScreen();

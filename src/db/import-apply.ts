@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import type { ImportPlan } from "./money-manager";
 import { getReferenceCurrency } from "@/currency/service";
+import { insertJournalTransaction } from "./journal";
 
 export interface ImportReport {
   accountsCreated: number;
@@ -224,25 +225,24 @@ export async function applyImportPlan(
         continue;
       }
 
-      await db.runAsync(
-        `INSERT INTO transactions
-           (type, amount, category_id, account_id, destination_account_id, fee,
-            destination_amount, exchange_rate, exchange_rate_date, exchange_rate_provider,
-            note, transaction_date, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        tx.type,
-        tx.amount,
-        categoryId,
-        accountId,
-        destinationAccountId,
-        tx.fee,
-        tx.type === "transfer" ? tx.amount : null,
-        tx.type === "transfer" ? 1 : null,
-        tx.type === "transfer" ? new Date(tx.date).toISOString().slice(0, 10) : null,
-        tx.type === "transfer" ? "Money Manager import" : null,
-        tx.note,
-        tx.date,
+      await insertJournalTransaction(
+        db,
+        {
+          type: tx.type,
+          amount: tx.amount,
+          categoryId,
+          accountId,
+          destinationAccountId,
+          fee: tx.fee,
+          destinationAmount: tx.type === "transfer" ? tx.amount : null,
+          exchangeRate: tx.type === "transfer" ? 1 : null,
+          exchangeRateDate: tx.type === "transfer" ? new Date(tx.date).toISOString().slice(0, 10) : null,
+          exchangeRateProvider: tx.type === "transfer" ? "Money Manager import" : null,
+          note: tx.note,
+          transactionDate: tx.date,
+        },
         now,
+        { skipCategoryValidation: true },
       );
       report.transactionsInserted += 1;
     }

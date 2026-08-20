@@ -201,6 +201,67 @@ export interface TransactionInput {
   reimbursements?: ReimbursementInput[];
 }
 
+export interface CsvImportMapping {
+  date: string;
+  amount: string;
+  type?: string;
+  merchant?: string;
+  description?: string;
+  note?: string;
+  category?: string;
+  tags?: string;
+  sourceAccount?: string;
+  destinationAccount?: string;
+}
+
+export interface CsvRowIssue {
+  rowNumber: number;
+  code: "missing_required" | "invalid_date" | "invalid_amount" | "invalid_type" | "transfer_accounts" | "unknown_category";
+  message: string;
+  severity: "error" | "warning";
+}
+
+export interface CsvParsedRow {
+  rowNumber: number;
+  date: number | null;
+  amount: number | null;
+  type: TransactionType | null;
+  merchant: string | null;
+  note: string | null;
+  categoryName: string | null;
+  tags: string[];
+  sourceAccountName: string | null;
+  destinationAccountName: string | null;
+}
+
+export interface CsvImportPreview {
+  rowNumber: number;
+  values: Record<string, string>;
+  parsed: CsvParsedRow | null;
+  issues: CsvRowIssue[];
+  probableDuplicate: boolean;
+  selected: boolean;
+  fingerprint: string;
+}
+
+export interface ImportBatch {
+  id: number;
+  fingerprint: string;
+  sourceName: string | null;
+  rowCount: number;
+  createdAt: number;
+}
+
+export interface CsvImportReport {
+  batchId: number;
+  totalRows: number;
+  inserted: number;
+  skipped: number;
+  duplicates: number;
+  invalidRows: number;
+  unknownCategories: string[];
+}
+
 export interface Budget {
   id: number;
   categoryId: number | null;

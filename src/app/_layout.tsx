@@ -64,6 +64,10 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onb
             name="reimbursement-settlement"
             options={{ presentation: "modal", title: "Enregistrer le règlement" }}
           />
+          <Stack.Screen
+            name="import-csv"
+            options={{ presentation: "modal", title: "Importer un CSV" }}
+          />
           <Stack.Screen name="accounts/[id]" options={{ title: "Compte" }} />
           <Stack.Screen
             name="accounts/[id]/edit"

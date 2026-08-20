@@ -216,6 +216,12 @@ export default function SettingsScreen() {
             onPress={() => void pickAndRestore()}
             accessibilityLabel="Restaurer une sauvegarde"
           />
+          <ActionButton
+            label="Importer un fichier CSV"
+            variant="secondary"
+            onPress={() => router.push("/import-csv" as never)}
+            accessibilityLabel="Importer un fichier CSV"
+          />
         </View>
 
         <View style={[styles.dataCard, { backgroundColor: theme.surface }]}>

@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 17;
+export const DATABASE_VERSION = 18;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -135,6 +135,22 @@ CREATE TABLE transaction_attachments (
 
 CREATE INDEX idx_transaction_attachments_transaction
   ON transaction_attachments (transaction_id);
+
+CREATE TABLE import_batches (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  fingerprint TEXT NOT NULL UNIQUE,
+  source_name TEXT,
+  row_count   INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+
+ALTER TABLE transactions ADD COLUMN import_batch_id INTEGER REFERENCES import_batches(id);
+ALTER TABLE transactions ADD COLUMN import_row_number INTEGER;
+ALTER TABLE transactions ADD COLUMN import_fingerprint TEXT;
+
+CREATE UNIQUE INDEX ux_transactions_import_fingerprint
+  ON transactions (import_fingerprint)
+  WHERE import_fingerprint IS NOT NULL;
 
 CREATE TABLE budgets (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -573,6 +589,24 @@ export const MIGRATION_V17 = `
     ON transaction_attachments (transaction_id);
 `;
 
+export const MIGRATION_V18 = `
+  CREATE TABLE import_batches (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL UNIQUE,
+    source_name TEXT,
+    row_count   INTEGER NOT NULL,
+    created_at  INTEGER NOT NULL
+  );
+
+  ALTER TABLE transactions ADD COLUMN import_batch_id INTEGER REFERENCES import_batches(id);
+  ALTER TABLE transactions ADD COLUMN import_row_number INTEGER;
+  ALTER TABLE transactions ADD COLUMN import_fingerprint TEXT;
+
+  CREATE UNIQUE INDEX ux_transactions_import_fingerprint
+    ON transactions (import_fingerprint)
+    WHERE import_fingerprint IS NOT NULL;
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -686,6 +720,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 16) {
       await db.execAsync(MIGRATION_V17);
+    }
+    if (currentDbVersion <= 17) {
+      await db.execAsync(MIGRATION_V18);
     }
   }
 
