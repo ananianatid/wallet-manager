@@ -9,7 +9,11 @@ ios
 web-build
 wallet-manager-cloud
 fixtures
-docs
+# Keep the web presentation screenshots in the Docker build context.
+docs/*
+!docs/
+!docs/images for the web/
+!docs/images for the web/*.png
 *.mmbak
 *.wlbak
 *.sqlite
