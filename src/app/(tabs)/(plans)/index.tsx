@@ -14,7 +14,7 @@ import { ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listBudgets } from "@/db/budgets";
 import { listGoals } from "@/db/goals";
-import { listRecurring } from "@/db/recurring";
+import { listPendingRecurringOccurrences, listRecurring } from "@/db/recurring";
 import { listSavingsRules } from "@/db/savings";
 import { listTransactions } from "@/db/transactions";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
@@ -94,11 +94,12 @@ export default function PlansScreen() {
   const load = useCallback(async () => {
     const db = await getDatabase();
     const now = new Date();
-    const [budgets, goals, savingsRules, recurring, transactions] = await Promise.all([
+    const [budgets, goals, savingsRules, recurring, pendingOccurrences, transactions] = await Promise.all([
       listBudgets(db),
       listGoals(db),
       listSavingsRules(db),
       listRecurring(db),
+      listPendingRecurringOccurrences(db),
       listTransactions(db, {
         startMs: new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
         endMs: new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime(),
@@ -119,6 +120,7 @@ export default function PlansScreen() {
       goals,
       savingsRules,
       recurring,
+      pendingOccurrences,
     };
   }, [baseCurrency, convert]);
 
@@ -129,6 +131,7 @@ export default function PlansScreen() {
   const activeGoals = useMemo(() => data?.goals.filter((goal) => goal.status === "active") ?? [], [data?.goals]);
   const activeSavings = useMemo(() => data?.savingsRules ?? [], [data?.savingsRules]);
   const activeRecurring = useMemo(() => data?.recurring.filter((rule) => rule.isActive) ?? [], [data?.recurring]);
+  const pendingOccurrences = data?.pendingOccurrences ?? [];
   const totals = useMemo(() => goalTotals(activeGoals, convert), [activeGoals, convert]);
   const budgetRows = data?.budgetRows ?? [];
   const overBudgetCount = budgetRows.filter((row) => row.over).length;
@@ -174,7 +177,7 @@ export default function PlansScreen() {
             <Text style={[styles.sectionHint, { color: theme.secondaryLabel }]}>Ne plus ressaisir le prévisible</Text>
           </View>
           <View style={[styles.list, { backgroundColor: theme.surface }]}>
-            <PlanRow icon={RefreshCcw} title="Transactions récurrentes" detail={activeRecurring.length > 0 ? `${activeRecurring.length} règle${activeRecurring.length > 1 ? "s" : ""} active${activeRecurring.length > 1 ? "s" : ""}` : "Programmez les revenus, dépenses et transferts réguliers."} onPress={() => router.push("/recurring")} />
+            <PlanRow icon={RefreshCcw} title="Transactions récurrentes" detail={pendingOccurrences.length > 0 ? `${pendingOccurrences.length} échéance${pendingOccurrences.length > 1 ? "s" : ""} à valider` : activeRecurring.length > 0 ? `${activeRecurring.length} règle${activeRecurring.length > 1 ? "s" : ""} active${activeRecurring.length > 1 ? "s" : ""}` : "Programmez les revenus, dépenses et transferts réguliers."} onPress={() => router.push("/recurring")} />
             <View style={[styles.separator, { backgroundColor: theme.separator }]} />
             <PlanRow icon={BarChart3} title="Analyses" detail="Comparez vos périodes pour ajuster vos décisions." onPress={() => router.push("/(tabs)/(statistics)" )} />
             <View style={[styles.separator, { backgroundColor: theme.separator }]} />

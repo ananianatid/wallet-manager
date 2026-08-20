@@ -235,7 +235,8 @@ export async function loadSafeToSpendInputs(
   now = Date.now(),
   options: SafeToSpendLoadOptions = {},
 ): Promise<SafeToSpendInputs> {
-  // Due recurring rows become real transactions first, so the forecast cannot double-count them.
+  // Due recurring rows become pending proposals first; they are not counted
+  // until the user explicitly approves them.
   await applyDueRecurring(db, now);
   const [accountsRows, transactions, recurring, goals, savingsRules] = await Promise.all([
     listAccounts(db),

@@ -12,6 +12,7 @@ import {
   MIGRATION_V17,
   MIGRATION_V18,
   MIGRATION_V19,
+  MIGRATION_V20,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -79,6 +80,7 @@ const MIGRATIONS: Record<number, string> = {
   17: MIGRATION_V17,
   18: MIGRATION_V18,
   19: MIGRATION_V19,
+  20: MIGRATION_V20,
 };
 
 class SqliteDb {
@@ -338,6 +340,7 @@ function assertMigratedState(db: SqliteDb, era: number): void {
     expect(row(db, "recurring_transactions", 1)).toMatchObject({
       amount: 15000,
       is_active: 1,
+      mode: "approval",
     });
   }
   if (era >= 4) {
@@ -389,6 +392,7 @@ describe("migrations versionnées", () => {
         "budgets",
         "budget_plans",
         "budget_periods",
+        "recurring_occurrences",
         "recurring_transactions",
         "savings_rules",
         "goals",

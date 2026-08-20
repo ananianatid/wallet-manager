@@ -17,6 +17,8 @@ export interface TransactionSearchCriteria {
 }
 
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
+export type RecurringMode = "approval" | "automatic";
+export type RecurringOccurrenceStatus = "pending" | "approved" | "skipped";
 
 export interface Category {
   id: number;
@@ -318,6 +320,7 @@ export interface RecurringTransaction {
   startDate: number;
   nextDate: number;
   endDate: number | null;
+  mode: RecurringMode;
   isActive: boolean;
   createdAt: number;
 }
@@ -335,7 +338,37 @@ export interface RecurringTransactionInput {
   startDate: number;
   nextDate: number;
   endDate: number | null;
+  mode?: RecurringMode;
   isActive: boolean;
+}
+
+export interface RecurringOccurrenceSnapshot {
+  type: TransactionType;
+  amount: number;
+  categoryId: number | null;
+  accountId: number;
+  destinationAccountId: number | null;
+  fee: number | null;
+  note: string | null;
+  transactionDate: number;
+  destinationAmount: number | null;
+  exchangeRate: number | null;
+  exchangeRateDate: string | null;
+  exchangeRateProvider: string | null;
+  sourceCurrencyCode: string;
+  destinationCurrencyCode: string | null;
+}
+
+export interface RecurringOccurrence {
+  id: number;
+  recurringTransactionId: number;
+  occurrenceDate: number;
+  status: RecurringOccurrenceStatus;
+  snapshot: RecurringOccurrenceSnapshot;
+  transactionId: number | null;
+  notificationId: string | null;
+  createdAt: number;
+  decidedAt: number | null;
 }
 
 export interface SavingsRule {

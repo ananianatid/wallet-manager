@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 19;
+export const DATABASE_VERSION = 20;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -205,9 +205,29 @@ CREATE TABLE recurring_transactions (
   start_date             INTEGER NOT NULL,
   next_date              INTEGER NOT NULL,
   end_date               INTEGER,
+  mode                   TEXT NOT NULL DEFAULT 'approval' CHECK (mode IN ('approval','automatic')),
   is_active              INTEGER NOT NULL DEFAULT 1,
   created_at             INTEGER NOT NULL
 );
+
+CREATE TABLE recurring_occurrences (
+  id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+  recurring_transaction_id INTEGER NOT NULL REFERENCES recurring_transactions(id) ON DELETE CASCADE,
+  occurrence_date          INTEGER NOT NULL,
+  status                   TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','skipped')),
+  snapshot_json            TEXT NOT NULL,
+  transaction_id           INTEGER REFERENCES transactions(id),
+  notification_id          TEXT,
+  created_at               INTEGER NOT NULL,
+  decided_at               INTEGER,
+  UNIQUE (recurring_transaction_id, occurrence_date)
+);
+
+CREATE INDEX idx_recurring_occurrences_status
+  ON recurring_occurrences (status, occurrence_date);
+
+CREATE INDEX idx_recurring_occurrences_rule
+  ON recurring_occurrences (recurring_transaction_id, occurrence_date);
 
 CREATE TABLE savings_rules (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -676,6 +696,31 @@ export const MIGRATION_V19 = `
   ) latest ON latest.id = b.id;
 `;
 
+export const MIGRATION_V20 = `
+  ALTER TABLE recurring_transactions
+    ADD COLUMN mode TEXT NOT NULL DEFAULT 'approval'
+    CHECK (mode IN ('approval', 'automatic'));
+
+  CREATE TABLE recurring_occurrences (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    recurring_transaction_id INTEGER NOT NULL REFERENCES recurring_transactions(id) ON DELETE CASCADE,
+    occurrence_date          INTEGER NOT NULL,
+    status                   TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','skipped')),
+    snapshot_json            TEXT NOT NULL,
+    transaction_id           INTEGER REFERENCES transactions(id),
+    notification_id          TEXT,
+    created_at               INTEGER NOT NULL,
+    decided_at               INTEGER,
+    UNIQUE (recurring_transaction_id, occurrence_date)
+  );
+
+  CREATE INDEX idx_recurring_occurrences_status
+    ON recurring_occurrences (status, occurrence_date);
+
+  CREATE INDEX idx_recurring_occurrences_rule
+    ON recurring_occurrences (recurring_transaction_id, occurrence_date);
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -795,6 +840,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 18) {
       await db.execAsync(MIGRATION_V19);
+    }
+    if (currentDbVersion <= 19) {
+      await db.execAsync(MIGRATION_V20);
     }
   }
 

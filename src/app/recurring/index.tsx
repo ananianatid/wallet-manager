@@ -1,5 +1,5 @@
 import { router, Stack, useFocusEffect } from "expo-router";
-import { Plus, Trash } from "lucide-react-native";
+import { Check, Plus, RotateCcw, Trash, X } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -14,12 +14,17 @@ import { CategoryIcon } from "@/components/category-icons";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import {
   applyDueRecurring,
+  approveRecurringOccurrence,
   deleteRecurring,
   listRecurring,
+  listPendingRecurringOccurrences,
+  rescheduleRecurringOccurrence,
+  skipRecurringOccurrence,
 } from "@/db/recurring";
+import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 import { radius, spacing, typography, useTheme } from "@/theme";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import type { RecurringTransaction } from "@/types";
+import type { RecurringOccurrence, RecurringTransaction } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
@@ -40,16 +45,24 @@ const TYPE_LABELS: Record<string, string> = {
 export default function RecurringScreen() {
   const theme = useTheme();
   const [generating, setGenerating] = useState(false);
+  const [actingOccurrence, setActingOccurrence] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    return listRecurring(db);
+    await applyDueRecurring(db);
+    await schedulePendingRecurringNotifications(db);
+    const [rules, pending] = await Promise.all([
+      listRecurring(db),
+      listPendingRecurringOccurrences(db),
+    ]);
+    return { rules, pending };
   }, []);
 
   const resource = useAsyncResource(load, "recurring.load");
   const reload = resource.reload;
-  const items = resource.data ?? [];
+  const items = resource.data?.rules ?? [];
+  const pending = resource.data?.pending ?? [];
 
   useFocusEffect(
     useCallback(() => {
@@ -78,6 +91,7 @@ export default function RecurringScreen() {
     try {
       const db = await getDatabase();
       await applyDueRecurring(db);
+      await schedulePendingRecurringNotifications(db);
       await resource.reload();
     } catch (e) {
       setActionError(userMessage(e));
@@ -85,6 +99,65 @@ export default function RecurringScreen() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const approve = async (occurrence: RecurringOccurrence) => {
+    setActingOccurrence(occurrence.id);
+    setActionError(null);
+    try {
+      const db = await getDatabase();
+      await approveRecurringOccurrence(db, occurrence.id);
+      await resource.reload();
+    } catch (e) {
+      setActionError(userMessage(e));
+      log.error("recurring.approve", "Échec de l'enregistrement de l'échéance", e);
+    } finally {
+      setActingOccurrence(null);
+    }
+  };
+
+  const skip = async (occurrence: RecurringOccurrence) => {
+    setActingOccurrence(occurrence.id);
+    setActionError(null);
+    try {
+      const db = await getDatabase();
+      await skipRecurringOccurrence(db, occurrence.id);
+      await resource.reload();
+    } catch (e) {
+      setActionError(userMessage(e));
+      log.error("recurring.skip", "Échec de l'ignorance de l'échéance", e);
+    } finally {
+      setActingOccurrence(null);
+    }
+  };
+
+  const reschedule = (occurrence: RecurringOccurrence) => {
+    Alert.alert(
+      "Reprogrammer l'échéance",
+      "Repousser cette échéance d'un jour ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Demain",
+          onPress: () => {
+            void (async () => {
+              setActingOccurrence(occurrence.id);
+              setActionError(null);
+              try {
+                const db = await getDatabase();
+                await rescheduleRecurringOccurrence(db, occurrence.id, occurrence.occurrenceDate + 86_400_000);
+                await resource.reload();
+              } catch (e) {
+                setActionError(userMessage(e));
+                log.error("recurring.reschedule", "Échec de la reprogrammation de l'échéance", e);
+              } finally {
+                setActingOccurrence(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -196,14 +269,54 @@ export default function RecurringScreen() {
         ListHeaderComponent={
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
               <View style={styles.intro}>
-                <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>Automatisez les échéances</Text>
-                <Text style={[styles.introBody, { color: theme.secondaryLabel }]}>Les revenus, dépenses et transferts prévisibles se créent au bon moment.</Text>
+                <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>Validez les échéances</Text>
+                <Text style={[styles.introBody, { color: theme.secondaryLabel }]}>Une échéance devient une proposition. Aucune transaction n&apos;est créée sans votre validation.</Text>
               </View>
               {actionError ? <InlineError message={actionError} onRetry={() => void generateNow()} /> : null}
+              {pending.length > 0 ? (
+                <View style={[styles.pendingCard, { backgroundColor: theme.surface }]}>
+                  <Text style={[styles.pendingTitle, { color: theme.label }]}>
+                    {pending.length} échéance{pending.length > 1 ? "s" : ""} à valider
+                  </Text>
+                  {pending.map((occurrence) => {
+                    const busy = actingOccurrence === occurrence.id;
+                    return (
+                      <View key={occurrence.id} style={[styles.pendingRow, { borderTopColor: theme.separator }]}>
+                        <View style={styles.pendingCopy}>
+                          <Text style={{ color: theme.label, fontWeight: "700" }}>
+                            {formatAmount(occurrence.snapshot.amount, occurrence.snapshot.sourceCurrencyCode)}
+                          </Text>
+                          <Text style={[styles.detail, { color: theme.secondaryLabel }]}>Échéance du {formatDate(occurrence.occurrenceDate)}</Text>
+                        </View>
+                        <View style={styles.pendingActions}>
+                          <IconButton
+                            label="Enregistrer l'échéance"
+                            disabled={busy}
+                            onPress={() => void approve(occurrence)}
+                            icon={<Check size={18} color={theme.income} />}
+                          />
+                          <IconButton
+                            label="Ignorer l'échéance"
+                            disabled={busy}
+                            onPress={() => void skip(occurrence)}
+                            icon={<X size={18} color={theme.expense} />}
+                          />
+                          <IconButton
+                            label="Reprogrammer l'échéance à demain"
+                            disabled={busy}
+                            onPress={() => reschedule(occurrence)}
+                            icon={<RotateCcw size={18} color={theme.accent} />}
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
               {items.length > 0 ? (
                 <>
               <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18, marginBottom: spacing.sm }}>
-                Les échéances dues sont aussi vérifiées automatiquement à l’ouverture de Transactions.
+                Les échéances manquées restent visibles ici jusqu&apos;à une décision.
               </Text>
               <Pressable
                 onPress={generateNow}
@@ -215,7 +328,7 @@ export default function RecurringScreen() {
                 ]}
               >
                 <Text style={{ color: theme.onAccent, fontWeight: "700" }}>
-                  {generating ? "Génération…" : "Générer les échéances dues"}
+                  {generating ? "Vérification…" : "Vérifier les échéances dues"}
                 </Text>
               </Pressable>
                 </>
@@ -283,6 +396,28 @@ const styles = StyleSheet.create({
   },
   introTitle: typography.title,
   introBody: typography.body,
+  pendingCard: {
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  pendingTitle: {
+    fontWeight: "800",
+    fontSize: 16,
+  },
+  pendingRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  pendingCopy: {
+    gap: 2,
+  },
+  pendingActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.xs,
+  },
   generateButton: {
     alignSelf: "center",
     minHeight: 48,

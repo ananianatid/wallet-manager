@@ -20,6 +20,8 @@ import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 import { initObservability } from "@/services/observability";
 import { runStartupHealth } from "@/utils/diagnostics";
+import { applyDueRecurring } from "@/db/recurring";
+import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -126,6 +128,13 @@ export default function RootLayout() {
       let shouldOnboard = false;
       try {
         const db = await getDatabase();
+        try {
+          await applyDueRecurring(db);
+          await schedulePendingRecurringNotifications(db);
+        } catch {
+          // A refused notification permission or an unavailable exchange rate
+          // must not block access to the local application.
+        }
         const accountCount = await db.getFirstAsync<{ count: number }>(
           "SELECT COUNT(*) AS count FROM accounts WHERE deleted_at IS NULL",
         );

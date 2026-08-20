@@ -16,7 +16,8 @@ import { TransactionRow } from "@/components/transaction-row";
 import { listAccounts } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { applyDueRecurring } from "@/db/recurring";
+import { applyDueRecurring, listPendingRecurringOccurrences } from "@/db/recurring";
+import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 import { getSetting, setSetting } from "@/db/settings";
 import { listTransactionAmountRows, listTransactions } from "@/db/transactions";
 import { setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
@@ -107,14 +108,12 @@ export default function TransactionsScreen() {
     ).getTime();
     const lastCheck = await getSetting(db, "recurring_last_check");
     if (lastCheck === String(todayKey)) {
-      return 0;
+      return (await listPendingRecurringOccurrences(db)).length;
     }
-    const generated = await applyDueRecurring(db, Date.now());
+    await applyDueRecurring(db, Date.now());
+    await schedulePendingRecurringNotifications(db);
     await setSetting(db, "recurring_last_check", String(todayKey));
-    if (generated > 0) {
-      return generated;
-    }
-    return 0;
+    return (await listPendingRecurringOccurrences(db)).length;
   }, []);
 
   useFocusEffect(
@@ -123,10 +122,10 @@ export default function TransactionsScreen() {
         setRecurringError(null);
         setRecurringNotice(null);
         try {
-          const generated = await checkRecurring();
-          if (generated > 0) {
+          const pendingCount = await checkRecurring();
+          if (pendingCount > 0) {
             setRecurringNotice(
-              `${generated} échéance${generated > 1 ? "s" : ""} récurrente${generated > 1 ? "s" : ""} ajoutée${generated > 1 ? "s" : ""} automatiquement.`,
+              `${pendingCount} échéance${pendingCount > 1 ? "s" : ""} récurrente${pendingCount > 1 ? "s" : ""} à valider.`,
             );
           }
         } catch (error) {
