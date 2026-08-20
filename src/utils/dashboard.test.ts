@@ -1,6 +1,12 @@
 /// <reference types="jest" />
 
-import { budgetProgress, topCategorySlices, urgentGoals } from "./dashboard";
+import {
+  budgetProgress,
+  dashboardInsight,
+  topCategorySlices,
+  urgentGoals,
+} from "./dashboard";
+import { dashboardMetricTone } from "./financial-display";
 import type { Budget, Goal } from "@/types";
 import type { CategorySlice } from "@/utils/statistics";
 
@@ -82,6 +88,68 @@ describe("budgetProgress", () => {
 
     expect(rows[0].pct).toBe(0);
     expect(rows[0].over).toBe(true);
+  });
+});
+
+describe("dashboardMetricTone", () => {
+  it("colore les métriques de l'Accueil selon leur rôle", () => {
+    expect(dashboardMetricTone("expense", 25_000)).toBe("expense");
+    expect(dashboardMetricTone("budgetRemaining", 10_000)).toBe("income");
+    expect(dashboardMetricTone("budgetRemaining", 0)).toBe("expense");
+    expect(dashboardMetricTone("savings", 5_000)).toBe("accent");
+    expect(dashboardMetricTone("upcoming", 1)).toBe("warning");
+  });
+
+  it("reste neutre en l'absence de donnée ou de montant", () => {
+    expect(dashboardMetricTone("expense", 0)).toBe("neutral");
+    expect(dashboardMetricTone("savings", 0)).toBe("neutral");
+    expect(dashboardMetricTone("budgetRemaining", null)).toBe("neutral");
+    expect(dashboardMetricTone("upcoming", null)).toBe("neutral");
+  });
+});
+
+describe("dashboardInsight", () => {
+  it("priorise l'alerte quand le budget est épuisé", () => {
+    expect(
+      dashboardInsight({
+        totalExpense: 112_000,
+        previousMonthExpense: 100_000,
+        hasCurrentActivity: true,
+        hasPreviousActivity: true,
+        budgetRemaining: 0,
+        hasOverBudget: false,
+      }),
+    ).toEqual({
+      level: "warning",
+      title: "Budget épuisé ce mois-ci",
+      body: "Votre budget restant est à 0. Vérifiez vos prochains paiements.",
+    });
+  });
+
+  it("signale une hausse des dépenses sans budget épuisé", () => {
+    expect(
+      dashboardInsight({
+        totalExpense: 112_000,
+        previousMonthExpense: 100_000,
+        hasCurrentActivity: true,
+        hasPreviousActivity: true,
+        budgetRemaining: 20_000,
+        hasOverBudget: false,
+      }),
+    ).toMatchObject({ level: "warning", title: "À surveiller ce mois-ci" });
+  });
+
+  it("garde un état calme sans activité", () => {
+    expect(
+      dashboardInsight({
+        totalExpense: 0,
+        previousMonthExpense: 0,
+        hasCurrentActivity: false,
+        hasPreviousActivity: false,
+        budgetRemaining: null,
+        hasOverBudget: false,
+      }),
+    ).toMatchObject({ level: "calm", title: "Votre suivi commence ici" });
   });
 });
 

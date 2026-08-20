@@ -22,6 +22,7 @@ import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { listTransactions, listTransactionsByRange } from "@/db/transactions";
 import { chartColors, radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
+import { financialToneColor, signedAmountTone } from "@/utils/financial-display";
 import { userMessage } from "@/utils/user-message";
 import {
   categoryChanges,
@@ -132,12 +133,18 @@ function ComparisonMetricView({
   theme,
 }: ComparisonMetricViewProps) {
   const color = comparisonColor(metric, kind, theme);
+  const currentColor =
+    kind === "income"
+      ? theme.income
+      : kind === "expense"
+        ? theme.expense
+        : financialToneColor(signedAmountTone(metric.current), theme);
   return (
     <View style={styles.comparisonMetric} accessible accessibilityRole="text">
       <Text style={[styles.comparisonMetricLabel, { color: theme.secondaryLabel }]}>
         {label}
       </Text>
-      <Text style={[styles.comparisonMetricValue, { color: theme.label }]}>
+      <Text style={[styles.comparisonMetricValue, { color: currentColor }]}>
         {formatAmount(metric.current, currency)}
       </Text>
       <Text style={[styles.comparisonMetricDelta, { color }]}>
@@ -186,7 +193,12 @@ function CategoryChangeRow({
         </Text>
       </View>
       <View style={styles.changeValues}>
-        <Text style={[styles.changeCurrent, { color: theme.label }]}>
+        <Text
+          style={[
+            styles.changeCurrent,
+            { color: type === "expense" ? theme.expense : theme.income },
+          ]}
+        >
           {formatAmount(change.currentTotal, currency)}
         </Text>
         <Text style={[styles.changeDelta, { color }]}>
@@ -973,7 +985,16 @@ export default function StatisticsScreen() {
                             <Text style={{ color: theme.expense, fontSize: 12 }}>
                               Dépenses {formatAmount(point.expense + point.fees, baseCurrency)}
                             </Text>
-                            <Text style={{ color: theme.label, fontSize: 12, fontWeight: "700" }}>
+                            <Text
+                              style={{
+                                color: financialToneColor(
+                                  signedAmountTone(point.net),
+                                  theme,
+                                ),
+                                fontSize: 12,
+                                fontWeight: "700",
+                              }}
+                            >
                               Total {formatAmount(point.net, baseCurrency)}
                             </Text>
                           </View>
@@ -998,7 +1019,16 @@ export default function StatisticsScreen() {
                         <Text style={{ color: theme.expense, fontSize: 12 }}>
                           Dépenses {formatAmount(selectedEvolutionPoint.expense + selectedEvolutionPoint.fees, baseCurrency)}
                         </Text>
-                        <Text style={{ color: theme.label, fontSize: 12, fontWeight: "700" }}>
+                        <Text
+                          style={{
+                            color: financialToneColor(
+                              signedAmountTone(selectedEvolutionPoint.net),
+                              theme,
+                            ),
+                            fontSize: 12,
+                            fontWeight: "700",
+                          }}
+                        >
                           Total {formatAmount(selectedEvolutionPoint.net, baseCurrency)}
                         </Text>
                       </View>

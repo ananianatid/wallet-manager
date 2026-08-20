@@ -10,6 +10,7 @@ import { getDatabase } from "@/db/database";
 import { useCurrency } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { financialToneColor, signedAmountTone } from "@/utils/financial-display";
 import { formatAmount, formatDate } from "@/utils/format";
 import { userMessage } from "@/utils/user-message";
 
@@ -85,7 +86,7 @@ export default function CashflowScreen() {
                   </View>
                   <Text style={{ color: theme.label }}>Disponible maintenant</Text>
                 </View>
-                <Text style={{ color: theme.label, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
+                <Text style={{ color: financialToneColor(signedAmountTone(data.currentAvailable), theme), fontWeight: "800", fontVariant: ["tabular-nums"] }}>
                   {formatAmount(data.currentAvailable, baseCurrency)}
                 </Text>
               </View>

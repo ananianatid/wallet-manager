@@ -65,7 +65,7 @@ describe("SafeToSpendCard", () => {
     );
 
     expect(getAllByText(formatAmount(75_000, "XOF"))[0].props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
+      expect.arrayContaining([expect.objectContaining({ color: "#B9D9C0" })]),
     );
     expect(getByText("Revenus")).toBeTruthy();
     expect(getByText("Dépenses")).toBeTruthy();
@@ -100,7 +100,7 @@ describe("SafeToSpendCard", () => {
     expect(queryByText("Revenus")).toBeNull();
     expect(getByText("Identique au solde actuel")).toBeTruthy();
     expect(getByText(formatAmount(30_000, "XOF")).props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
+      expect.arrayContaining([expect.objectContaining({ color: "#B9D9C0" })]),
     );
   });
 

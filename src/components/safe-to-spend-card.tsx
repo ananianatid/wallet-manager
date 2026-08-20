@@ -100,7 +100,9 @@ export function SafeToSpendCard({
   const forecastMatchesCurrent = data.amount === currentAmount;
   const cardSurface = isNegative ? theme.dangerSurface : theme.accentSurface;
   const cardLabel = isNegative ? theme.dangerSurfaceLabel : theme.accentSurfaceLabel;
-  const cardText = isNegative ? theme.dangerSurfaceText : theme.accentSurfaceText;
+  const cardText = isNegative
+    ? theme.dangerSurfaceText
+    : theme.accentSurfaceIncome;
   const incomeColor = isNegative
     ? theme.dangerSurfaceIncome
     : theme.accentSurfaceIncome;

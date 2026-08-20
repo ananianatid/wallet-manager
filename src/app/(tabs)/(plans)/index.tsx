@@ -6,9 +6,10 @@ import {
   RefreshCcw,
   Target,
 } from "lucide-react-native";
-import { router, Stack, useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listBudgets } from "@/db/budgets";
@@ -87,6 +88,7 @@ function BudgetRows({ rows, currency }: { rows: BudgetProgressRow[]; currency: s
 
 export default function PlansScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const load = useCallback(async () => {
@@ -133,16 +135,13 @@ export default function PlansScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Plans" }} />
       {!data ? (
         <ScreenState status={resource.status === "error" ? "error" : "loading"} message={resource.status === "error" ? "Les plans n’ont pas pu être chargés." : undefined} onRetry={() => void resource.reload()} />
       ) : (
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
-          <View style={styles.intro}>
-            <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Préparer la suite</Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Budgets, objectifs et automatisations au même endroit.</Text>
-          </View>
-
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
+        >
           <View style={[styles.snapshot, { backgroundColor: theme.accentSurface }]} accessible accessibilityRole="summary">
             <Text style={[styles.snapshotLabel, { color: theme.accentSurfaceLabel }]}>ENGAGEMENTS ACTIFS</Text>
             <Text style={[styles.snapshotValue, { color: theme.accentSurfaceText }]}>{budgetRows.length + activeGoals.length + activeSavings.length + activeRecurring.length}</Text>
@@ -189,9 +188,6 @@ export default function PlansScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xxl + 24, gap: spacing.md },
-  intro: { gap: spacing.xs, paddingHorizontal: spacing.xs, marginBottom: spacing.sm },
-  title: typography.display,
-  subtitle: typography.body,
   snapshot: { padding: spacing.lg, borderRadius: radius.xl, gap: spacing.xs, borderCurve: "continuous" },
   snapshotLabel: { ...typography.label, letterSpacing: 0.6 },
   snapshotValue: { ...typography.amount, marginTop: spacing.xs },

@@ -3,7 +3,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import type { ReactNode } from "react";
-import NewTransactionScreen, { resolveInitialTransactionType } from "./new-transaction";
+import NewTransactionScreen, { resolveInitialTransactionType } from "@/app/new-transaction";
 
 let mockParams: { id?: string; goalId?: string; type?: string } = {};
 

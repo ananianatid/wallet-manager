@@ -10,6 +10,7 @@ import {
   totals,
 } from "./statistics";
 import type { SavingsRule, Transaction } from "../types";
+import { signedAmountTone } from "./financial-display";
 
 function transaction(
   id: number,
@@ -190,6 +191,14 @@ describe("totals", () => {
       fees: 1_500,
       net: 58_500,
     });
+  });
+});
+
+describe("signedAmountTone", () => {
+  it("réserve le rouge aux montants négatifs", () => {
+    expect(signedAmountTone(-1)).toBe("expense");
+    expect(signedAmountTone(1)).toBe("income");
+    expect(signedAmountTone(0)).toBe("neutral");
   });
 });
 

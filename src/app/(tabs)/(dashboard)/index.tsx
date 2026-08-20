@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useMemo } from "react";
-import { ChevronRight } from "lucide-react-native";
+import { AlertTriangle, ChevronRight } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   Pressable,
@@ -25,9 +25,13 @@ import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
-import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
-import { budgetProgress } from "@/utils/dashboard";
-import { formatAmount, formatDate, formatDayLabel, formatShortDate, formatTime } from "@/utils/format";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { budgetProgress, dashboardInsight } from "@/utils/dashboard";
+import {
+  dashboardMetricTone,
+  financialToneColor,
+} from "@/utils/financial-display";
+import { formatAmount, formatDayLabel, formatShortDate } from "@/utils/format";
 import { savingsByRule } from "@/utils/statistics";
 import { userMessage } from "@/utils/user-message";
 import { goalTotals } from "@/utils/goals";
@@ -82,7 +86,7 @@ function groupTransactionsByDay(transactions: Transaction[]): RecentDayGroup[] {
 
 export default function DashboardScreen() {
   const theme = useTheme();
-  const { lastRefresh, stale, baseCurrency, rates } = useCurrency();
+  const { baseCurrency, rates } = useCurrency();
   const convert = useCurrencyConverter();
   const onScroll = useScrollPerformance("dashboard.scroll");
   const insets = useSafeAreaInsets();
@@ -210,29 +214,41 @@ export default function DashboardScreen() {
       return sum + Math.max(budgetAmount - row.spent, 0);
     }, 0);
   }, [budgetRows, convert]);
-  const insight = useMemo(() => {
-    if (previousMonthExpense > 0) {
-      const change = Math.round(((totalExpense - previousMonthExpense) / previousMonthExpense) * 100);
-      if (change < 0) {
-        return `Vos dépenses sont ${Math.abs(change)} % plus faibles que le mois dernier. Vous êtes sur la bonne trajectoire.`;
-      }
-      if (change > 0) {
-        return `Vos dépenses sont ${change} % plus élevées que le mois dernier. Vérifiez vos prochains paiements.`;
-      }
-      return "Vos dépenses restent stables par rapport au mois dernier.";
-    }
-    return totalExpense > 0
-      ? "Vos dépenses commencent à se dessiner ce mois-ci."
-      : "Ajoutez vos premières dépenses pour voir votre trajectoire.";
-  }, [previousMonthExpense, totalExpense]);
-  const insightTitle =
-    monthTx.length === 0 && previousMonthTx.length === 0
-      ? "Votre suivi commence ici"
-      : previousMonthExpense > 0 && totalExpense > previousMonthExpense
-        ? "À surveiller ce mois-ci"
-        : previousMonthExpense > 0
-          ? "Tout va bien ce mois-ci"
-          : "Continuez votre suivi";
+  const insight = useMemo(
+    () =>
+      dashboardInsight({
+        totalExpense,
+        previousMonthExpense,
+        hasCurrentActivity: monthTx.length > 0,
+        hasPreviousActivity: previousMonthTx.length > 0,
+        budgetRemaining,
+        hasOverBudget: budgetRows.some((row) => row.over),
+      }),
+    [
+      budgetRemaining,
+      budgetRows,
+      monthTx.length,
+      previousMonthExpense,
+      previousMonthTx.length,
+      totalExpense,
+    ],
+  );
+  const expenseColor = financialToneColor(
+    dashboardMetricTone("expense", totalExpense),
+    theme,
+  );
+  const budgetColor = financialToneColor(
+    dashboardMetricTone("budgetRemaining", budgetRemaining),
+    theme,
+  );
+  const savingsColor = financialToneColor(
+    dashboardMetricTone("savings", savingsTotal),
+    theme,
+  );
+  const upcomingColor = financialToneColor(
+    dashboardMetricTone("upcoming", upcoming[0] ? 1 : null),
+    theme,
+  );
 
   const openEdit = useCallback(
     (id: number) =>
@@ -261,21 +277,6 @@ export default function DashboardScreen() {
             gap: spacing.xl,
           }}
         >
-          <View style={styles.screenHeader}>
-            <View style={styles.screenHeaderCopy}>
-              <Text accessibilityRole="header" style={[styles.screenTitle, { color: theme.label }]}>
-                Aujourd’hui
-              </Text>
-              <Text style={[styles.screenSubtitle, { color: theme.secondaryLabel }]}>
-                Votre argent, en ordre de marche.
-              </Text>
-            </View>
-            {lastRefresh != null ? (
-              <Text style={[styles.refreshLabel, { color: theme.secondaryLabel }]}>
-                Mis à jour le {formatDate(lastRefresh)} à {formatTime(lastRefresh)}{stale ? " · hors connexion" : ""}
-              </Text>
-            ) : null}
-          </View>
           {!hasAccounts ? (
             <EmptyState
               title="Commencez par créer un compte"
@@ -302,24 +303,24 @@ export default function DashboardScreen() {
                   <DashboardStatCard
                     label="Dépenses ce mois"
                     value={formatAmount(totalExpense, baseCurrency)}
-                    valueColor={theme.label}
+                    valueColor={expenseColor}
                   />
                   <DashboardStatCard
                     label="Budget restant"
                     value={budgetRemaining == null ? "—" : formatAmount(budgetRemaining, baseCurrency)}
-                    valueColor={theme.income}
+                    valueColor={budgetColor}
                   />
                 </View>
                 <View style={styles.statsRow}>
                   <DashboardStatCard
                     label="Épargne"
                     value={formatAmount(savingsTotal, baseCurrency)}
-                    valueColor={theme.label}
+                    valueColor={savingsColor}
                   />
                   <DashboardStatCard
                     label="Prochaine échéance"
                     value={upcoming[0] ? formatShortDate(upcoming[0].transactionDate) : "—"}
-                    valueColor={theme.label}
+                    valueColor={upcomingColor}
                   />
                 </View>
               </View>
@@ -327,11 +328,37 @@ export default function DashboardScreen() {
               <View
                 accessible
                 accessibilityRole="summary"
-                accessibilityLabel={`Insight : ${insight}`}
-                style={[styles.insightCard, { backgroundColor: withAlpha(theme.income, "18") }]}
+                accessibilityLabel={`Insight : ${insight.title}. ${insight.body}`}
+                style={[
+                  styles.insightCard,
+                  {
+                    backgroundColor: withAlpha(
+                      insight.level === "warning" ? theme.expense : theme.income,
+                      "18",
+                    ),
+                  },
+                ]}
               >
-                <Text style={[styles.insightTitle, { color: theme.label }]}>{insightTitle}</Text>
-                <Text style={[styles.insightBody, { color: theme.secondaryLabel }]}>{insight}</Text>
+                {insight.level === "warning" ? (
+                  <AlertTriangle
+                    accessibilityLabel="Alerte financière"
+                    size={18}
+                    color={theme.expense}
+                  />
+                ) : null}
+                <View style={styles.insightCopy}>
+                  <Text
+                    style={[
+                      styles.insightTitle,
+                      { color: insight.level === "warning" ? theme.expense : theme.label },
+                    ]}
+                  >
+                    {insight.title}
+                  </Text>
+                  <Text style={[styles.insightBody, { color: theme.secondaryLabel }]}>
+                    {insight.body}
+                  </Text>
+                </View>
               </View>
 
               {budgetRows.length > 0 ? (
@@ -370,7 +397,7 @@ export default function DashboardScreen() {
                             numberOfLines={1}
                             style={[
                               styles.budgetAmount,
-                              { color: theme.secondaryLabel },
+                              { color: row.over ? theme.expense : theme.secondaryLabel },
                             ]}
                           >
                             {formatAmount(row.spent, baseCurrency)} /{" "}
@@ -603,28 +630,6 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
-  screenHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.lg,
-  },
-  screenHeaderCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  screenTitle: {
-    ...typography.display,
-  },
-  screenSubtitle: {
-    ...typography.body,
-  },
-  refreshLabel: {
-    maxWidth: 132,
-    fontSize: 11,
-    lineHeight: 16,
-    textAlign: "right",
-  },
   planningRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -727,10 +732,16 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   insightCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     padding: spacing.lg,
     borderRadius: radius.lg,
-    gap: spacing.xs,
+    gap: spacing.sm,
     borderCurve: "continuous",
+  },
+  insightCopy: {
+    flex: 1,
+    gap: spacing.xs,
   },
   insightTitle: {
     fontSize: 13,

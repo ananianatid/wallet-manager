@@ -6,7 +6,7 @@ echo "==> prebuild android..."
 npx expo prebuild --platform android --no-install
 
 echo "==> gradle assembleRelease..."
-(cd android && ./gradlew assembleRelease)
+(cd android && NODE_ENV=production ./gradlew assembleRelease)
 
 mkdir -p dist
 cp android/app/build/outputs/apk/release/app-release.apk dist/app-release.apk
