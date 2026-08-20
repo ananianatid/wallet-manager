@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wallet Manager — Les 5 évolutions</title>
+    <style>
+      :root {
+        --paper: #f5f5f2;
+        --ink: #181916;
+        --muted: #657169;
+        --forest: #26352d;
+        --mint: #dce8de;
+        --mint-strong: #b0d2b8;
+        --coral: #b75c52;
+        --line: rgba(38, 53, 45, 0.14);
+        --shadow: 0 24px 60px rgba(38, 53, 45, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: #dfe5df;
+        color: var(--ink);
+        font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+      }
+
+      .intro {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 56px 28px 26px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--forest);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 9px 9px 9px 2px;
+        background: var(--forest);
+        color: white;
+        font-size: 14px;
+      }
+
+      h1 {
+        max-width: 720px;
+        margin: 28px 0 12px;
+        color: var(--forest);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(38px, 6vw, 72px);
+        font-weight: 500;
+        letter-spacing: -.055em;
+        line-height: .98;
+      }
+
+      .intro p {
+        max-width: 580px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.55;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 24px;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 26px 28px 64px;
+      }
+
+      .card {
+        position: relative;
+        display: flex;
+        min-height: 560px;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 30px;
+        border: 1px solid rgba(255, 255, 255, .7);
+        border-radius: 30px 30px 30px 8px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+        isolation: isolate;
+      }
+
+      .card::before {
+        position: absolute;
+        z-index: -1;
+        top: -90px;
+        right: -80px;
+        width: 250px;
+        height: 250px;
+        border-radius: 50%;
+        background: var(--mint);
+        content: "";
+      }
+
+      .card:nth-child(2)::before { background: #f1dcd1; }
+      .card:nth-child(3)::before { background: #d9e1f0; }
+      .card:nth-child(4)::before { background: #ebe2b6; }
+      .card:nth-child(5)::before { background: #ded5eb; }
+
+      .eyebrow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+
+      .number {
+        color: var(--forest);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 30px;
+        font-weight: 500;
+        letter-spacing: -.05em;
+      }
+
+      .icon {
+        display: grid;
+        width: 94px;
+        height: 94px;
+        margin: 54px 0 26px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 28px 28px 28px 8px;
+        background: rgba(255, 255, 255, .72);
+        color: var(--forest);
+        font-size: 42px;
+      }
+
+      h2 {
+        max-width: 340px;
+        margin: 0 0 14px;
+        color: var(--forest);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 33px;
+        font-weight: 500;
+        letter-spacing: -.045em;
+        line-height: 1.02;
+      }
+
+      .summary {
+        margin: 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .points {
+        display: grid;
+        gap: 11px;
+        margin: auto 0 0;
+        padding: 22px 0 0;
+        border-top: 1px solid var(--line);
+        list-style: none;
+      }
+
+      .points li {
+        display: grid;
+        grid-template-columns: 20px 1fr;
+        gap: 9px;
+        color: var(--ink);
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      .points li::before {
+        color: var(--coral);
+        content: "✦";
+        font-size: 13px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-self: flex-start;
+        margin-top: 22px;
+        padding: 8px 11px;
+        border-radius: 999px;
+        background: var(--forest);
+        color: white;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .04em;
+      }
+
+      .footer {
+        display: flex;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 28px 58px;
+        color: var(--forest);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+
+      .footer span { color: var(--muted); font-weight: 500; }
+
+      @media (max-width: 620px) {
+        .intro { padding-top: 34px; }
+        .cards { grid-template-columns: 1fr; padding-top: 12px; }
+        .card { min-height: 520px; }
+      }
+
+      @media print {
+        @page { size: A4 portrait; margin: 12mm; }
+        body { background: white; }
+        .intro { padding: 12mm 0 8mm; }
+        .cards { grid-template-columns: 1fr 1fr; gap: 8mm; padding: 0 0 10mm; }
+        .card {
+          min-height: 122mm;
+          padding: 8mm;
+          border-radius: 8mm 8mm 8mm 2mm;
+          box-shadow: none;
+          break-inside: avoid;
+        }
+        .icon { width: 20mm; height: 20mm; margin: 12mm 0 6mm; }
+        h2 { font-size: 22px; }
+        .summary { font-size: 11px; }
+        .points { gap: 6px; padding-top: 5mm; }
+        .points li { font-size: 10px; }
+        .footer { padding: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="intro">
+      <div class="brand"><span class="brand-mark">W</span> Wallet Manager</div>
+      <h1>Un suivi financier qui vous laisse la main.</h1>
+      <p>Cinq évolutions pour mieux comprendre, préparer et valider son argent — localement, hors ligne et en français.</p>
+    </header>
+
+    <main class="cards" aria-label="Les cinq évolutions de Wallet Manager">
+      <article class="card">
+        <div class="eyebrow"><span>Journal financier</span><span class="number">01</span></div>
+        <div class="icon" aria-hidden="true">↗<span style="font-size: 28px">↘</span></div>
+        <h2>Une dépense peut enfin raconter toute son histoire.</h2>
+        <p class="summary">Le journal devient assez précis pour suivre une dépense partagée ou un remboursement sans créer d’écriture cachée.</p>
+        <ul class="points">
+          <li>Fractionnez une dépense entre plusieurs catégories.</li>
+          <li>Suivez une dette, ses règlements partiels et son solde.</li>
+          <li>Chaque règlement est une transaction explicitement enregistrée.</li>
+        </ul>
+        <span class="tag">Plus de précision</span>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow"><span>Marchands · tags · reçus</span><span class="number">02</span></div>
+        <div class="icon" aria-hidden="true">▣</div>
+        <h2>Retrouvez le contexte, pas seulement le montant.</h2>
+        <p class="summary">Une transaction peut garder le nom du marchand, plusieurs tags et un justificatif local.</p>
+        <ul class="points">
+          <li>Recherchez par marchand ou filtrez par tags réutilisables.</li>
+          <li>Ajoutez une image ou un PDF sans dépendre d’une URI externe.</li>
+          <li>Les pièces jointes suivent la sauvegarde chiffrée.</li>
+        </ul>
+        <span class="tag">Tout reste sur l’appareil</span>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow"><span>Import CSV</span><span class="number">03</span></div>
+        <div class="icon" aria-hidden="true">⇥</div>
+        <h2>Importer vite, vérifier avant d’écrire.</h2>
+        <p class="summary">L’import universel transforme un fichier CSV en propositions lisibles avant toute modification de la base.</p>
+        <ul class="points">
+          <li>Détectez virgule, point-virgule ou tabulation.</li>
+          <li>Identifiez les dates, montants, catégories et lignes invalides.</li>
+          <li>Les doublons probables sont signalés et désélectionnés par défaut.</li>
+        </ul>
+        <span class="tag">Ajout non destructif</span>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow"><span>Budgets mensuels</span><span class="number">04</span></div>
+        <div class="icon" aria-hidden="true">◒</div>
+        <h2>Un budget suit le calendrier réel de votre vie.</h2>
+        <p class="summary">Chaque mois montre ce qui était prévu, ce qui est reporté, ce qui est dépensé et ce qui reste.</p>
+        <ul class="points">
+          <li>Modifiez un mois sans réécrire les mois passés.</li>
+          <li>Comptez les fractions une seule fois et ignorez les transferts.</li>
+          <li>Un report négatif réduit clairement le budget suivant.</li>
+        </ul>
+        <span class="tag">Prévoir sans réécrire</span>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow"><span>Récurrences</span><span class="number">05</span></div>
+        <div class="icon" aria-hidden="true">⏳</div>
+        <h2>Le prévisible attend votre accord.</h2>
+        <p class="summary">Une échéance arrivée devient une proposition. Elle ne devient une transaction qu’après votre décision.</p>
+        <ul class="points">
+          <li>Enregistrez, ignorez ou reprogrammez chaque échéance.</li>
+          <li>Une validation ne peut pas créer deux fois la même écriture.</li>
+          <li>Les notifications sont locales et restent facultatives.</li>
+        </ul>
+        <span class="tag">Jamais de création silencieuse</span>
+      </article>
+    </main>
+
+    <footer class="footer">
+      Local · hors ligne · en français&nbsp;&nbsp; <span>Pas de synchronisation bancaire, cloud, OCR ou multi-utilisateur dans cette version.</span>
+    </footer>
+  </body>
+</html>
