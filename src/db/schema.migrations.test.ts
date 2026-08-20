@@ -6,6 +6,13 @@ import {
   MIGRATION_V11,
   MIGRATION_V12,
   MIGRATION_V13,
+  MIGRATION_V14,
+  MIGRATION_V15,
+  MIGRATION_V16,
+  MIGRATION_V17,
+  MIGRATION_V18,
+  MIGRATION_V19,
+  MIGRATION_V20,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -67,6 +74,13 @@ const MIGRATIONS: Record<number, string> = {
   11: MIGRATION_V11,
   12: MIGRATION_V12,
   13: MIGRATION_V13,
+  14: MIGRATION_V14,
+  15: MIGRATION_V15,
+  16: MIGRATION_V16,
+  17: MIGRATION_V17,
+  18: MIGRATION_V18,
+  19: MIGRATION_V19,
+  20: MIGRATION_V20,
 };
 
 class SqliteDb {
@@ -236,8 +250,15 @@ function assertMigratedState(db: SqliteDb, era: number): void {
     expect(tableColumns(db, "transactions")).toContain(column);
   }
   expect(tableColumns(db, "categories")).toContain("icon");
+  expect(tableColumns(db, "transactions")).toContain("merchant");
+  expect(tableColumns(db, "transactions")).toEqual(
+    expect.arrayContaining(["import_batch_id", "import_row_number", "import_fingerprint"]),
+  );
   expect(tableColumns(db, "budgets")).toContain("currency_code");
   expect(tableColumns(db, "goals")).toContain("currency_code");
+  expect(tableColumns(db, "goals")).toEqual(
+    expect.arrayContaining(["description", "image_uri", "link_url"]),
+  );
   expect(tableColumns(db, "savings_rules")).toContain("start_date");
   expect(tableColumns(db, "savings_rules")).toContain("subtract_from_available");
   expect(tableColumns(db, "goal_reservations")).toEqual(
@@ -251,6 +272,18 @@ function assertMigratedState(db: SqliteDb, era: number): void {
   );
   expect(tableNames(db)).toEqual(
     expect.arrayContaining(["currencies", "fx_rates"]),
+  );
+  expect(tableNames(db)).toEqual(
+    expect.arrayContaining([
+      "transaction_splits",
+      "people",
+      "reimbursements",
+      "reimbursement_settlements",
+      "tags",
+      "transaction_tags",
+      "transaction_attachments",
+      "import_batches",
+    ]),
   );
   if (era >= 10) {
     expect(tableNames(db)).toContain("settings");
@@ -286,9 +319,10 @@ function assertMigratedState(db: SqliteDb, era: number): void {
     "Salaire",
     "Nourriture",
   ]);
-  for (const category of categories.slice(2)) {
-    expect(category.icon).toBe("tag");
-  }
+  expect(categories.slice(2).map((category) => category.icon)).toEqual([
+    "banknote-arrow-up",
+    "utensils",
+  ]);
 
   expect(tableNames(db)).toContain("account_groups");
   const groups = db.db
@@ -298,9 +332,15 @@ function assertMigratedState(db: SqliteDb, era: number): void {
 
   if (era >= 3) {
     expect(row(db, "budgets", 1)).toMatchObject({ amount: 50000 });
+    expect(row(db, "budget_plans", 1)).toMatchObject({
+      amount: 50000,
+      rollover_enabled: 0,
+      is_active: 1,
+    });
     expect(row(db, "recurring_transactions", 1)).toMatchObject({
       amount: 15000,
       is_active: 1,
+      mode: "approval",
     });
   }
   if (era >= 4) {
@@ -350,6 +390,9 @@ describe("migrations versionnées", () => {
         "accounts",
         "transactions",
         "budgets",
+        "budget_plans",
+        "budget_periods",
+        "recurring_occurrences",
         "recurring_transactions",
         "savings_rules",
         "goals",
@@ -357,6 +400,14 @@ describe("migrations versionnées", () => {
         "account_groups",
         "currencies",
         "fx_rates",
+        "transaction_splits",
+        "people",
+        "reimbursements",
+        "reimbursement_settlements",
+        "tags",
+        "transaction_tags",
+        "transaction_attachments",
+        "import_batches",
       ]),
     );
     const categoryCount = db.db

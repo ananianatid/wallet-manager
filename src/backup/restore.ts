@@ -4,6 +4,7 @@ import { DATABASE_NAME, closeDatabase, getDatabase } from "@/db/database";
 import { DATABASE_VERSION } from "@/db/schema";
 import { decryptBackup } from "@/security/cipher";
 import { bumpDataEpoch } from "@/state/data-epoch";
+import { privateAttachmentDirectory } from "@/db/attachments";
 
 const SQLITE_MAGIC = "SQLite format 3\u0000";
 
@@ -123,5 +124,43 @@ export async function applyRestoredBackup(
     await restored.closeAsync();
   }
   await getDatabase();
+  await restoreAttachmentBlobs();
   bumpDataEpoch();
+}
+
+function safeRestoredName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "-") || "piece-jointe";
+}
+
+async function restoreAttachmentBlobs(): Promise<void> {
+  const db = await getDatabase();
+  const table = await db.getFirstAsync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'backup_attachment_blobs'",
+  );
+  if (!table) return;
+  const blobs = await db.getAllAsync<{
+    attachmentId: number;
+    content: Uint8Array;
+  }>(
+    `SELECT b.attachment_id AS attachmentId, b.content
+     FROM backup_attachment_blobs b
+     JOIN transaction_attachments a ON a.id = b.attachment_id`,
+  );
+  const directory = privateAttachmentDirectory();
+  for (const blob of blobs) {
+    const attachment = await db.getFirstAsync<{ originalName: string }>(
+      "SELECT original_name AS originalName FROM transaction_attachments WHERE id = ?",
+      blob.attachmentId,
+    );
+    if (!attachment) continue;
+    const file = new File(directory, `${blob.attachmentId}-${Date.now()}-${safeRestoredName(attachment.originalName)}`);
+    file.write(blob.content);
+    await db.runAsync(
+      "UPDATE transaction_attachments SET storage_path = ?, size = ? WHERE id = ?",
+      file.uri,
+      file.size,
+      blob.attachmentId,
+    );
+  }
+  await db.execAsync("DROP TABLE backup_attachment_blobs");
 }

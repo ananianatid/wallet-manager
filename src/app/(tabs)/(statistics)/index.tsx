@@ -17,9 +17,12 @@ import { getDatabase } from "@/db/database";
 import { getSetting } from "@/db/settings";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { listTransactions, listTransactionsByRange } from "@/db/transactions";
-import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
+import { chartColors, radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
+import { financialToneColor, signedAmountTone } from "@/utils/financial-display";
 import { userMessage } from "@/utils/user-message";
 import {
   categoryChanges,
@@ -130,12 +133,18 @@ function ComparisonMetricView({
   theme,
 }: ComparisonMetricViewProps) {
   const color = comparisonColor(metric, kind, theme);
+  const currentColor =
+    kind === "income"
+      ? theme.income
+      : kind === "expense"
+        ? theme.expense
+        : financialToneColor(signedAmountTone(metric.current), theme);
   return (
     <View style={styles.comparisonMetric} accessible accessibilityRole="text">
       <Text style={[styles.comparisonMetricLabel, { color: theme.secondaryLabel }]}>
         {label}
       </Text>
-      <Text style={[styles.comparisonMetricValue, { color: theme.label }]}>
+      <Text style={[styles.comparisonMetricValue, { color: currentColor }]}>
         {formatAmount(metric.current, currency)}
       </Text>
       <Text style={[styles.comparisonMetricDelta, { color }]}>
@@ -184,7 +193,12 @@ function CategoryChangeRow({
         </Text>
       </View>
       <View style={styles.changeValues}>
-        <Text style={[styles.changeCurrent, { color: theme.label }]}>
+        <Text
+          style={[
+            styles.changeCurrent,
+            { color: type === "expense" ? theme.expense : theme.income },
+          ]}
+        >
           {formatAmount(change.currentTotal, currency)}
         </Text>
         <Text style={[styles.changeDelta, { color }]}>
@@ -197,6 +211,7 @@ function CategoryChangeRow({
 
 export default function StatisticsScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("statistics.scroll");
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const now = new Date();
@@ -597,6 +612,8 @@ export default function StatisticsScreen() {
         />
       ) : (
         <ScrollView
+          onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+          scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
           style={{ flex: 1 }}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{
@@ -613,64 +630,6 @@ export default function StatisticsScreen() {
               resource.status === "loading" || resource.data?.periodKey !== periodKey
             }
           />
-
-          {comparison ? (
-            <View
-              style={[styles.card, { backgroundColor: theme.surface }]}
-              accessible
-              accessibilityRole="summary"
-              accessibilityLabel={`Comparaison avec la période précédente. Revenus ${formatSignedAmount(comparison.income.delta, baseCurrency)}. Dépenses ${formatSignedAmount(comparison.expense.delta + comparison.fees.delta, baseCurrency)}. Total net ${formatSignedAmount(comparison.net.delta, baseCurrency)}.`}
-            >
-              <View style={styles.sectionHeadingRow}>
-                <Text style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}>
-                  Comparaison
-                </Text>
-                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                  Période précédente
-                </Text>
-              </View>
-              {!hasComparisonActivity ? (
-                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                  Aucune transaction dans la période précédente : les pourcentages marquent les nouvelles données.
-                </Text>
-              ) : null}
-              <View style={styles.comparisonGrid}>
-                <ComparisonMetricView
-                  label="Revenus"
-                  metric={comparison.income}
-                  currency={baseCurrency}
-                  kind="income"
-                  theme={theme}
-                />
-                <ComparisonMetricView
-                  label="Dépenses"
-                  metric={{
-                    ...comparison.expense,
-                    current: comparison.expense.current + comparison.fees.current,
-                    previous: comparison.expense.previous + comparison.fees.previous,
-                    delta: comparison.expense.delta + comparison.fees.delta,
-                    percent:
-                      comparison.expense.previous + comparison.fees.previous === 0
-                        ? null
-                        : ((comparison.expense.current + comparison.fees.current -
-                            comparison.expense.previous - comparison.fees.previous) /
-                            (comparison.expense.previous + comparison.fees.previous)) *
-                          100,
-                  }}
-                  currency={baseCurrency}
-                  kind="expense"
-                  theme={theme}
-                />
-                <ComparisonMetricView
-                  label="Total net"
-                  metric={comparison.net}
-                  currency={baseCurrency}
-                  kind="net"
-                  theme={theme}
-                />
-              </View>
-            </View>
-          ) : null}
 
           <View>
             <View style={[styles.typeControl, { backgroundColor: theme.surface }]}>
@@ -848,6 +807,64 @@ export default function StatisticsScreen() {
             )}
           </View>
 
+          {comparison ? (
+            <View
+              style={[styles.card, { backgroundColor: theme.surface }]}
+              accessible
+              accessibilityRole="summary"
+              accessibilityLabel={`Comparaison avec la période précédente. Revenus ${formatSignedAmount(comparison.income.delta, baseCurrency)}. Dépenses ${formatSignedAmount(comparison.expense.delta + comparison.fees.delta, baseCurrency)}. Total net ${formatSignedAmount(comparison.net.delta, baseCurrency)}.`}
+            >
+              <View style={styles.sectionHeadingRow}>
+                <Text style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}>
+                  Comparaison
+                </Text>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                  Période précédente
+                </Text>
+              </View>
+              {!hasComparisonActivity ? (
+                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+                  Aucune transaction dans la période précédente : les pourcentages marquent les nouvelles données.
+                </Text>
+              ) : null}
+              <View style={styles.comparisonGrid}>
+                <ComparisonMetricView
+                  label="Revenus"
+                  metric={comparison.income}
+                  currency={baseCurrency}
+                  kind="income"
+                  theme={theme}
+                />
+                <ComparisonMetricView
+                  label="Dépenses"
+                  metric={{
+                    ...comparison.expense,
+                    current: comparison.expense.current + comparison.fees.current,
+                    previous: comparison.expense.previous + comparison.fees.previous,
+                    delta: comparison.expense.delta + comparison.fees.delta,
+                    percent:
+                      comparison.expense.previous + comparison.fees.previous === 0
+                        ? null
+                        : ((comparison.expense.current + comparison.fees.current -
+                            comparison.expense.previous - comparison.fees.previous) /
+                            (comparison.expense.previous + comparison.fees.previous)) *
+                          100,
+                  }}
+                  currency={baseCurrency}
+                  kind="expense"
+                  theme={theme}
+                />
+                <ComparisonMetricView
+                  label="Total net"
+                  metric={comparison.net}
+                  currency={baseCurrency}
+                  kind="net"
+                  theme={theme}
+                />
+              </View>
+            </View>
+          ) : null}
+
           {comparison && hasComparisonActivity && changes.length > 0 ? (
             <View style={[styles.card, { backgroundColor: theme.surface, gap: spacing.sm }]}>
               <View style={styles.sectionHeadingRow}>
@@ -968,7 +985,16 @@ export default function StatisticsScreen() {
                             <Text style={{ color: theme.expense, fontSize: 12 }}>
                               Dépenses {formatAmount(point.expense + point.fees, baseCurrency)}
                             </Text>
-                            <Text style={{ color: theme.label, fontSize: 12, fontWeight: "700" }}>
+                            <Text
+                              style={{
+                                color: financialToneColor(
+                                  signedAmountTone(point.net),
+                                  theme,
+                                ),
+                                fontSize: 12,
+                                fontWeight: "700",
+                              }}
+                            >
                               Total {formatAmount(point.net, baseCurrency)}
                             </Text>
                           </View>
@@ -993,7 +1019,16 @@ export default function StatisticsScreen() {
                         <Text style={{ color: theme.expense, fontSize: 12 }}>
                           Dépenses {formatAmount(selectedEvolutionPoint.expense + selectedEvolutionPoint.fees, baseCurrency)}
                         </Text>
-                        <Text style={{ color: theme.label, fontSize: 12, fontWeight: "700" }}>
+                        <Text
+                          style={{
+                            color: financialToneColor(
+                              signedAmountTone(selectedEvolutionPoint.net),
+                              theme,
+                            ),
+                            fontSize: 12,
+                            fontWeight: "700",
+                          }}
+                        >
                           Total {formatAmount(selectedEvolutionPoint.net, baseCurrency)}
                         </Text>
                       </View>
@@ -1123,8 +1158,7 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     flexShrink: 1,
-    fontSize: 16,
-    fontWeight: "700",
+    ...typography.section,
   },
   granularityChip: {
     flexDirection: "row",
@@ -1140,7 +1174,7 @@ const styles = StyleSheet.create({
   typeControl: {
     flexDirection: "row",
     gap: spacing.xs,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: 4,
   },
   typeSegment: {
@@ -1148,10 +1182,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 48,
-    borderRadius: radius.lg - 4,
+    borderRadius: radius.lg,
   },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.lg,
   },
   sectionHeadingRow: {

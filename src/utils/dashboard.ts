@@ -1,6 +1,12 @@
 import type { Budget, Goal } from "@/types";
 import type { CategorySlice } from "@/utils/statistics";
 
+export interface DashboardInsight {
+  level: "calm" | "warning";
+  title: string;
+  body: string;
+}
+
 export interface BudgetProgressRow {
   budget: Budget;
   spent: number;
@@ -25,6 +31,79 @@ export function budgetProgress(
     const pct = budget.amount <= 0 ? 0 : Math.min((spent / budget.amount) * 100, 100);
     return { budget, spent, pct, over: spent > budget.amount };
   });
+}
+
+export function dashboardInsight({
+  totalExpense,
+  previousMonthExpense,
+  hasCurrentActivity,
+  hasPreviousActivity,
+  budgetRemaining,
+  hasOverBudget,
+}: {
+  totalExpense: number;
+  previousMonthExpense: number;
+  hasCurrentActivity: boolean;
+  hasPreviousActivity: boolean;
+  budgetRemaining: number | null;
+  hasOverBudget: boolean;
+}): DashboardInsight {
+  if (budgetRemaining === 0) {
+    return {
+      level: "warning",
+      title: "Budget épuisé ce mois-ci",
+      body: "Votre budget restant est à 0. Vérifiez vos prochains paiements.",
+    };
+  }
+
+  if (hasOverBudget) {
+    return {
+      level: "warning",
+      title: "Budget à surveiller",
+      body: "Un de vos budgets est dépassé. Vérifiez vos prochains paiements.",
+    };
+  }
+
+  if (!hasCurrentActivity && !hasPreviousActivity) {
+    return {
+      level: "calm",
+      title: "Votre suivi commence ici",
+      body: "Ajoutez vos premières dépenses pour voir votre trajectoire.",
+    };
+  }
+
+  if (previousMonthExpense > 0) {
+    const change = Math.round(
+      ((totalExpense - previousMonthExpense) / previousMonthExpense) * 100,
+    );
+    if (change < 0) {
+      return {
+        level: "calm",
+        title: "Tout va bien ce mois-ci",
+        body: `Vos dépenses sont ${Math.abs(change)} % plus faibles que le mois dernier. Vous êtes sur la bonne trajectoire.`,
+      };
+    }
+    if (change > 0) {
+      return {
+        level: "warning",
+        title: "À surveiller ce mois-ci",
+        body: `Vos dépenses sont ${change} % plus élevées que le mois dernier. Vérifiez vos prochains paiements.`,
+      };
+    }
+    return {
+      level: "calm",
+      title: "Continuez votre suivi",
+      body: "Vos dépenses restent stables par rapport au mois dernier.",
+    };
+  }
+
+  return {
+    level: "calm",
+    title: "Continuez votre suivi",
+    body: totalExpense > 0
+      ? "Vos dépenses commencent à se dessiner ce mois-ci."
+      : "Ajoutez vos premières dépenses pour voir votre trajectoire.",
+  };
 }
 
 /**

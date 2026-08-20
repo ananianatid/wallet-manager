@@ -1,4 +1,4 @@
-import type { SavingsRule, Transaction } from "../types";
+import type { SavingsRule, Transaction, TransactionAmountRow } from "../types";
 import type { CategoryIconName } from "@/constants/category-icons";
 
 export interface MonthRef {
@@ -241,7 +241,7 @@ function convertedAmount(
 }
 
 export function totals(
-  transactions: Transaction[],
+  transactions: readonly (Transaction | TransactionAmountRow)[],
   converter?: AmountConverter,
 ): Totals {
   let income = 0;

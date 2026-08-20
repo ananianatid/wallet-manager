@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { ChevronRight, Eye, EyeOff, Plus, Target, X } from "lucide-react-native";
+import { ChevronRight, EllipsisVertical, Eye, EyeOff, Plus, Settings, Target, X } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -14,7 +14,13 @@ import {
 } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { SelectField } from "@/components/select-field";
-import { IconButton, InlineError, KeyboardAwareView, ScreenState } from "@/components/ui";
+import {
+  IconButton,
+  InlineError,
+  KeyboardAwareScreen,
+  KeyboardAwareView,
+  ScreenState,
+} from "@/components/ui";
 import { listAccountGroups } from "@/db/account-groups";
 import {
   createAccount,
@@ -26,6 +32,8 @@ import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Account } from "@/types";
 import { formatAmount } from "@/utils/format";
@@ -34,11 +42,11 @@ import { userMessage } from "@/utils/user-message";
 
 export default function AccountsScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("accounts.scroll");
   const { baseCurrency, currencies } = useCurrency();
   const convert = useCurrencyConverter();
   const summaryLabel = theme.accentSurfaceLabel;
   const [formError, setFormError] = useState<string | null>(null);
-  const listRef = useRef<SectionList>(null);
   const [showForm, setShowForm] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [name, setName] = useState("");
@@ -51,11 +59,6 @@ export default function AccountsScreen() {
   const openForm = () => {
     setShowForm(true);
     setCurrencyCode(baseCurrency);
-    try {
-      listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: true });
-    } catch {
-      // liste vide : le formulaire est déjà visible en tête
-    }
   };
 
   const load = useCallback(async () => {
@@ -260,6 +263,11 @@ export default function AccountsScreen() {
           headerRight: () => (
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
               <IconButton
+                onPress={() => router.push("/(tabs)/(settings)")}
+                label="Ouvrir les réglages"
+                icon={<Settings size={21} strokeWidth={2.2} color={theme.accent} />}
+              />
+              <IconButton
                 onPress={() => router.push("/goals")}
                 label="Ouvrir les objectifs"
                 icon={<Target size={21} strokeWidth={2.2} color={theme.accent} />}
@@ -286,8 +294,9 @@ export default function AccountsScreen() {
       ) : (
       <KeyboardAwareView>
         <SectionList
-        ref={listRef}
         style={{ flex: 1 }}
+        onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+        scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
         keyboardDismissMode="on-drag"
@@ -304,11 +313,13 @@ export default function AccountsScreen() {
       )}
         renderItem={({ item, index, section }) => {
         const isLast = index === section.data.length - 1;
+        const isExcluded = item.excludeFromTotal;
+        const accountTextColor = isExcluded ? theme.secondaryLabel : theme.label;
         return (
           <>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${item.name}. Disponible ${formatAmount(item.availableBalance, item.currencyCode)}`}
+              accessibilityLabel={`${item.name}. ${item.excludeFromTotal ? "Exclu du patrimoine. " : ""}Disponible ${formatAmount(item.availableBalance, item.currencyCode)}`}
               onPress={() => {
                 if (longPressTriggered.current) {
                   longPressTriggered.current = false;
@@ -340,10 +351,10 @@ export default function AccountsScreen() {
                 pressed && { opacity: 0.6 },
               ]}
             >
-              <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+              <View style={[styles.dot, { backgroundColor: isExcluded ? theme.secondaryLabel : theme.accent }]} />
               <View style={styles.body}>
                 <View style={styles.nameRow}>
-                  <Text style={[styles.name, { color: theme.label }]} numberOfLines={1}>
+                  <Text style={[styles.name, { color: accountTextColor }]} numberOfLines={1}>
                     {item.name}
                   </Text>
                   {item.hidden ? (
@@ -355,14 +366,16 @@ export default function AccountsScreen() {
                   ) : null}
                 </View>
               </View>
-              <View style={{ alignItems: "flex-end" }}>
+              <View style={styles.balanceColumn}>
+                <Text style={[styles.amountLabel, { color: theme.secondaryLabel }]}>Disponible</Text>
                 <Text
                   selectable
                   style={[
                     styles.balance,
                     {
-                      color:
-                        item.availableBalance > 0
+                      color: isExcluded
+                        ? theme.secondaryLabel
+                        : item.availableBalance > 0
                           ? theme.income
                           : item.availableBalance < 0
                             ? theme.expense
@@ -373,7 +386,7 @@ export default function AccountsScreen() {
                   {formatAmount(item.availableBalance, item.currencyCode)}
                 </Text>
                 {item.currencyCode !== baseCurrency ? (
-                  <Text style={[styles.totalBalance, { color: theme.secondaryLabel }]}>
+                  <Text style={[styles.totalBalance, { color: accountTextColor }]}>
                     {(() => {
                       const equivalent = convert(item.availableBalance, item.currencyCode);
                       return equivalent == null
@@ -383,11 +396,26 @@ export default function AccountsScreen() {
                   </Text>
                 ) : null}
                 {item.reservedAmount > 0 ? (
-                  <Text style={[styles.totalBalance, { color: theme.secondaryLabel }]}>
-                    total {formatAmount(item.balance, item.currencyCode)}
+                  <Text
+                    style={[styles.totalBalance, { color: accountTextColor }]}
+                  >
+                    Solde {formatAmount(item.balance, item.currencyCode)}
                   </Text>
                 ) : null}
               </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Actions pour ${item.name}`}
+                accessibilityHint="Ouvre les actions de gestion du compte."
+                hitSlop={8}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openAccountActions(item);
+                }}
+                style={({ pressed }) => [styles.rowAction, pressed && { opacity: 0.55 }]}
+              >
+                <EllipsisVertical size={20} strokeWidth={2.2} color={theme.secondaryLabel} />
+              </Pressable>
             </Pressable>
             {!isLast ? (
               <View
@@ -439,7 +467,7 @@ export default function AccountsScreen() {
               </View>
               <View style={[styles.summaryItem, styles.summaryItemRight]}>
                 <Text style={{ color: summaryLabel, fontSize: 13 }}>
-                  Solde
+                  Solde net
                 </Text>
                 <Text
                   selectable
@@ -463,7 +491,7 @@ export default function AccountsScreen() {
               ]}
             >
               <Text style={{ color: summaryLabel, fontSize: 13 }}>
-                Disponible après réservations
+                Disponible
               </Text>
               <Text
                 selectable
@@ -472,27 +500,32 @@ export default function AccountsScreen() {
                 {formatAmount(totals.available)}
               </Text>
             </View>
-            {(accounts ?? []).some((a) => a.excludeFromTotal) ? (
-              <Text style={{ color: summaryLabel, fontSize: 13 }}>
-                {(accounts ?? []).filter((a) => a.excludeFromTotal).length} compte
-                {(accounts ?? []).filter((a) => a.excludeFromTotal).length > 1 ? "s" : ""}{" "}
-                exclu{(accounts ?? []).filter((a) => a.excludeFromTotal).length > 1 ? "s" : ""}{" "}
-                du total
-              </Text>
-            ) : null}
           </View>
           <View style={{ gap: spacing.sm }}>
-            <Text
-              style={{
-                paddingHorizontal: spacing.lg,
-                color: theme.secondaryLabel,
-                fontSize: 13,
-                fontWeight: "600",
-                letterSpacing: 1.1,
-              }}
-            >
-              COMPTES
-            </Text>
+            <View style={styles.accountsHeading}>
+              <Text
+                style={{
+                  color: theme.secondaryLabel,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  letterSpacing: 1.1,
+                }}
+              >
+                COMPTES
+              </Text>
+              <Pressable
+                onPress={() => router.push("/(tabs)/(settings)/accounts-management")}
+                accessibilityRole="button"
+                accessibilityLabel="Organiser les comptes"
+                accessibilityHint="Ouvre la gestion avancée des comptes."
+                style={({ pressed }) => [styles.organizeButton, pressed && { opacity: 0.65 }]}
+              >
+                <Text style={{ color: theme.accent, fontSize: 13, fontWeight: "700" }}>
+                  Organiser
+                </Text>
+                <ChevronRight size={16} strokeWidth={2.4} color={theme.accent} />
+              </Pressable>
+            </View>
             {(accounts ?? []).some((a) => a.hidden) ? (
               <Pressable
                 onPress={() => setShowHidden((v) => !v)}
@@ -516,72 +549,6 @@ export default function AccountsScreen() {
             </Pressable>
           ) : null}
           </View>
-          {showForm ? (
-            <View
-              style={{
-                marginHorizontal: spacing.lg,
-                padding: spacing.lg,
-                gap: spacing.md,
-                backgroundColor: theme.surface,
-                borderRadius: radius.lg,
-              }}
-            >
-              <Text style={[styles.name, { color: theme.label }]}>Nouveau compte</Text>
-              {formError ? <InlineError message={formError} onRetry={() => setFormError(null)} /> : null}
-                <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="Nom du compte"
-                placeholderTextColor={theme.secondaryLabel}
-                accessibilityLabel="Nom du compte"
-                maxLength={40}
-                style={{
-                  color: theme.label,
-                  backgroundColor: theme.surfaceElevated,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.sm + 2,
-                  borderRadius: radius.md,
-                }}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={() => void submit()}
-              />
-              <SelectField
-                label="Groupe de comptes"
-                value={
-                  groupId == null
-                    ? "Sans groupe"
-                    : (accountGroups.find((g) => g.id === groupId)?.name ?? null)
-                }
-                options={groupOptions}
-                onChange={(id) => setGroupId(id === -1 ? null : id)}
-              />
-              <SelectField
-                label="Devise du compte"
-                value={currencyOptions.find((option) => option.code === currencyCode)?.label ?? currencyCode}
-                options={currencyOptions}
-                onChange={(id) => setCurrencyCode(currencyOptions.find((option) => option.id === id)?.code ?? baseCurrency)}
-              />
-              <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                <Pressable
-                  onPress={() => setShowForm(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Annuler la création du compte"
-                  style={({ pressed }) => [styles.button, { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.separator }, pressed && { opacity: 0.7 }]}
-                >
-                  <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>Annuler</Text>
-                </Pressable>
-                <Pressable
-                  onPress={submit}
-                  accessibilityRole="button"
-                  accessibilityLabel="Créer le compte"
-                  style={({ pressed }) => [styles.button, { backgroundColor: theme.accent, flex: 1 }, pressed && { opacity: 0.7 }]}
-                >
-                  <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Créer</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
         </View>
         }
         ListEmptyComponent={
@@ -617,26 +584,86 @@ export default function AccountsScreen() {
                 </View>
                 <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
               </Pressable>
-              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separator, marginLeft: spacing.lg }} />
-              <Pressable
-                onPress={() => router.push("/(tabs)/(settings)/accounts-management")}
-                accessibilityRole="button"
-                accessibilityLabel="Gestion avancée des comptes"
-                accessibilityHint="Ouvrir la gestion avancée des comptes"
-                style={({ pressed }) => [styles.advancedRow, pressed && { opacity: 0.6 }]}
-              >
-                <View style={styles.body}>
-                  <Text style={[styles.advancedRowTitle, { color: theme.label }]}>Gestion avancée</Text>
-                  <Text style={[styles.advancedRowSubtitle, { color: theme.secondaryLabel }]}>Gérer les comptes supprimés et les groupes</Text>
-                </View>
-                <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
-              </Pressable>
             </View>
           </View>
         }
         />
       </KeyboardAwareView>
       )}
+
+      <Modal
+        visible={showForm}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowForm(false)}
+      >
+        <Pressable
+          style={[styles.backdrop, { backgroundColor: theme.scrim }]}
+          onPress={() => setShowForm(false)}
+          accessibilityLabel="Fermer"
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            accessibilityViewIsModal
+            style={[styles.formSheet, { backgroundColor: theme.surfaceElevated }]}
+          >
+            <KeyboardAwareScreen contentContainerStyle={styles.formContent}>
+              <Text accessibilityRole="header" style={[styles.formTitle, { color: theme.label }]}>Nouveau compte</Text>
+              <Text style={[styles.formIntro, { color: theme.secondaryLabel }]}>Ajoutez un compte à votre suivi financier.</Text>
+              {formError ? <InlineError message={formError} onRetry={() => setFormError(null)} /> : null}
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="Nom du compte"
+                placeholderTextColor={theme.secondaryLabel}
+                accessibilityLabel="Nom du compte"
+                maxLength={40}
+                style={[
+                  styles.formInput,
+                  { color: theme.label, backgroundColor: theme.surface, borderColor: theme.separator },
+                ]}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={() => void submit()}
+              />
+              <SelectField
+                label="Groupe de comptes"
+                value={
+                  groupId == null
+                    ? "Sans groupe"
+                    : (accountGroups.find((g) => g.id === groupId)?.name ?? null)
+                }
+                options={groupOptions}
+                onChange={(id) => setGroupId(id === -1 ? null : id)}
+              />
+              <SelectField
+                label="Devise du compte"
+                value={currencyOptions.find((option) => option.code === currencyCode)?.label ?? currencyCode}
+                options={currencyOptions}
+                onChange={(id) => setCurrencyCode(currencyOptions.find((option) => option.id === id)?.code ?? baseCurrency)}
+              />
+              <View style={styles.formActions}>
+                <Pressable
+                  onPress={() => setShowForm(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Annuler la création du compte"
+                  style={({ pressed }) => [styles.button, styles.cancelButton, { borderColor: theme.separator }, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={{ color: theme.secondaryLabel, fontWeight: "600" }}>Annuler</Text>
+                </Pressable>
+                <Pressable
+                  onPress={submit}
+                  accessibilityRole="button"
+                  accessibilityLabel="Créer le compte"
+                  style={({ pressed }) => [styles.button, styles.createButton, { backgroundColor: theme.accent }, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={{ color: theme.onAccent, fontWeight: "700" }}>Créer</Text>
+                </Pressable>
+              </View>
+            </KeyboardAwareScreen>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={selectedAccount != null}
@@ -785,6 +812,19 @@ const styles = StyleSheet.create({
   summaryItemRight: {
     alignItems: "flex-end",
   },
+  accountsHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+  },
+  organizeButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
   availableSummary: {
     flexDirection: "row",
     alignItems: "center",
@@ -828,6 +868,21 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
+  balanceColumn: {
+    alignItems: "flex-end",
+    minWidth: 96,
+  },
+  amountLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  rowAction: {
+    minWidth: 40,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: -spacing.sm,
+  },
   body: {
     flex: 1,
     gap: 2,
@@ -863,6 +918,42 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.xl,
     alignItems: "center",
+  },
+  formSheet: {
+    maxHeight: "90%",
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  formContent: {
+    gap: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  formIntro: {
+    lineHeight: 19,
+  },
+  formInput: {
+    minHeight: 50,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+  },
+  formActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  cancelButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  createButton: {
+    flex: 1,
   },
   filterButton: {
     flexDirection: "row",

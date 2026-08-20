@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Stack } from "expo-router/stack";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -6,8 +7,8 @@ import {
   ThemeProvider,
 } from "expo-router/react-navigation";
 import { ThemeProvider as AppThemeProvider, useTheme, useThemeControl } from "@/theme";
-import { StatusBar } from "react-native";
-import { useEffect, useState } from "react";
+import { Platform, StatusBar } from "react-native";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CompactStackHeader } from "@/components/compact-stack-header";
 import { LockScreen } from "@/components/lock-screen";
@@ -19,12 +20,17 @@ import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 import { initObservability } from "@/services/observability";
 import { runStartupHealth } from "@/utils/diagnostics";
+import { applyDueRecurring } from "@/db/recurring";
+import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
+
+const SPLASH_MIN_DURATION_MS = 800;
+const splashStartedAt = Date.now();
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 initObservability();
 
-function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onboarding" }) {
+function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tabs)" | "onboarding" }) {
   const theme = useTheme();
   const { scheme } = useThemeControl();
   const lock = useLockState();
@@ -52,11 +58,21 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onb
             contentStyle: { backgroundColor: theme.background },
           }}
         >
+          <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen
             name="new-transaction"
             options={{ presentation: "modal", title: "Nouvelle transaction" }}
+          />
+          <Stack.Screen name="transaction-detail" options={{ title: "Détail de la transaction" }} />
+          <Stack.Screen
+            name="reimbursement-settlement"
+            options={{ presentation: "modal", title: "Enregistrer le règlement" }}
+          />
+          <Stack.Screen
+            name="import-csv"
+            options={{ presentation: "modal", title: "Importer un CSV" }}
           />
           <Stack.Screen name="accounts/[id]" options={{ title: "Compte" }} />
           <Stack.Screen
@@ -98,10 +114,16 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onb
 }
 
 export default function RootLayout() {
-  const [isReady, setIsReady] = useState(false);
+  const router = useRouter();
+  const [isReady, setIsReady] = useState(Platform.OS === "web");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const hasRoutedToDashboard = useRef(false);
 
   useEffect(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
+
     let active = true;
     initLock();
     try {
@@ -114,6 +136,12 @@ export default function RootLayout() {
       let shouldOnboard = false;
       try {
         const db = await getDatabase();
+        try {
+          await applyDueRecurring(db);
+        } catch {
+          // A recurring-operation failure must not block access to the local
+          // application.
+        }
         const accountCount = await db.getFirstAsync<{ count: number }>(
           "SELECT COUNT(*) AS count FROM accounts WHERE deleted_at IS NULL",
         );
@@ -133,6 +161,15 @@ export default function RootLayout() {
       setNeedsOnboarding(shouldOnboard);
       setIsReady(true);
       void runStartupHealth();
+
+      // Notification permissions and scheduling are secondary startup work.
+      // They must not keep the native splash visible while Android waits for
+      // a permission response.
+      void getDatabase()
+        .then((db) => schedulePendingRecurringNotifications(db))
+        .catch(() => {
+          // Notifications are optional and must never prevent app access.
+        });
     })();
 
     return () => {
@@ -141,10 +178,27 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (isReady) {
-      void SplashScreen.hideAsync();
+    if (!isReady) {
+      return;
     }
+
+    const elapsed = Date.now() - splashStartedAt;
+    const remaining = Math.max(0, SPLASH_MIN_DURATION_MS - elapsed);
+    const timeout = setTimeout(() => {
+      void SplashScreen.hideAsync();
+    }, remaining);
+
+    return () => clearTimeout(timeout);
   }, [isReady]);
+
+  useEffect(() => {
+    if (Platform.OS === "web" || !isReady || hasRoutedToDashboard.current) {
+      return;
+    }
+
+    hasRoutedToDashboard.current = true;
+    router.replace(needsOnboarding ? "/onboarding" : "/(tabs)/(dashboard)");
+  }, [isReady, needsOnboarding, router]);
 
   if (!isReady) {
     return null;
@@ -153,9 +207,13 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AppThemeProvider>
-        <CurrencyProvider>
-          <RootNavigator initialRouteName={needsOnboarding ? "onboarding" : "(tabs)"} />
-        </CurrencyProvider>
+        {Platform.OS === "web" ? (
+          <RootNavigator initialRouteName="index" />
+        ) : (
+          <CurrencyProvider>
+            <RootNavigator initialRouteName={needsOnboarding ? "onboarding" : "(tabs)"} />
+          </CurrencyProvider>
+        )}
       </AppThemeProvider>
     </SafeAreaProvider>
   );

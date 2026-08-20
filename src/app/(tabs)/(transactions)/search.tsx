@@ -40,6 +40,8 @@ import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { searchTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import {
   resetTransactionSearch,
   setTransactionSearch,
@@ -185,6 +187,7 @@ function ChoiceRow({
 
 export default function TransactionSearchScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("search.scroll");
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const criteria = useTransactionSearch();
@@ -353,8 +356,11 @@ export default function TransactionSearchScreen() {
     update({ types });
   };
 
-  const openEdit = (id: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(id) } });
+  const openEdit = useCallback(
+    (id: number) =>
+      router.push({ pathname: "/new-transaction", params: { id: String(id) } }),
+    [],
+  );
 
   const renderForm = (
     <View style={styles.form}>
@@ -632,6 +638,8 @@ export default function TransactionSearchScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <SectionList
+            onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+            scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
             sections={sections}
             keyExtractor={(item) => String(item.id)}
             contentInsetAdjustmentBehavior="automatic"
@@ -664,26 +672,35 @@ export default function TransactionSearchScreen() {
             </>
           }
           renderSectionHeader={({ section }) => (
-            <View style={[styles.sectionHeader, { backgroundColor: theme.surface }]}>
+            <View style={[styles.sectionHeader, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
               <Text style={[styles.sectionHeaderTitle, { color: theme.secondaryLabel }]}>
                 {section.title}
               </Text>
-              <Text style={[styles.sectionHeaderTotal, { color: section.total >= 0 ? theme.label : theme.expense }]}>
+              <Text
+                style={[
+                  styles.sectionHeaderTotal,
+                  { color: section.total < 0 ? theme.expense : theme.label },
+                ]}
+              >
                 {formatAmount(section.total, baseCurrency)}
               </Text>
             </View>
           )}
-          renderItem={({ item, index, section }) => (
-            <View
-              style={[
-                styles.resultRow,
-                { backgroundColor: theme.surface },
-                index === section.data.length - 1 && styles.resultRowLast,
-              ]}
-            >
-              <TransactionRow transaction={item} onPress={() => openEdit(item.id)} />
-            </View>
-          )}
+          renderItem={({ item, index, section }) => {
+            const isLast = index === section.data.length - 1;
+            return (
+              <View
+                style={[
+                  styles.resultRow,
+                  { backgroundColor: theme.surface, borderColor: theme.separator },
+                  isLast && styles.resultRowLast,
+                ]}
+              >
+                <TransactionRow transaction={item} onPress={openEdit} />
+                {!isLast ? <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.separator }} /> : null}
+              </View>
+            );
+          }}
           ListEmptyComponent={
             displayStatus === "ready" ? (
               <EmptyState
@@ -746,9 +763,9 @@ const styles = StyleSheet.create({
   resultsEyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
   resultsTitle: { fontSize: 19, fontWeight: "800", marginTop: spacing.xs },
   limitHint: { fontSize: 12, marginTop: -spacing.sm },
-  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
   sectionHeaderTitle: { fontSize: 13, fontWeight: "700" },
   sectionHeaderTotal: { fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  resultRow: { overflow: "hidden" },
-  resultRowLast: { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+  resultRow: { overflow: "hidden", borderLeftWidth: StyleSheet.hairlineWidth, borderRightWidth: StyleSheet.hairlineWidth },
+  resultRowLast: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
 });

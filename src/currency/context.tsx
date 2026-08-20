@@ -10,11 +10,11 @@ import {
   refreshCurrencyCatalog,
   type CurrencyRate,
 } from "./service";
+import { DEFAULT_CURRENCY_CODE, type CurrencyDefinition } from "./currencies";
 import {
-  convertMinorAmount,
-  DEFAULT_CURRENCY_CODE,
-  type CurrencyDefinition,
-} from "./currencies";
+  convertWithIndexedRates,
+  indexCurrencyRates,
+} from "./rate-index";
 
 interface CurrencyContextValue {
   baseCurrency: string;
@@ -119,25 +119,15 @@ export function useCurrency(): CurrencyContextValue {
 
 export function useCurrencyConverter() {
   const { baseCurrency, rates } = useCurrency();
+  const indexedRates = useMemo(() => indexCurrencyRates(rates), [rates]);
   return useCallback(
-    (amount: number, fromCurrency: string, toCurrency = baseCurrency): number | null => {
-      if (fromCurrency === toCurrency) return amount;
-      const direct = rates.find(
-        (rate) => rate.base === fromCurrency && rate.quote === toCurrency,
-      );
-      if (direct) {
-        return convertMinorAmount(amount, fromCurrency, toCurrency, direct.rate);
-      }
-      const baseRate = rates.find((rate) => rate.quote === fromCurrency);
-      const targetRate = rates.find((rate) => rate.quote === toCurrency);
-      if (!baseRate || !targetRate || baseRate.rate === 0) return null;
-      return convertMinorAmount(
+    (amount: number, fromCurrency: string, toCurrency = baseCurrency): number | null =>
+      convertWithIndexedRates(
         amount,
         fromCurrency,
         toCurrency,
-        targetRate.rate / baseRate.rate,
-      );
-    },
-    [baseCurrency, rates],
+        indexedRates,
+      ),
+    [baseCurrency, indexedRates],
   );
 }

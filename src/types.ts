@@ -13,9 +13,12 @@ export interface TransactionSearchCriteria {
   accountIds: number[] | null;
   types: TransactionType[];
   categoryIds: number[] | null;
+  tagIds?: number[] | null;
 }
 
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
+export type RecurringMode = "approval" | "automatic";
+export type RecurringOccurrenceStatus = "pending" | "approved" | "skipped";
 
 export interface Category {
   id: number;
@@ -68,8 +71,97 @@ export interface Transaction {
   exchangeRateDate?: string | null;
   exchangeRateProvider?: string | null;
   note: string | null;
+  merchant?: string | null;
+  tags?: Tag[];
   transactionDate: number;
   createdAt: number;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  createdAt: number;
+}
+
+export interface TransactionAttachment {
+  id: number;
+  transactionId: number;
+  originalName: string;
+  mimeType: string;
+  storagePath: string;
+  size: number;
+  createdAt: number;
+  exists: boolean;
+}
+
+export interface TransactionSplit {
+  id: number;
+  transactionId: number;
+  categoryId: number;
+  categoryName: string | null;
+  amount: number;
+  createdAt: number;
+}
+
+export interface TransactionSplitInput {
+  categoryId: number;
+  amount: number;
+}
+
+export type ReimbursementDirection = "owed_to_me" | "i_owe";
+
+export interface Person {
+  id: number;
+  name: string;
+  createdAt: number;
+}
+
+export interface PersonInput {
+  name: string;
+}
+
+export interface ReimbursementSettlement {
+  id: number;
+  reimbursementId: number;
+  settlementTransactionId: number;
+  amount: number;
+  createdAt: number;
+}
+
+export interface Reimbursement {
+  id: number;
+  transactionId: number;
+  personId: number;
+  personName: string;
+  direction: ReimbursementDirection;
+  amount: number;
+  settledAmount: number;
+  remainingAmount: number;
+  note: string | null;
+  createdAt: number;
+  settlements: ReimbursementSettlement[];
+}
+
+export interface ReimbursementInput {
+  personId?: number | null;
+  personName?: string | null;
+  direction: ReimbursementDirection;
+  amount: number;
+  note?: string | null;
+}
+
+export interface TransactionDetail {
+  transaction: Transaction;
+  splits: TransactionSplit[];
+  reimbursements: Reimbursement[];
+  tags: Tag[];
+}
+
+export interface TransactionAmountRow {
+  type: TransactionType;
+  amount: number;
+  fee: number | null;
+  accountCurrencyCode: string;
 }
 
 export interface CategoryInput {
@@ -105,6 +197,71 @@ export interface TransactionInput {
   exchangeRateProvider?: string | null;
   note: string | null;
   transactionDate: number;
+  merchant?: string | null;
+  tags?: string[];
+  allocations?: TransactionSplitInput[];
+  reimbursements?: ReimbursementInput[];
+}
+
+export interface CsvImportMapping {
+  date: string;
+  amount: string;
+  type?: string;
+  merchant?: string;
+  description?: string;
+  note?: string;
+  category?: string;
+  tags?: string;
+  sourceAccount?: string;
+  destinationAccount?: string;
+}
+
+export interface CsvRowIssue {
+  rowNumber: number;
+  code: "missing_required" | "invalid_date" | "invalid_amount" | "invalid_type" | "transfer_accounts" | "unknown_category";
+  message: string;
+  severity: "error" | "warning";
+}
+
+export interface CsvParsedRow {
+  rowNumber: number;
+  date: number | null;
+  amount: number | null;
+  type: TransactionType | null;
+  merchant: string | null;
+  note: string | null;
+  categoryName: string | null;
+  tags: string[];
+  sourceAccountName: string | null;
+  destinationAccountName: string | null;
+}
+
+export interface CsvImportPreview {
+  rowNumber: number;
+  values: Record<string, string>;
+  parsed: CsvParsedRow | null;
+  issues: CsvRowIssue[];
+  probableDuplicate: boolean;
+  selected: boolean;
+  fingerprint: string;
+}
+
+export interface ImportBatch {
+  id: number;
+  fingerprint: string;
+  sourceName: string | null;
+  rowCount: number;
+  createdAt: number;
+}
+
+export interface CsvImportReport {
+  batchId: number;
+  totalRows: number;
+  inserted: number;
+  skipped: number;
+  duplicates: number;
+  invalidRows: number;
+  unknownCategories: string[];
 }
 
 export interface Budget {
@@ -115,6 +272,32 @@ export interface Budget {
   amount: number;
   currencyCode: string;
   createdAt: number;
+}
+
+export interface BudgetPlan {
+  id: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
+  amount: number;
+  currencyCode: string;
+  rolloverEnabled: boolean;
+  isActive: boolean;
+  createdAt: number;
+}
+
+export interface BudgetPeriodSnapshot {
+  planId: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categoryIcon: import("@/constants/category-icons").CategoryIconName | null;
+  month: string;
+  currencyCode: string;
+  plannedAmount: number;
+  rolloverIn: number;
+  spent: number;
+  available: number;
+  rolloverOut: number;
 }
 
 export interface RecurringTransaction {
@@ -137,6 +320,7 @@ export interface RecurringTransaction {
   startDate: number;
   nextDate: number;
   endDate: number | null;
+  mode: RecurringMode;
   isActive: boolean;
   createdAt: number;
 }
@@ -154,7 +338,37 @@ export interface RecurringTransactionInput {
   startDate: number;
   nextDate: number;
   endDate: number | null;
+  mode?: RecurringMode;
   isActive: boolean;
+}
+
+export interface RecurringOccurrenceSnapshot {
+  type: TransactionType;
+  amount: number;
+  categoryId: number | null;
+  accountId: number;
+  destinationAccountId: number | null;
+  fee: number | null;
+  note: string | null;
+  transactionDate: number;
+  destinationAmount: number | null;
+  exchangeRate: number | null;
+  exchangeRateDate: string | null;
+  exchangeRateProvider: string | null;
+  sourceCurrencyCode: string;
+  destinationCurrencyCode: string | null;
+}
+
+export interface RecurringOccurrence {
+  id: number;
+  recurringTransactionId: number;
+  occurrenceDate: number;
+  status: RecurringOccurrenceStatus;
+  snapshot: RecurringOccurrenceSnapshot;
+  transactionId: number | null;
+  notificationId: string | null;
+  createdAt: number;
+  decidedAt: number | null;
 }
 
 export interface SavingsRule {
@@ -180,6 +394,9 @@ export type GoalStatus = "active" | "closed";
 export interface Goal {
   id: number;
   name: string;
+  description?: string | null;
+  imageUri?: string | null;
+  linkUrl?: string | null;
   targetAmount: number;
   currencyCode: string;
   targetDate: number;
@@ -195,6 +412,9 @@ export interface Goal {
 
 export interface GoalInput {
   name: string;
+  description?: string | null;
+  imageUri?: string | null;
+  linkUrl?: string | null;
   targetAmount: number;
   targetDate: number;
   currencyCode?: string;

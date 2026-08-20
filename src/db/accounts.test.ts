@@ -3,12 +3,14 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import {
   deleteAccount,
   getAccountBalance,
+  listAccounts,
   planBalanceAdjustment,
   restoreAccount,
   setAccountBalance,
   updateAccountForOnboarding,
 } from "./accounts";
 import { SCHEMA_VERSION_1 } from "./schema";
+import { TestSqliteDatabase } from "@/test-utils/in-memory-db";
 
 interface AccountRowLike {
   id: number;
@@ -101,6 +103,50 @@ describe("getAccountBalance", () => {
     const db = { getFirstAsync } as unknown as SQLiteDatabase;
 
     await expect(getAccountBalance(db, 7)).resolves.toBe(-12_250);
+  });
+});
+
+describe("listAccounts", () => {
+  it("keeps transfer fees and active reservations in the aggregated list", async () => {
+    const db = new TestSqliteDatabase();
+    await db.execAsync(SCHEMA_VERSION_1);
+    await db.execAsync(`
+      INSERT INTO categories (id, type, name, is_seed) VALUES
+        (1, 'account', 'Compte', 1),
+        (2, 'income', 'Revenu', 1),
+        (3, 'expense', 'Dépense', 1);
+      INSERT INTO accounts (id, name, category_id, created_at) VALUES
+        (1, 'Source', 1, 1),
+        (2, 'Destination', 1, 1),
+        (3, 'Supprimé', 1, 1);
+      UPDATE accounts SET deleted_at = 9 WHERE id = 3;
+      INSERT INTO transactions
+        (type, amount, category_id, account_id, destination_account_id, fee,
+         destination_amount, transaction_date, created_at)
+      VALUES
+        ('income', 1000, 2, 1, NULL, NULL, NULL, 1, 1),
+        ('expense', 200, 3, 1, NULL, NULL, NULL, 2, 2),
+        ('transfer', 300, NULL, 1, 2, 10, 300, 3, 3),
+        ('income', 500, 2, 3, NULL, NULL, NULL, 4, 4);
+      INSERT INTO goals (id, name, target_amount, target_date, created_at)
+        VALUES (1, 'Objectif', 1000, 100, 1);
+      INSERT INTO goal_reservations
+        (goal_id, source_account_id, amount, reservation_date, created_at)
+        VALUES (1, 1, 100, 1, 1);
+    `);
+
+    const accounts = await listAccounts(db as unknown as SQLiteDatabase);
+    expect(accounts).toHaveLength(2);
+    expect(accounts.find((account) => account.id === 1)).toMatchObject({
+      balance: 490,
+      reservedAmount: 100,
+      availableBalance: 390,
+    });
+    expect(accounts.find((account) => account.id === 2)).toMatchObject({
+      balance: 300,
+      reservedAmount: 0,
+      availableBalance: 300,
+    });
   });
 });
 

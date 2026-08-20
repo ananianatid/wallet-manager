@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { exportEncryptedBackup } from "@/backup/export";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
 
@@ -135,5 +135,5 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     flexGrow: 1,
   },
-  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
+  title: { ...typography.title },
 });

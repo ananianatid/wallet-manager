@@ -1,4 +1,5 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { useState } from "react";
@@ -19,12 +20,16 @@ import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
+import { isValidGoalLink } from "@/utils/goals";
 
 export default function NewGoalScreen() {
   const theme = useTheme();
   const { baseCurrency } = useCurrency();
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [targetDate, setTargetDate] = useState(() => {
     const date = new Date();
     date.setFullYear(date.getFullYear() + 1);
@@ -33,6 +38,17 @@ export default function NewGoalScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const previewAmount = parseMoneyInput(targetAmount, baseCurrency);
+
+  const chooseImage = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "image/*",
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
 
   const save = async () => {
     const amount = parseMoneyInput(targetAmount, baseCurrency);
@@ -44,8 +60,8 @@ export default function NewGoalScreen() {
       Alert.alert("Montant invalide", `Saisissez un montant positif en ${baseCurrency}.`);
       return;
     }
-    if (targetDate.getTime() <= Date.now()) {
-      Alert.alert("Date invalide", "Choisissez une date future.");
+    if (linkUrl.trim() && !isValidGoalLink(linkUrl)) {
+      Alert.alert("Lien invalide", "Utilisez une adresse commençant par http:// ou https://.");
       return;
     }
 
@@ -54,6 +70,9 @@ export default function NewGoalScreen() {
       const db = await getDatabase();
       await createGoal(db, {
         name,
+        description,
+        imageUri,
+        linkUrl,
         targetAmount: amount,
         currencyCode: baseCurrency,
         targetDate: targetDate.getTime(),
@@ -86,6 +105,50 @@ export default function NewGoalScreen() {
             autoFocus
           />
         </FormField>
+
+        <FormField label="Description (optionnelle)">
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Pourquoi cet objectif compte pour vous ?"
+            placeholderTextColor={theme.secondaryLabel}
+            multiline
+            maxLength={500}
+            accessibilityLabel="Description de l’objectif"
+            style={[styles.input, styles.multilineInput, { backgroundColor: theme.surface, color: theme.label }]}
+          />
+        </FormField>
+
+        <FormField label="Lien (optionnel)" hint="Ajoutez une page produit ou une référence.">
+          <TextInput
+            value={linkUrl}
+            onChangeText={setLinkUrl}
+            placeholder="https://…"
+            placeholderTextColor={theme.secondaryLabel}
+            autoCapitalize="none"
+            keyboardType="url"
+            inputMode="url"
+            accessibilityLabel="Lien de l’objectif"
+            style={[styles.input, { backgroundColor: theme.surface, color: theme.label }]}
+          />
+        </FormField>
+
+        <View style={[styles.attachmentRow, { backgroundColor: theme.surfaceElevated }]}>
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            <Text style={{ color: theme.label, fontWeight: "700" }}>Image de référence</Text>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+              {imageUri ? "Une image locale est sélectionnée." : "Ajoutez une image si elle vous aide à visualiser la cible."}
+            </Text>
+          </View>
+          <Pressable
+            onPress={chooseImage}
+            accessibilityRole="button"
+            accessibilityLabel={imageUri ? "Remplacer l’image de l’objectif" : "Ajouter une image à l’objectif"}
+            style={({ pressed }) => [styles.attachmentButton, { backgroundColor: theme.accent }, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={{ color: theme.onAccent, fontWeight: "700" }}>{imageUri ? "Remplacer" : "Ajouter"}</Text>
+          </Pressable>
+        </View>
 
         <FormField label="Montant à réserver">
         <View style={[styles.amountCard, { backgroundColor: theme.surfaceElevated }]}>
@@ -131,7 +194,6 @@ export default function NewGoalScreen() {
           <DateTimePicker
             mode="date"
             value={targetDate}
-            minimumDate={new Date()}
             onValueChange={(_, date) => {
               setShowDatePicker(false);
               if (date) setTargetDate(date);
@@ -189,6 +251,23 @@ const styles = StyleSheet.create({
   info: {
     gap: spacing.xs,
     padding: spacing.md,
+    borderRadius: radius.md,
+  },
+  multilineInput: {
+    minHeight: 96,
+    textAlignVertical: "top",
+  },
+  attachmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+  },
+  attachmentButton: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
   },
   saveButton: {

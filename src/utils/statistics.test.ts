@@ -10,6 +10,7 @@ import {
   totals,
 } from "./statistics";
 import type { SavingsRule, Transaction } from "../types";
+import { signedAmountTone } from "./financial-display";
 
 function transaction(
   id: number,
@@ -99,6 +100,20 @@ describe("savingsByRule", () => {
     expect(result[0].amount).toBe(5_000);
   });
 
+  it("cumule tout l'historique quand la période commence à zéro", () => {
+    const income = [
+      transaction(1, "income", 100_000, JULY),
+      transaction(2, "income", 50_000, AUGUST),
+      transaction(3, "income", 30_000, JUNE),
+    ];
+    const result = savingsByRule(
+      income,
+      [rule({ id: 1, percent: 10, startDate: null })],
+      0,
+    );
+    expect(result[0].amount).toBe(18_000);
+  });
+
   it("combine une règle globale et une règle par catégorie", () => {
     const income = [
       transaction(1, "income", 100_000, AUGUST, 10, "Salaire"),
@@ -176,6 +191,14 @@ describe("totals", () => {
       fees: 1_500,
       net: 58_500,
     });
+  });
+});
+
+describe("signedAmountTone", () => {
+  it("réserve le rouge aux montants négatifs", () => {
+    expect(signedAmountTone(-1)).toBe("expense");
+    expect(signedAmountTone(1)).toBe("income");
+    expect(signedAmountTone(0)).toBe("neutral");
   });
 });
 

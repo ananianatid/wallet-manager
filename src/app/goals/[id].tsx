@@ -1,5 +1,7 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
+import { Image } from "expo-image";
+import * as WebBrowser from "expo-web-browser";
 import { ArrowUpRight, Calendar, Check, Pencil, RotateCcw, Target, Trash2, Undo2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
@@ -31,6 +33,7 @@ export default function GoalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const goalId = Number(id);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -114,6 +117,12 @@ export default function GoalDetailScreen() {
         },
       },
     ]);
+  };
+
+  const openLink = async () => {
+    if (goal?.linkUrl) {
+      await WebBrowser.openBrowserAsync(goal.linkUrl);
+    }
   };
 
   return (
@@ -244,6 +253,43 @@ export default function GoalDetailScreen() {
                 ) : null}
               </View>
 
+              {goal.description ? (
+                <View style={[styles.detailCard, { backgroundColor: theme.surface }]}>
+                  <Text style={{ color: theme.label, fontWeight: "700" }}>Description</Text>
+                  <Text selectable style={{ color: theme.secondaryLabel, lineHeight: 19 }}>
+                    {goal.description}
+                  </Text>
+                </View>
+              ) : null}
+
+              {goal.imageUri && !imageFailed ? (
+                <Image
+                  source={{ uri: goal.imageUri }}
+                  contentFit="cover"
+                  onError={() => setImageFailed(true)}
+                  accessibilityLabel={`Image de référence de ${goal.name}`}
+                  style={styles.goalImage}
+                />
+              ) : goal.imageUri ? (
+                <View style={[styles.missingMedia, { backgroundColor: theme.surfaceElevated }]}>
+                  <Text style={{ color: theme.secondaryLabel }}>Image indisponible sur cet appareil.</Text>
+                </View>
+              ) : null}
+
+              {goal.linkUrl ? (
+                <Pressable
+                  onPress={() => void openLink()}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Ouvrir le lien de ${goal.name}`}
+                  style={({ pressed }) => [styles.linkCard, { backgroundColor: theme.surface }, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={{ color: theme.accent, fontWeight: "700" }} numberOfLines={1}>
+                    {goal.linkUrl}
+                  </Text>
+                  <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Ouvrir la référence</Text>
+                </Pressable>
+              ) : null}
+
               <Pressable
                 onPress={() => router.push({ pathname: "/new-transaction", params: { goalId: String(goal.id) } })}
                 disabled={goal.status !== "active"}
@@ -302,6 +348,28 @@ const styles = StyleSheet.create({
   },
   hero: {
     gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  detailCard: {
+    gap: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  goalImage: {
+    width: "100%",
+    height: 190,
+    borderRadius: radius.lg,
+  },
+  missingMedia: {
+    minHeight: 72,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  linkCard: {
+    gap: spacing.xs,
     padding: spacing.lg,
     borderRadius: radius.lg,
   },

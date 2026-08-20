@@ -32,15 +32,18 @@ function makeData(amount: number): SafeToSpend {
 }
 
 describe("SafeToSpendCard", () => {
-  it("labels the summary total according to the selected period", async () => {
-    const { getByText } = await render(
+  it("affiche uniquement le détail du bilan", async () => {
+    const { getByText, queryByText } = await render(
       <MonthlySummaryCard
         totals={{ income: 120_000, expense: 45_000, fees: 0, net: 75_000 }}
         totalLabel="Total de la période"
       />,
     );
 
-    expect(getByText("Total de la période")).toBeTruthy();
+    expect(queryByText("Total de la période")).toBeNull();
+    expect(getByText("Revenus")).toBeTruthy();
+    expect(getByText("Dépenses")).toBeTruthy();
+    expect(getByText("Écart")).toBeTruthy();
   });
 
   it("hides period totals while the selected period is loading", async () => {
@@ -62,7 +65,7 @@ describe("SafeToSpendCard", () => {
     );
 
     expect(getAllByText(formatAmount(75_000, "XOF"))[0].props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
+      expect.arrayContaining([expect.objectContaining({ color: "#B9D9C0" })]),
     );
     expect(getByText("Revenus")).toBeTruthy();
     expect(getByText("Dépenses")).toBeTruthy();
@@ -75,10 +78,10 @@ describe("SafeToSpendCard", () => {
     );
 
     expect(getByText(formatAmount(-15_000, "XOF")).props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
+      expect.arrayContaining([expect.objectContaining({ color: "#5B2924" })]),
     );
     expect(
-      getByText("Il manque 15 000 XOF pour couvrir les échéances prévues."),
+      getByText("Prévision déficitaire : il manque 15 000 XOF après les échéances prévues."),
     ).toBeTruthy();
   });
 
@@ -95,9 +98,21 @@ describe("SafeToSpendCard", () => {
     expect(queryByText(/Horizon/)).toBeNull();
     expect(queryByText(/compte.*inclus/)).toBeNull();
     expect(queryByText("Revenus")).toBeNull();
+    expect(getByText("Identique au solde actuel")).toBeTruthy();
     expect(getByText(formatAmount(30_000, "XOF")).props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: "#FFFFFF" })]),
+      expect.arrayContaining([expect.objectContaining({ color: "#B9D9C0" })]),
     );
+  });
+
+  it("affiche le solde actuel sans présenter un revenu futur comme déjà disponible", async () => {
+    const data = makeData(175_000);
+    data.currentAvailable = 75_000;
+    const { getByText } = await render(
+      <SafeToSpendCard data={data} interactive={false} />,
+    );
+
+    expect(getByText(formatAmount(75_000, "XOF"))).toBeTruthy();
+    expect(getByText(`+${formatAmount(120_000, "XOF")} à venir`)).toBeTruthy();
   });
 
   it("shows the balance before calculation when provided", async () => {

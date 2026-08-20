@@ -16,14 +16,17 @@ import { TransactionRow } from "@/components/transaction-row";
 import { listAccounts } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { applyDueRecurring } from "@/db/recurring";
+import { applyDueRecurring, listPendingRecurringOccurrences } from "@/db/recurring";
+import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 import { getSetting, setSetting } from "@/db/settings";
-import { listTransactions } from "@/db/transactions";
-import { filterTransactions, setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
+import { listTransactionAmountRows, listTransactions } from "@/db/transactions";
+import { setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 import type { Transaction } from "@/types";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   formatAmount,
@@ -42,44 +45,50 @@ interface DaySection {
   data: Transaction[];
 }
 
-interface MonthSection {
-  key: string;
-  title: string;
-  total: number;
-  data: Transaction[];
-}
-
-type TransactionSection = DaySection | MonthSection;
+type TransactionSection = DaySection;
 
 export default function TransactionsScreen() {
   const theme = useTheme();
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const insets = useSafeAreaInsets();
+  const onScroll = useScrollPerformance("transactions.scroll");
   const filters = useTransactionFilters();
   const [recurringError, setRecurringError] = useState<string | null>(null);
   const [recurringNotice, setRecurringNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [rows, accs] = await Promise.all([
+    const startMs =
+      filters.mode === "month"
+        ? new Date(filters.year, filters.month, 1).getTime()
+        : null;
+    const endMs =
+      filters.mode === "month"
+        ? new Date(filters.year, filters.month + 1, 1).getTime()
+        : null;
+    const hasDisplayFilters =
+      filters.accountIds != null ||
+      filters.types.length !== 3 ||
+      filters.categoryIds != null;
+    const [rows, accs, summaryRows] = await Promise.all([
       listTransactions(db, {
-        startMs:
-          filters.mode === "month"
-            ? new Date(filters.year, filters.month, 1).getTime()
-            : null,
-        endMs:
-          filters.mode === "month"
-            ? new Date(filters.year, filters.month + 1, 1).getTime()
-            : null,
+        startMs,
+        endMs,
+        accountIds: filters.accountIds,
+        types: filters.types,
+        categoryIds: filters.categoryIds,
         order: "desc",
       }),
       listAccounts(db),
+      hasDisplayFilters
+        ? listTransactionAmountRows(db, { startMs, endMs })
+        : Promise.resolve(null),
     ]);
     return {
-      transactions: filterTransactions(rows, filters),
+      transactions: rows,
       accounts: accs,
-      monthTotals: totals(rows, convert),
+      monthTotals: totals(summaryRows ?? rows, convert),
     };
   }, [filters, convert]);
 
@@ -99,14 +108,12 @@ export default function TransactionsScreen() {
     ).getTime();
     const lastCheck = await getSetting(db, "recurring_last_check");
     if (lastCheck === String(todayKey)) {
-      return 0;
+      return (await listPendingRecurringOccurrences(db)).length;
     }
-    const generated = await applyDueRecurring(db, Date.now());
+    await applyDueRecurring(db, Date.now());
+    await schedulePendingRecurringNotifications(db);
     await setSetting(db, "recurring_last_check", String(todayKey));
-    if (generated > 0) {
-      return generated;
-    }
-    return 0;
+    return (await listPendingRecurringOccurrences(db)).length;
   }, []);
 
   useFocusEffect(
@@ -115,10 +122,10 @@ export default function TransactionsScreen() {
         setRecurringError(null);
         setRecurringNotice(null);
         try {
-          const generated = await checkRecurring();
-          if (generated > 0) {
+          const pendingCount = await checkRecurring();
+          if (pendingCount > 0) {
             setRecurringNotice(
-              `${generated} échéance${generated > 1 ? "s" : ""} récurrente${generated > 1 ? "s" : ""} ajoutée${generated > 1 ? "s" : ""} automatiquement.`,
+              `${pendingCount} échéance${pendingCount > 1 ? "s" : ""} récurrente${pendingCount > 1 ? "s" : ""} à valider.`,
             );
           }
         } catch (error) {
@@ -146,77 +153,43 @@ export default function TransactionsScreen() {
 
   const sections = useMemo<TransactionSection[]>(() => {
     const rows = transactions ?? [];
-
-    if (filters.mode === "all") {
-      const groups = new Map<string, MonthSection>();
-      for (const t of rows) {
-        const date = new Date(t.transactionDate);
-        const key = `${date.getFullYear()}-${date.getMonth()}`;
-        let section = groups.get(key);
-        if (!section) {
-          const label = formatMonthLabel(
-            date.getFullYear(),
-            date.getMonth(),
-          );
-          section = {
-            key,
-            title: label.charAt(0).toUpperCase() + label.slice(1),
-            total: 0,
-            data: [],
-          };
-          groups.set(key, section);
-        }
-        section.data.push(t);
-        const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        section.total +=
-          t.type === "income"
-            ? amount
-            : t.type === "expense"
-              ? -amount
-              : fee
-                ? -fee
-                : 0;
-      }
-      const sorted = [...groups.values()];
-      sorted.sort((a, b) => (b.key < a.key ? -1 : b.key > a.key ? 1 : 0));
-      return sorted;
-    }
-
     const groups = new Map<string, DaySection>();
     for (const t of rows) {
       const date = new Date(t.transactionDate);
       const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
       let section = groups.get(key);
-        if (!section) {
-          section = {
-            key,
-            title: formatDayLabel(t.transactionDate),
-            income: 0,
-            expense: 0,
-            data: [],
-          };
-          groups.set(key, section);
-        }
-        section.data.push(t);
-        const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
-        if (t.type === "income") {
-          section.income += amount;
-        } else if (t.type === "expense") {
-          section.expense += amount;
-        } else if (fee) {
-          section.expense += fee;
-        }
+      if (!section) {
+        section = {
+          key,
+          title: formatDayLabel(t.transactionDate),
+          income: 0,
+          expense: 0,
+          data: [],
+        };
+        groups.set(key, section);
+      }
+      section.data.push(t);
+      const amount = convert(t.amount, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+      const fee = t.fee == null ? 0 : convert(t.fee, t.accountCurrencyCode ?? baseCurrency) ?? 0;
+      if (t.type === "income") {
+        section.income += amount;
+      } else if (t.type === "expense") {
+        section.expense += amount;
+      } else if (fee) {
+        section.expense += fee;
+      }
     }
     return [...groups.values()];
-  }, [baseCurrency, convert, filters, transactions]);
+  }, [baseCurrency, convert, transactions]);
 
   const monthRows = transactions ?? [];
 
   const openNew = () => router.push("/new-transaction");
-  const openEdit = (id: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(id) } });
+  const openDetail = useCallback(
+    (id: number) =>
+      router.push({ pathname: "/transaction-detail" as never, params: { id: String(id) } }),
+    [],
+  );
 
   const hasTransactions = monthRows.length > 0;
   const openSearch = () => router.push("/search");
@@ -271,6 +244,8 @@ export default function TransactionsScreen() {
       ) : (
       <SectionList<Transaction, TransactionSection>
         style={{ flex: 1 }}
+        onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+        scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl, flexGrow: 1 }}
         sections={sections}
@@ -281,22 +256,20 @@ export default function TransactionsScreen() {
             <View
               style={[
                 styles.sectionCardRow,
-                { backgroundColor: theme.surface },
+                { backgroundColor: theme.surface, borderColor: theme.separator },
                 isLast && styles.sectionCardRowLast,
               ]}
             >
               <TransactionRow
                 transaction={item}
                 hideDate={filters.mode === "month"}
-                onPress={() => openEdit(item.id)}
+                onPress={openDetail}
               />
               {!isLast ? (
                 <View
                   style={{
                     height: StyleSheet.hairlineWidth,
                     backgroundColor: theme.separator,
-                    marginLeft: spacing.lg + 22,
-                    marginRight: spacing.lg,
                   }}
                 />
               ) : null}
@@ -307,7 +280,7 @@ export default function TransactionsScreen() {
           <View
             style={[
               styles.dayHeader,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.surface, borderColor: theme.separator },
             ]}
           >
             <Text
@@ -316,32 +289,14 @@ export default function TransactionsScreen() {
             >
               {section.title}
             </Text>
-            {"income" in section ? (
-              <View style={styles.daySummary}>
-                {section.income > 0 ? (
-                  <Text style={[styles.dayAmount, { color: theme.income }]}>
-                    + {formatAmount(section.income, baseCurrency)}
-                  </Text>
-                ) : null}
-                {section.expense > 0 ? (
-                  <Text style={[styles.dayAmount, { color: theme.expense }]}>
-                    −{formatAmount(section.expense, baseCurrency)}
-                  </Text>
-                ) : null}
-              </View>
-            ) : (
-              <Text
-                style={[
-                  styles.dayTotal,
-                  {
-                    color:
-                      section.total >= 0 ? theme.label : theme.expense,
-                  },
-                ]}
-              >
-                {formatAmount(section.total, baseCurrency)}
-              </Text>
-            )}
+            <View style={styles.daySummary}>
+              {section.income > 0 ? (
+                <Text style={[styles.dayAmount, { color: theme.income }]}>+ {formatAmount(section.income, baseCurrency)}</Text>
+              ) : null}
+              {section.expense > 0 ? (
+                <Text style={[styles.dayAmount, { color: theme.expense }]}>−{formatAmount(section.expense, baseCurrency)}</Text>
+              ) : null}
+            </View>
           </View>
         )}
         stickySectionHeadersEnabled={false}
@@ -425,13 +380,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
-  },
-  dayTotal: {
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
   },
   daySummary: {
     flexDirection: "row",
@@ -445,8 +398,11 @@ const styles = StyleSheet.create({
   },
   sectionCardRow: {
     marginHorizontal: spacing.lg,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
   },
   sectionCardRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomLeftRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
     paddingBottom: spacing.md + spacing.sm,

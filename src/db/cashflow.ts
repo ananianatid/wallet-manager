@@ -7,11 +7,14 @@ import { listTransactions } from "./transactions";
 import { savingsByRule } from "../utils/statistics";
 import { convertMinorAmount } from "@/currency/currencies";
 import { getRateForPair, getReferenceCurrency } from "@/currency/service";
+import type { CurrencyRate } from "@/currency/service";
 import type {
   Account,
   Frequency,
+  Goal,
   RecurringTransaction,
   SafeToSpend,
+  SavingsRule,
   Transaction,
 } from "../types";
 
@@ -178,11 +181,62 @@ function findNextIncome(
   return dates.length > 0 ? Math.min(...dates) : null;
 }
 
-export async function calculateSafeToSpend(
+export interface SafeToSpendInputs {
+  accountsRows: Account[];
+  transactions: Transaction[];
+  recurring: RecurringTransaction[];
+  goals: Goal[];
+  savingsRules: SavingsRule[];
+  referenceCurrency: string;
+  rates: Map<string, number>;
+}
+
+export interface SafeToSpendLoadOptions {
+  referenceCurrency?: string;
+  currencyRates?: readonly CurrencyRate[];
+}
+
+function currenciesIn(inputs: Pick<SafeToSpendInputs, "accountsRows" | "transactions">): Set<string> {
+  const currencies = new Set(inputs.accountsRows.map((account) => account.currencyCode));
+  for (const transaction of inputs.transactions) {
+    if (transaction.accountCurrencyCode) currencies.add(transaction.accountCurrencyCode);
+    if (transaction.destinationCurrencyCode) currencies.add(transaction.destinationCurrencyCode);
+  }
+  return currencies;
+}
+
+function rateFromProvidedRows(
+  rows: readonly CurrencyRate[] | undefined,
+  from: string,
+  to: string,
+): number | null {
+  if (from === to) return 1;
+  const direct = rows?.find((row) => row.base === from && row.quote === to);
+  if (direct?.rate && Number.isFinite(direct.rate) && direct.rate > 0) {
+    return direct.rate;
+  }
+  const fromBase = rows?.find((row) => row.quote === from);
+  const toBase = rows?.find((row) => row.quote === to);
+  if (
+    !fromBase ||
+    !toBase ||
+    fromBase.base !== toBase.base ||
+    !Number.isFinite(fromBase.rate) ||
+    !Number.isFinite(toBase.rate) ||
+    fromBase.rate <= 0
+  ) {
+    return null;
+  }
+  return toBase.rate / fromBase.rate;
+}
+
+export async function loadSafeToSpendInputs(
   db: SQLiteDatabase,
   now = Date.now(),
-): Promise<SafeToSpend> {
-  // Due recurring rows become real transactions first, so the forecast cannot double-count them.
+  options: SafeToSpendLoadOptions = {},
+): Promise<SafeToSpendInputs> {
+  // Due recurring rows become pending proposals first; they are not counted
+  // until the user explicitly approves them.
   await applyDueRecurring(db, now);
   const [accountsRows, transactions, recurring, goals, savingsRules] = await Promise.all([
     listAccounts(db),
@@ -191,21 +245,50 @@ export async function calculateSafeToSpend(
     listGoals(db),
     listSavingsRules(db),
   ]);
-  const referenceCurrency = await getReferenceCurrency(db);
-  const currencies = new Set(accountsRows.map((account) => account.currencyCode));
-  for (const transaction of transactions) {
-    if (transaction.accountCurrencyCode) currencies.add(transaction.accountCurrencyCode);
-    if (transaction.destinationCurrencyCode) currencies.add(transaction.destinationCurrencyCode);
-  }
+  const referenceCurrency = options.referenceCurrency ?? (await getReferenceCurrency(db));
+  const currencies = currenciesIn({ accountsRows, transactions });
   const rates = new Map<string, number>();
   for (const currency of currencies) {
     if (currency === referenceCurrency) {
       rates.set(currency, 1);
       continue;
     }
-    const rate = await getRateForPair(db, currency, referenceCurrency);
-    if (rate) rates.set(currency, rate.rate);
+    const providedRate = rateFromProvidedRows(
+      options.currencyRates,
+      currency,
+      referenceCurrency,
+    );
+    if (providedRate != null) {
+      rates.set(currency, providedRate);
+      continue;
+    }
+    const cachedRate = await getRateForPair(db, currency, referenceCurrency);
+    if (cachedRate) rates.set(currency, cachedRate.rate);
   }
+  return {
+    accountsRows,
+    transactions,
+    recurring,
+    goals,
+    savingsRules,
+    referenceCurrency,
+    rates,
+  };
+}
+
+export function calculateSafeToSpendFromInputs(
+  inputs: SafeToSpendInputs,
+  now = Date.now(),
+): SafeToSpend {
+  const {
+    accountsRows,
+    transactions,
+    recurring,
+    goals,
+    savingsRules,
+    referenceCurrency,
+    rates,
+  } = inputs;
   const accounts = new Map(accountsRows.map((account) => [account.id, account]));
   const nextIncomeDate = findNextIncome(transactions, recurring, accounts, now);
   const usesFallbackHorizon = nextIncomeDate == null;
@@ -328,4 +411,15 @@ export async function calculateSafeToSpend(
           }
         : null,
   };
+}
+
+export async function calculateSafeToSpend(
+  db: SQLiteDatabase,
+  now = Date.now(),
+  options: SafeToSpendLoadOptions = {},
+): Promise<SafeToSpend> {
+  return calculateSafeToSpendFromInputs(
+    await loadSafeToSpendInputs(db, now, options),
+    now,
+  );
 }

@@ -1,7 +1,8 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Eye, EyeOff } from "lucide-react-native";
 import { useState } from "react";
 import {
-  Alert, StyleSheet, Text, TextInput,
+  Alert, Pressable, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import {
   applyRestoredBackup,
@@ -9,7 +10,7 @@ import {
   type RestoredBackupInfo,
 } from "@/backup/restore";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { radius, spacing, useTheme } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
 
@@ -18,6 +19,7 @@ export default function BackupRestoreScreen() {
   const params = useLocalSearchParams<{ uri?: string }>();
   const uri = params.uri ?? "";
   const [passphrase, setPassphrase] = useState("");
+  const [showPassphrase, setShowPassphrase] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,27 +77,38 @@ export default function BackupRestoreScreen() {
         </Text>
         {error ? <InlineError message={error} /> : null}
         <FormField label="Mot de passe de la sauvegarde">
-          <TextInput
-            value={passphrase}
-            onChangeText={setPassphrase}
-            placeholder="Mot de passe"
-            placeholderTextColor={theme.secondaryLabel}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={256}
-            accessibilityLabel="Mot de passe de la sauvegarde"
-            style={{
-              color: theme.label,
-              backgroundColor: theme.surface,
-              borderColor: theme.separator,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderRadius: radius.md,
-              minHeight: 48,
-              paddingHorizontal: spacing.lg,
-              fontSize: 16,
-            }}
-          />
+          <View
+            style={[
+              styles.passphraseField,
+              { backgroundColor: theme.surface, borderColor: theme.separator },
+            ]}
+          >
+            <TextInput
+              value={passphrase}
+              onChangeText={setPassphrase}
+              placeholder="Mot de passe"
+              placeholderTextColor={theme.secondaryLabel}
+              secureTextEntry={!showPassphrase}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={256}
+              accessibilityLabel="Mot de passe de la sauvegarde"
+              style={[styles.passphraseInput, { color: theme.label }]}
+            />
+            <Pressable
+              onPress={() => setShowPassphrase((visible) => !visible)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassphrase ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              accessibilityHint="Affiche ou masque le mot de passe saisi."
+              style={({ pressed }) => [styles.visibilityButton, pressed && { opacity: 0.65 }]}
+            >
+              {showPassphrase ? (
+                <EyeOff size={20} strokeWidth={2.2} color={theme.secondaryLabel} />
+              ) : (
+                <Eye size={20} strokeWidth={2.2} color={theme.secondaryLabel} />
+              )}
+            </Pressable>
+          </View>
         </FormField>
         <ActionButton
           label={busy ? "Restauration…" : "Restaurer"}
@@ -114,5 +127,24 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     flexGrow: 1,
   },
-  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.2 },
+  title: { ...typography.title },
+  passphraseField: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passphraseInput: {
+    flex: 1,
+    minHeight: 46,
+    paddingHorizontal: spacing.lg,
+    fontSize: 16,
+  },
+  visibilityButton: {
+    minWidth: 48,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

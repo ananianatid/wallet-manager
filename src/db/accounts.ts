@@ -61,6 +61,7 @@ const reservedSum = (accountRef: string): string => `
 const txAccountsActive = `
   AND (SELECT a2.deleted_at FROM accounts a2 WHERE a2.id = t.account_id) IS NULL
   AND (SELECT a2.deleted_at FROM accounts a2 WHERE a2.id = t.destination_account_id) IS NULL
+  AND t.transaction_date <= CAST(strftime('%s', 'now') AS INTEGER) * 1000
 `;
 
 const accountSelect = (where: string): string => `
@@ -90,9 +91,57 @@ const accountSelect = (where: string): string => `
   ${where}
 `;
 
+const accountListSelect = (where: string): string => `
+  WITH transaction_balances AS (
+    SELECT a2.id AS accountId,
+           COALESCE(SUM(
+             CASE
+               WHEN t.type = 'income' THEN t.amount
+               WHEN t.type = 'expense' THEN -t.amount
+               WHEN t.type = 'transfer' THEN
+                 CASE
+                   WHEN t.account_id = a2.id THEN -(t.amount + COALESCE(t.fee, 0))
+                   ELSE COALESCE(t.destination_amount, t.amount)
+                 END
+             END
+           ), 0) AS balance
+    FROM accounts a2
+    LEFT JOIN transactions t
+      ON t.account_id = a2.id OR t.destination_account_id = a2.id
+    LEFT JOIN accounts source_account ON source_account.id = t.account_id
+    LEFT JOIN accounts destination_account ON destination_account.id = t.destination_account_id
+    WHERE source_account.deleted_at IS NULL
+      AND destination_account.deleted_at IS NULL
+      AND t.transaction_date <= CAST(strftime('%s', 'now') AS INTEGER) * 1000
+    GROUP BY a2.id
+  ), reservation_totals AS (
+    SELECT source_account_id AS accountId,
+           COALESCE(SUM(amount), 0) AS reservedAmount
+    FROM goal_reservations
+    WHERE released_at IS NULL
+    GROUP BY source_account_id
+  )
+  SELECT a.id, a.name,
+         a.group_id AS groupId,
+         g.name AS groupName,
+         a.created_at AS createdAt,
+         a.hidden AS hidden,
+         a.exclude_from_total AS excludeFromTotal,
+         a.currency_code AS currencyCode,
+         a.description AS description,
+         COALESCE(rt.reservedAmount, 0) AS reservedAmount,
+         COALESCE(tb.balance, 0) AS balance,
+         COALESCE(tb.balance, 0) - COALESCE(rt.reservedAmount, 0) AS availableBalance
+  FROM accounts a
+  LEFT JOIN account_groups g ON g.id = a.group_id
+  LEFT JOIN transaction_balances tb ON tb.accountId = a.id
+  LEFT JOIN reservation_totals rt ON rt.accountId = a.id
+  ${where}
+`;
+
 export async function listAccounts(db: SQLiteDatabase): Promise<Account[]> {
   const rows = await db.getAllAsync<AccountRow>(
-    `${accountSelect("WHERE a.deleted_at IS NULL")} ORDER BY a.name`,
+    `${accountListSelect("WHERE a.deleted_at IS NULL")} ORDER BY a.name`,
   );
   return rows.map(mapAccount);
 }
@@ -127,7 +176,7 @@ export async function listDeletedAccounts(
   db: SQLiteDatabase,
 ): Promise<Account[]> {
   const rows = await db.getAllAsync<AccountRow>(
-    `${accountSelect("WHERE a.deleted_at IS NOT NULL")} ORDER BY a.name`,
+    `${accountListSelect("WHERE a.deleted_at IS NOT NULL")} ORDER BY a.name`,
   );
   return rows.map(mapAccount);
 }

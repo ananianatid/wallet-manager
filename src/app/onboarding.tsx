@@ -190,7 +190,7 @@ export default function OnboardingScreen() {
         await setSetting(db, "onboarding_completed", "1");
       });
       void refresh();
-      router.replace("/");
+      router.replace("/(tabs)/(dashboard)");
     } catch (cause) {
       log.error("onboarding.finish", "Échec de la finalisation de l’onboarding", cause);
       setError(userMessage(cause, "Impossible de terminer la configuration."));
@@ -215,7 +215,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
       >
         <Image
-          source={require("../../assets/images/wallet-logo-square.png")}
+          source={require("../../assets/images/wallet-logo-green-v4.png")}
           accessible
           accessibilityRole="image"
           accessibilityLabel="Logo Wallet"

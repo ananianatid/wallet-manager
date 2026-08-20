@@ -1,9 +1,9 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Alert,
-  FlatList,
+  SectionList,
   Pressable,
   StyleSheet,
   Text,
@@ -16,14 +16,24 @@ import { deleteAccount, getAccount } from "@/db/accounts";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { listTransactionsByAccount } from "@/db/transactions";
-import { spacing, useTheme } from "@/theme";
-import { formatAmount } from "@/utils/format";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
+import { radius, spacing, useTheme } from "@/theme";
+import { formatAmount, formatDayLabel } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
+import type { Transaction } from "@/types";
+
+interface AccountDaySection {
+  key: string;
+  title: string;
+  data: Transaction[];
+}
 
 export default function AccountDetailScreen() {
   const theme = useTheme();
+  const onScroll = useScrollPerformance("account.scroll");
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,10 +51,28 @@ export default function AccountDetailScreen() {
   const resource = useAsyncResource(load, "accounts.detail");
   const reload = resource.reload;
   const account = resource.data?.account ?? null;
-  const transactions = resource.data?.transactions ?? [];
+  const transactions = resource.data?.transactions;
+  const sections = useMemo<AccountDaySection[]>(() => {
+    const groups = new Map<string, AccountDaySection>();
+    for (const transaction of transactions ?? []) {
+      const date = new Date(transaction.transactionDate);
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const section = groups.get(key) ?? {
+        key,
+        title: formatDayLabel(transaction.transactionDate),
+        data: [],
+      };
+      section.data.push(transaction);
+      groups.set(key, section);
+    }
+    return [...groups.values()];
+  }, [transactions]);
 
-  const openEdit = (transactionId: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(transactionId) } });
+  const openEdit = useCallback(
+    (transactionId: number) =>
+      router.push({ pathname: "/new-transaction", params: { id: String(transactionId) } }),
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -114,24 +142,44 @@ export default function AccountDetailScreen() {
       ) : !account ? (
         <ScreenState status="error" message="Ce compte est introuvable." />
       ) : (
-      <FlatList
+      <SectionList
         style={{ flex: 1 }}
+        onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+        scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: spacing.xxl, flexGrow: 1 }}
-        data={transactions}
+        sections={sections}
         keyExtractor={(t) => String(t.id)}
-        renderItem={({ item }) => (
-          <TransactionRow transaction={item} onPress={() => openEdit(item.id)} />
+        renderSectionHeader={({ section }) => (
+          <View style={[styles.dayHeader, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+            <Text accessibilityRole="header" style={[styles.dayTitle, { color: theme.label }]}>
+              {section.title}
+            </Text>
+          </View>
         )}
-        ItemSeparatorComponent={() => (
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: theme.separator,
-              marginLeft: spacing.lg + 22,
-            }}
-          />
-        )}
+        renderItem={({ item, index, section }) => {
+          const isLast = index === section.data.length - 1;
+          return (
+            <View
+              style={[
+                styles.transactionGroupRow,
+                { backgroundColor: theme.surface, borderColor: theme.separator },
+                isLast && styles.transactionGroupRowLast,
+              ]}
+            >
+              <TransactionRow transaction={item} onPress={openEdit} />
+              {!isLast ? (
+                <View
+                  style={{
+                    height: StyleSheet.hairlineWidth,
+                    backgroundColor: theme.separator,
+                  }}
+                />
+              ) : null}
+            </View>
+          );
+        }}
+        stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <View style={[styles.accountHero, { backgroundColor: theme.surfaceElevated }]}>
@@ -226,5 +274,33 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     minHeight: 48,
     justifyContent: "center",
+  },
+  dayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+  },
+  dayTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  transactionGroupRow: {
+    marginHorizontal: spacing.lg,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+  },
+  transactionGroupRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    paddingBottom: spacing.sm,
   },
 });

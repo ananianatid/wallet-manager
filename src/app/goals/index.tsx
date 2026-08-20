@@ -8,10 +8,12 @@ import { IconButton, ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listGoals } from "@/db/goals";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { useCurrency, useCurrencyConverter } from "@/currency/context";
+import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import type { Goal } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
 import { userMessage } from "@/utils/user-message";
+import { goalTotals } from "@/utils/goals";
 
 function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
   const theme = useTheme();
@@ -99,6 +101,8 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
 
 export default function GoalsScreen() {
   const theme = useTheme();
+  const { baseCurrency } = useCurrency();
+  const convert = useCurrencyConverter();
   const load = useCallback(async () => {
     const db = await getDatabase();
     return listGoals(db);
@@ -107,6 +111,7 @@ export default function GoalsScreen() {
   const resource = useAsyncResource(load, "goals.load");
   const reload = resource.reload;
   const goals = resource.data;
+  const totals = goalTotals(goals ?? [], convert);
 
   useFocusEffect(
     useCallback(() => {
@@ -141,13 +146,37 @@ export default function GoalsScreen() {
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl, flexGrow: 1 }}
       >
         <View style={[styles.intro, { backgroundColor: theme.surfaceElevated }]}>
-          <Text accessibilityRole="header" style={{ color: theme.label, fontSize: 17, fontWeight: "800" }}>
+          <Text accessibilityRole="header" style={[styles.introTitle, { color: theme.label }]}>
             Donnez une destination à votre argent.
           </Text>
           <Text style={{ color: theme.secondaryLabel, lineHeight: 19 }}>
             Réservez une somme depuis n&apos;importe quel compte. Votre solde total reste vrai, votre solde disponible devient honnête.
           </Text>
         </View>
+
+        {goals && goals.length > 0 ? (
+          <View
+            accessible
+            accessibilityLabel={`Total des objectifs actifs : cible ${formatAmount(totals.target, baseCurrency)}, réservé ${formatAmount(totals.reserved, baseCurrency)}, reste ${formatAmount(totals.remaining, baseCurrency)}`}
+            style={[styles.totalCard, { backgroundColor: theme.accentSurface }]}
+          >
+            <Text style={{ color: theme.accentSurfaceLabel, fontWeight: "700" }}>CAP DES OBJECTIFS ACTIFS</Text>
+            <View style={styles.totalGrid}>
+              <View style={styles.totalItem}>
+                <Text style={{ color: theme.accentSurfaceLabel, fontSize: 12 }}>Cibles</Text>
+                <Text selectable style={{ color: theme.accentSurfaceText, fontWeight: "800" }}>{formatAmount(totals.target, baseCurrency)}</Text>
+              </View>
+              <View style={styles.totalItem}>
+                <Text style={{ color: theme.accentSurfaceLabel, fontSize: 12 }}>Réservé</Text>
+                <Text selectable style={{ color: theme.accentSurfaceIncome, fontWeight: "800" }}>{formatAmount(totals.reserved, baseCurrency)}</Text>
+              </View>
+              <View style={[styles.totalItem, styles.totalItemRight]}>
+                <Text style={{ color: theme.accentSurfaceLabel, fontSize: 12 }}>Reste</Text>
+                <Text selectable style={{ color: theme.accentSurfaceText, fontWeight: "800" }}>{formatAmount(totals.remaining, baseCurrency)}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {goals?.length === 0 ? (
           <EmptyState
@@ -175,12 +204,31 @@ const styles = StyleSheet.create({
   intro: {
     gap: spacing.xs,
     padding: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
+  },
+  introTitle: {
+    ...typography.title,
+  },
+  totalCard: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+  },
+  totalGrid: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  totalItem: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  totalItemRight: {
+    alignItems: "flex-end",
   },
   card: {
     gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
   },
   cardTop: {
     flexDirection: "row",
@@ -192,18 +240,17 @@ const styles = StyleSheet.create({
     height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
+    borderRadius: 10,
   },
   cardBody: {
     flex: 1,
     gap: 2,
   },
   title: {
-    fontSize: 16,
-    fontWeight: "700",
+    ...typography.section,
   },
   progressTrack: {
-    height: 8,
+    height: 10,
     overflow: "hidden",
     borderRadius: 4,
   },

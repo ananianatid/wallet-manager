@@ -17,7 +17,7 @@ export default function TransactionsLayout() {
         contentStyle: { backgroundColor: theme.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Transactions" }} />
+      <Stack.Screen name="index" options={{ title: "Activité" }} />
       <Stack.Screen name="search" options={{ title: "Recherche et filtres" }} />
     </Stack>
   );

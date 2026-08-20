@@ -1,32 +1,40 @@
+import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowLeftRight } from "lucide-react-native";
 import { CategoryIcon } from "@/components/category-icons";
-import { spacing, useTheme, withAlpha } from "@/theme";
+import { radius, spacing, typography, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 
 interface Props {
   transaction: Transaction;
-  onPress?: () => void;
+  onPress?: (transactionId: number) => void;
   hideDate?: boolean;
 }
 
-export function TransactionRow({ transaction, onPress, hideDate = false }: Props) {
+export const TransactionRow = memo(function TransactionRow({
+  transaction,
+  onPress,
+  hideDate = false,
+}: Props) {
   const theme = useTheme();
   const isIncome = transaction.type === "income";
   const isExpense = transaction.type === "expense";
   const isTransfer = transaction.type === "transfer";
 
-  const color = isIncome ? theme.income : isExpense ? theme.expense : theme.accent;
+  const color = isIncome ? theme.income : isExpense ? theme.accent : theme.accent;
+  const amountColor = isIncome
+    ? theme.income
+    : isExpense
+      ? theme.expense
+      : theme.label;
   const title = isTransfer
     ? `${transaction.accountName} → ${transaction.destinationAccountName}`
     : (transaction.categoryName ?? "Sans catégorie");
-  const details = [
-    transaction.accountName,
-    hideDate
-      ? formatTime(transaction.transactionDate)
-      : `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`,
-  ];
+  const dateLabel = hideDate
+    ? formatTime(transaction.transactionDate)
+    : `${formatDate(transaction.transactionDate)} · ${formatTime(transaction.transactionDate)}`;
+  const details = [transaction.accountName, dateLabel];
   if (isTransfer && transaction.fee) {
     details.push(`Frais : ${formatAmount(transaction.fee, transaction.accountCurrencyCode)}`);
   }
@@ -34,11 +42,11 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
   const content = (
     <>
       {isTransfer ? (
-        <View style={[styles.categoryIcon, { backgroundColor: withAlpha(color, "22") }]}>
+        <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
           <ArrowLeftRight size={17} color={color} />
         </View>
       ) : (
-        <View style={[styles.categoryIcon, { backgroundColor: withAlpha(color, "22") }]}>
+        <View style={[styles.categoryIcon, { backgroundColor: theme.surfaceElevated }]}>
           <CategoryIcon name={transaction.categoryIcon} size={17} color={color} />
         </View>
       )}
@@ -50,7 +58,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
           {title}
         </Text>
         <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
-          {details.join(" · ")}
+          {transaction.accountName} · {dateLabel}
         </Text>
         {transaction.note ? (
           <Text style={[styles.detail, { color: theme.secondaryLabel }]} numberOfLines={1}>
@@ -62,7 +70,7 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
         selectable
         numberOfLines={2}
         ellipsizeMode="tail"
-        style={[styles.amount, { color }]}
+        style={[styles.amount, { color: amountColor }]}
       >
         {isIncome ? "+" : isExpense ? "−" : ""}
         {isTransfer && transaction.destinationAmount != null && transaction.destinationCurrencyCode && transaction.destinationCurrencyCode !== transaction.accountCurrencyCode
@@ -84,17 +92,17 @@ export function TransactionRow({ transaction, onPress, hideDate = false }: Props
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(transaction.id)}
       accessible
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint="Ouvre la transaction pour la modifier."
+      accessibilityHint="Ouvre le détail de la transaction."
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
     >
       {content}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {
@@ -103,15 +111,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    minHeight: 64,
+    minHeight: 72,
     borderCurve: "continuous",
   },
   categoryIcon: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
+    borderRadius: radius.md,
     borderCurve: "continuous",
   },
   body: {
@@ -119,10 +127,14 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
+    ...typography.body,
     fontWeight: "600",
+    lineHeight: 20,
   },
   detail: {
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 17,
+    fontVariant: ["tabular-nums"],
   },
   amount: {
     fontWeight: "700",

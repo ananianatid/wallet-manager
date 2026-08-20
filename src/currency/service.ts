@@ -37,6 +37,10 @@ interface ApiCurrency {
 
 export const RATE_CACHE_TTL_MS = CACHE_TTL_MS;
 
+export function isValidExchangeRate(rate: number): boolean {
+  return Number.isFinite(rate) && rate > 0;
+}
+
 function mapCurrency(row: {
   code: string;
   name: string;
@@ -140,8 +144,13 @@ export async function refreshLatestRates(
       provider: PROVIDER,
       fetchedAt,
     },
-    ...payload.map((item) => ({ ...item, provider: PROVIDER, fetchedAt })),
+    ...payload
+      .filter((item) => isValidExchangeRate(item.rate))
+      .map((item) => ({ ...item, provider: PROVIDER, fetchedAt })),
   ];
+  if (rates.length === 1) {
+    throw new Error("Frankfurter n’a fourni aucun taux de change valide.");
+  }
   await db.withTransactionAsync(async () => {
     for (const item of rates) {
       await db.runAsync(
@@ -184,7 +193,7 @@ export async function ensureCurrentRates(
       base,
       cachedCount: cached.length,
     });
-    return { rates: cached, stale: cached.length > 0, refreshed: false };
+    return { rates: cached, stale: true, refreshed: false };
   }
 }
 
@@ -204,10 +213,17 @@ function rateFromRows(
     };
   }
   const direct = rows.find((row) => row.base === from && row.quote === to);
-  if (direct) return direct;
+  if (direct && isValidExchangeRate(direct.rate)) return direct;
   const fromBase = rows.find((row) => row.base === rows[0]?.base && row.quote === from);
   const toBase = rows.find((row) => row.base === rows[0]?.base && row.quote === to);
-  if (!fromBase || !toBase || fromBase.rate === 0) return null;
+  if (
+    !fromBase ||
+    !toBase ||
+    !isValidExchangeRate(fromBase.rate) ||
+    !isValidExchangeRate(toBase.rate)
+  ) {
+    return null;
+  }
   return {
     base: from,
     quote: to,
@@ -239,12 +255,15 @@ export async function getRateForPair(
     from,
     to,
   );
-  if (cachedDirect) return cachedDirect;
+  if (cachedDirect && isValidExchangeRate(cachedDirect.rate)) return cachedDirect;
   try {
     const item = await fetchJson<ApiRate>(
       `${API_BASE}/rate/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
       options.signal,
     );
+    if (!isValidExchangeRate(item.rate)) {
+      throw new Error("Le taux reçu est invalide.");
+    }
     const rate: CurrencyRate = { ...item, provider: PROVIDER, fetchedAt: Date.now() };
     await db.runAsync(
       `INSERT INTO fx_rates (base_code, quote_code, rate, rate_date, provider, fetched_at)
@@ -288,6 +307,37 @@ export async function setReferenceCurrency(
         convertMinorAmount(budget.amount, budget.currencyCode, nextCurrency, rate.rate),
         nextCurrency,
         budget.id,
+      );
+    }
+    const budgetPeriods = await db.getAllAsync<{
+      id: number;
+      amount: number;
+      planCurrencyCode: string;
+    }>(
+      `SELECT bp.id,
+              bp.amount,
+              plans.currency_code AS planCurrencyCode
+       FROM budget_periods bp
+       JOIN budget_plans plans ON plans.id = bp.plan_id`,
+    );
+    for (const period of budgetPeriods) {
+      await db.runAsync(
+        "UPDATE budget_periods SET amount = ? WHERE id = ?",
+        convertMinorAmount(period.amount, period.planCurrencyCode, nextCurrency, rate.rate),
+        period.id,
+      );
+    }
+    const budgetPlans = await db.getAllAsync<{
+      id: number;
+      amount: number;
+      currencyCode: string;
+    }>("SELECT id, amount, currency_code AS currencyCode FROM budget_plans");
+    for (const plan of budgetPlans) {
+      await db.runAsync(
+        "UPDATE budget_plans SET amount = ?, currency_code = ? WHERE id = ?",
+        convertMinorAmount(plan.amount, plan.currencyCode, nextCurrency, rate.rate),
+        nextCurrency,
+        plan.id,
       );
     }
     const goals = await db.getAllAsync<{

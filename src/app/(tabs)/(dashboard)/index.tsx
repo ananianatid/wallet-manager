@@ -1,7 +1,6 @@
-import { Fragment, type ReactNode } from "react";
-import { ChevronRight, Plus } from "lucide-react-native";
+import { Fragment, useCallback, useMemo } from "react";
+import { AlertTriangle, ChevronRight } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo } from "react";
 import {
   Pressable,
   ScrollView,
@@ -12,106 +11,141 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmptyState } from "@/components/empty-state";
 import { CategoryIcon } from "@/components/category-icons";
-import { MiniDonut } from "@/components/mini-donut";
-import { ProgressRing } from "@/components/progress-ring";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
-import { ScreenState } from "@/components/ui";
-import { listAccounts } from "@/db/accounts";
+import { ContentSection, ScreenState } from "@/components/ui";
+import { MotionEntrance } from "@/components/motion";
 import { listBudgets } from "@/db/budgets";
-import { calculateSafeToSpend } from "@/db/cashflow";
+import {
+  calculateSafeToSpendFromInputs,
+  loadSafeToSpendInputs,
+} from "@/db/cashflow";
 import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { listGoals } from "@/db/goals";
-import { listSavingsRules } from "@/db/savings";
-import { listTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { chartColors, radius, spacing, useTheme, withAlpha } from "@/theme";
-import { budgetProgress, topCategorySlices, urgentGoals } from "@/utils/dashboard";
-import { formatAmount, formatDate } from "@/utils/format";
-import { categoryBreakdown } from "@/utils/statistics";
+import { useScrollPerformance } from "@/hooks/use-scroll-performance";
+import { isPerformanceProfilingEnabled } from "@/services/performance";
+import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { budgetProgress, dashboardInsight } from "@/utils/dashboard";
+import {
+  dashboardMetricTone,
+  financialToneColor,
+} from "@/utils/financial-display";
+import { formatAmount, formatDayLabel, formatShortDate } from "@/utils/format";
+import { savingsByRule } from "@/utils/statistics";
 import { userMessage } from "@/utils/user-message";
+import { goalTotals } from "@/utils/goals";
+import type { Transaction } from "@/types";
 
-function SectionCard({
-  title,
-  action,
-  tone = "neutral",
-  children,
-}: {
+interface RecentDayGroup {
+  key: string;
   title: string;
-  action?: { label: string; onPress: () => void };
-  tone?: "neutral" | "accent";
-  children: ReactNode;
+  data: Transaction[];
+}
+
+function DashboardStatCard({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor: string;
 }) {
   const theme = useTheme();
   return (
     <View
-      style={[
-        styles.card,
-        {
-          backgroundColor:
-            tone === "accent" ? withAlpha(theme.accentSurface, "12") : theme.surface,
-          gap: spacing.md,
-        },
-      ]}
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={`${label} : ${value}`}
+      style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.separator }]}
     >
-      <View style={styles.cardHeader}>
-        <Text
-          accessibilityRole="header"
-          style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}
-        >
-          {title}
-        </Text>
-        {action ? (
-          <Pressable
-            onPress={action.onPress}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-            style={({ pressed }) => [styles.cardAction, pressed && styles.pressed]}
-          >
-            <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 13 }}>
-              {action.label}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {children}
+      <Text style={[styles.statLabel, { color: theme.secondaryLabel }]}>{label}</Text>
+      <Text selectable numberOfLines={1} style={[styles.statValue, { color: valueColor }]}>
+        {value}
+      </Text>
     </View>
   );
 }
 
+function groupTransactionsByDay(transactions: Transaction[]): RecentDayGroup[] {
+  const groups = new Map<string, RecentDayGroup>();
+  for (const transaction of transactions) {
+    const date = new Date(transaction.transactionDate);
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const group = groups.get(key) ?? {
+      key,
+      title: formatDayLabel(transaction.transactionDate),
+      data: [],
+    };
+    group.data.push(transaction);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
 export default function DashboardScreen() {
   const theme = useTheme();
-  const { lastRefresh, stale, baseCurrency } = useCurrency();
+  const { baseCurrency, rates } = useCurrency();
   const convert = useCurrencyConverter();
+  const onScroll = useScrollPerformance("dashboard.scroll");
   const insets = useSafeAreaInsets();
 
   const load = useCallback(async () => {
     const db = await getDatabase();
     const now = new Date();
+    const nowMs = now.getTime();
     const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-    const [forecast, accounts, goals, budgets, savingsRules, monthTx, recent] =
-      await Promise.all([
-        calculateSafeToSpend(db),
-        listAccounts(db),
-        listGoals(db),
-        listBudgets(db),
-        listSavingsRules(db),
-        listTransactions(db, { startMs, endMs, order: "asc" }),
-        listTransactions(db, { order: "desc", limit: 5 }),
-      ]);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const [inputs, budgets] = await Promise.all([
+      loadSafeToSpendInputs(db, nowMs, {
+        referenceCurrency: baseCurrency,
+        currencyRates: rates,
+      }),
+      listBudgets(db),
+    ]);
+    const allTransactions = [...inputs.transactions].reverse();
+    const monthTx = inputs.transactions
+      .filter(
+        (transaction) =>
+          transaction.transactionDate >= startMs &&
+          transaction.transactionDate < endMs,
+      )
+      .reverse();
+    const previousMonthTx = inputs.transactions
+      .filter(
+        (transaction) =>
+          transaction.transactionDate >= previousMonthStart &&
+          transaction.transactionDate < startMs,
+      )
+      .reverse();
+    const recent = inputs.transactions
+      .filter((transaction) => transaction.transactionDate < nowMs)
+      .slice(0, 5);
+    const upcoming = inputs.transactions
+      .filter((transaction) => transaction.transactionDate >= nowMs)
+      .reverse()
+      .slice(0, 3);
+
+    const savingsTotal = savingsByRule(allTransactions, inputs.savingsRules, 0, convert).reduce(
+      (sum, contribution) => sum + contribution.amount,
+      0,
+    );
 
     return {
-      safeToSpend: forecast,
-      accounts,
-      goals,
+      safeToSpend: calculateSafeToSpendFromInputs(inputs, nowMs),
+      accounts: inputs.accountsRows,
+      goals: inputs.goals,
       budgets,
-      savingsRules,
+      savingsRules: inputs.savingsRules,
       monthTx,
+      previousMonthTx,
       recent,
+      upcoming,
+      savingsTotal,
     };
-  }, []);
+  }, [baseCurrency, convert, rates]);
 
   const resource = useAsyncResource(load, "dashboard.load");
   const reload = resource.reload;
@@ -133,9 +167,15 @@ export default function DashboardScreen() {
     [data?.savingsRules],
   );
   const recent = useMemo(() => data?.recent ?? [], [data?.recent]);
+  const upcoming = useMemo(() => data?.upcoming ?? [], [data?.upcoming]);
   const monthTx = useMemo(() => data?.monthTx ?? [], [data?.monthTx]);
+  const previousMonthTx = useMemo(() => data?.previousMonthTx ?? [], [data?.previousMonthTx]);
+  const savingsTotal = data?.savingsTotal ?? 0;
+  const totals = useMemo(() => goalTotals(goals, convert), [convert, goals]);
+  const recentGroups = useMemo(() => groupTransactionsByDay(recent), [recent]);
+  const upcomingGroups = useMemo(() => groupTransactionsByDay(upcoming), [upcoming]);
 
-  const { spentByCategory, totalExpense } = useMemo(() => {
+  const { spentByCategory, totalExpense, previousMonthExpense } = useMemo(() => {
     const map = new Map<number, number>();
     let total = 0;
     for (const t of monthTx) {
@@ -148,25 +188,73 @@ export default function DashboardScreen() {
         map.set(t.categoryId, (map.get(t.categoryId) ?? 0) + converted);
       }
     }
-    return { spentByCategory: map, totalExpense: total };
-  }, [monthTx, convert, baseCurrency]);
+    const previousTotal = previousMonthTx.reduce((sum, transaction) => {
+      if (transaction.type !== "expense") {
+        return sum;
+      }
+      return sum + (convert(transaction.amount, transaction.accountCurrencyCode ?? baseCurrency) ?? 0);
+    }, 0);
+    return {
+      spentByCategory: map,
+      totalExpense: total,
+      previousMonthExpense: previousTotal,
+    };
+  }, [baseCurrency, convert, monthTx, previousMonthTx]);
 
   const budgetRows = useMemo(
     () => budgetProgress(budgets, spentByCategory, totalExpense),
     [budgets, spentByCategory, totalExpense],
   );
-  const topGoals = useMemo(() => urgentGoals(goals), [goals]);
-  const topSlices = useMemo(
-    () => topCategorySlices(categoryBreakdown(monthTx, "expense", convert)),
-    [monthTx, convert],
+  const budgetRemaining = useMemo(() => {
+    if (budgetRows.length === 0) {
+      return null;
+    }
+    return budgetRows.reduce((sum, row) => {
+      const budgetAmount = convert(row.budget.amount, row.budget.currencyCode) ?? row.budget.amount;
+      return sum + Math.max(budgetAmount - row.spent, 0);
+    }, 0);
+  }, [budgetRows, convert]);
+  const insight = useMemo(
+    () =>
+      dashboardInsight({
+        totalExpense,
+        previousMonthExpense,
+        hasCurrentActivity: monthTx.length > 0,
+        hasPreviousActivity: previousMonthTx.length > 0,
+        budgetRemaining,
+        hasOverBudget: budgetRows.some((row) => row.over),
+      }),
+    [
+      budgetRemaining,
+      budgetRows,
+      monthTx.length,
+      previousMonthExpense,
+      previousMonthTx.length,
+      totalExpense,
+    ],
+  );
+  const expenseColor = financialToneColor(
+    dashboardMetricTone("expense", totalExpense),
+    theme,
+  );
+  const budgetColor = financialToneColor(
+    dashboardMetricTone("budgetRemaining", budgetRemaining),
+    theme,
+  );
+  const savingsColor = financialToneColor(
+    dashboardMetricTone("savings", savingsTotal),
+    theme,
+  );
+  const upcomingColor = financialToneColor(
+    dashboardMetricTone("upcoming", upcoming[0] ? 1 : null),
+    theme,
   );
 
-  const openNew = () => router.push("/new-transaction");
-  const openEdit = (id: number) =>
-    router.push({ pathname: "/new-transaction", params: { id: String(id) } });
-
-  const sliceColor = (index: number) =>
-    index < 4 ? chartColors[index] : theme.secondaryLabel;
+  const openEdit = useCallback(
+    (id: number) =>
+      router.push({ pathname: "/new-transaction", params: { id: String(id) } }),
+    [],
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -179,12 +267,14 @@ export default function DashboardScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
+          onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
+          scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{
-            paddingTop: insets.top + spacing.md,
+            paddingTop: insets.top + spacing.sm,
             paddingHorizontal: spacing.lg,
-            paddingBottom: spacing.xxl + 56 + insets.bottom + spacing.lg,
-            gap: spacing.lg,
+            paddingBottom: spacing.xxl + 104 + insets.bottom + spacing.lg,
+            gap: spacing.xl,
           }}
         >
           {!hasAccounts ? (
@@ -196,26 +286,84 @@ export default function DashboardScreen() {
             />
           ) : (
             <>
-              {lastRefresh != null ? (
-                <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
-                  Taux actuels du {formatDate(lastRefresh)}{stale ? " · hors connexion" : ""}
-                </Text>
-              ) : null}
               {safeToSpend ? (
                 // SafeToSpendCard porte son propre marginHorizontal: annule celui-ci
                 // pour rester aligné avec les autres cards (conteneur paddé).
-                <View style={{ marginHorizontal: -spacing.lg }}>
+                <MotionEntrance style={{ marginHorizontal: -spacing.lg }}>
                   <SafeToSpendCard
                     data={safeToSpend}
                     compact
                     onPress={() => router.push("/cashflow")}
                   />
-                </View>
+                </MotionEntrance>
               ) : null}
 
+              <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
+                  <DashboardStatCard
+                    label="Dépenses ce mois"
+                    value={formatAmount(totalExpense, baseCurrency)}
+                    valueColor={expenseColor}
+                  />
+                  <DashboardStatCard
+                    label="Budget restant"
+                    value={budgetRemaining == null ? "—" : formatAmount(budgetRemaining, baseCurrency)}
+                    valueColor={budgetColor}
+                  />
+                </View>
+                <View style={styles.statsRow}>
+                  <DashboardStatCard
+                    label="Épargne"
+                    value={formatAmount(savingsTotal, baseCurrency)}
+                    valueColor={savingsColor}
+                  />
+                  <DashboardStatCard
+                    label="Prochaine échéance"
+                    value={upcoming[0] ? formatShortDate(upcoming[0].transactionDate) : "—"}
+                    valueColor={upcomingColor}
+                  />
+                </View>
+              </View>
+
+              <View
+                accessible
+                accessibilityRole="summary"
+                accessibilityLabel={`Insight : ${insight.title}. ${insight.body}`}
+                style={[
+                  styles.insightCard,
+                  {
+                    backgroundColor: withAlpha(
+                      insight.level === "warning" ? theme.expense : theme.income,
+                      "18",
+                    ),
+                  },
+                ]}
+              >
+                {insight.level === "warning" ? (
+                  <AlertTriangle
+                    accessibilityLabel="Alerte financière"
+                    size={18}
+                    color={theme.expense}
+                  />
+                ) : null}
+                <View style={styles.insightCopy}>
+                  <Text
+                    style={[
+                      styles.insightTitle,
+                      { color: insight.level === "warning" ? theme.expense : theme.label },
+                    ]}
+                  >
+                    {insight.title}
+                  </Text>
+                  <Text style={[styles.insightBody, { color: theme.secondaryLabel }]}>
+                    {insight.body}
+                  </Text>
+                </View>
+              </View>
+
               {budgetRows.length > 0 ? (
-                <SectionCard
-                  title="Budgets"
+                <ContentSection
+                  title="Budgets du mois"
                   action={{
                     label: "Tout voir",
                     onPress: () => router.push("/budgets"),
@@ -249,7 +397,7 @@ export default function DashboardScreen() {
                             numberOfLines={1}
                             style={[
                               styles.budgetAmount,
-                              { color: theme.secondaryLabel },
+                              { color: row.over ? theme.expense : theme.secondaryLabel },
                             ]}
                           >
                             {formatAmount(row.spent, baseCurrency)} /{" "}
@@ -259,7 +407,7 @@ export default function DashboardScreen() {
                         <View
                           accessible
                           accessibilityRole="progressbar"
-                          accessibilityLabel={`${formatAmount(row.spent, baseCurrency)} dépensés sur ${formatAmount(row.budget.amount, row.budget.currencyCode)}`}
+                          accessibilityLabel={`${row.budget.categoryName ?? "Toutes les dépenses"} : ${formatAmount(row.spent, baseCurrency)} dépensés sur ${formatAmount(row.budget.amount, row.budget.currencyCode)}`}
                           style={[
                             styles.budgetTrack,
                             { backgroundColor: theme.surfaceElevated },
@@ -277,69 +425,35 @@ export default function DashboardScreen() {
                       </View>
                     </View>
                   ))}
-                </SectionCard>
+                </ContentSection>
               ) : null}
 
-              {topGoals.length > 0 || savingsRules.length > 0 ? (
-                <SectionCard
-                  title="Objectifs"
+              {goals.length > 0 || savingsRules.length > 0 ? (
+                <ContentSection
+                  title="Vos plans"
                   action={{
                     label: "Tout voir",
-                    onPress: () => router.push("/goals"),
+                    onPress: () => router.push("/(tabs)/(plans)"),
                   }}
                 >
-                  {topGoals.length > 0 ? (
-                    <View style={styles.goalsRow}>
-                      {topGoals.map((goal) => {
-                        const overdue = goal.isOverdue;
-                        const ringColor = overdue ? theme.expense : theme.accent;
-                        const cardSurface = overdue
-                          ? withAlpha(theme.expense, "12")
-                          : withAlpha(theme.accentSurface, "12");
-                        return (
-                          <Pressable
-                            key={goal.id}
-                            onPress={() =>
-                              router.push({
-                                pathname: "/goals/[id]",
-                                params: { id: String(goal.id) },
-                              })
-                            }
-                            accessibilityRole="button"
-                            accessibilityLabel={`${goal.name}. ${Math.round(goal.progressPercent)} % atteints.`}
-                            accessibilityHint="Ouvre le détail de l’objectif."
-                            style={({ pressed }) => [
-                              styles.goalCard,
-                              { backgroundColor: cardSurface },
-                              pressed && styles.pressed,
-                            ]}
-                          >
-                            <ProgressRing
-                              progress={goal.progressPercent}
-                              color={ringColor}
-                              trackColor={withAlpha(theme.label, "16")}
-                              labelColor={theme.label}
-                              accessibilityLabel={`${goal.name} : ${Math.round(goal.progressPercent)} %`}
-                            />
-                            <Text
-                              numberOfLines={1}
-                              style={[styles.goalName, { color: theme.label }]}
-                            >
-                              {goal.name}
-                            </Text>
-                            <Text style={[styles.goalDetail, { color: theme.secondaryLabel }]}>
-                              Cible le {formatDate(goal.targetDate)}
-                            </Text>
-                            <Text
-                              numberOfLines={1}
-                              style={[styles.goalAmount, { color: theme.label }]}
-                            >
-                              {formatAmount(goal.reservedAmount, goal.currencyCode)}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                  {goals.length > 0 ? (
+                    <Pressable
+                      onPress={() => router.push("/goals")}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Total des objectifs : ${formatAmount(totals.target, baseCurrency)}`}
+                      accessibilityHint="Ouvre les objectifs"
+                      style={({ pressed }) => [styles.planningRow, pressed && styles.pressed]}
+                    >
+                      <View style={styles.planningCopy}>
+                        <Text style={[styles.planningTitle, { color: theme.label }]}>Objectifs</Text>
+                        <Text
+                          style={[styles.planningDetail, { color: theme.secondaryLabel }]}
+                        >
+                          {formatAmount(totals.target, baseCurrency)}
+                        </Text>
+                      </View>
+                      <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                    </Pressable>
                   ) : null}
                   <Pressable
                     onPress={() => router.push("/savings")}
@@ -354,156 +468,168 @@ export default function DashboardScreen() {
                       </Text>
                       <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>
                         {savingsRules.length > 0
-                          ? `${savingsRules.length} règle${savingsRules.length > 1 ? "s" : ""} active${savingsRules.length > 1 ? "s" : ""}`
+                          ? `${savingsRules.length} règle${savingsRules.length > 1 ? "s" : ""} active${savingsRules.length > 1 ? "s" : ""} · Total épargné depuis le début : ${formatAmount(savingsTotal, baseCurrency)}`
                           : "Mettre automatiquement de côté"}
                       </Text>
                     </View>
                     <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
                   </Pressable>
-                </SectionCard>
+                </ContentSection>
               ) : null}
 
-              {topSlices.length > 0 ? (
-                <SectionCard
-                  title="Top catégories"
+              {recentGroups.length > 0 ? (
+                <ContentSection
+                  title="Derniers mouvements"
                   action={{
-                    label: "Statistiques",
-                    onPress: () => router.push("/(tabs)/(statistics)"),
+                    label: "Tout voir",
+                    onPress: () => router.push("/(tabs)/(transactions)"),
                   }}
                 >
-                  <View style={styles.topCategoriesRow}>
-                    <MiniDonut
-                      slices={topSlices.map((s, index) => ({
-                        value: s.total,
-                        color: sliceColor(index),
-                      }))}
-                      trackColor={theme.surfaceElevated}
-                    />
-                    <View style={styles.topCategoriesLegend}>
-                      {topSlices.map((s, index) => (
-                        <View key={s.categoryName} style={styles.topCategoryLine}>
-                          <CategoryIcon
-                            name={s.categoryIcon}
-                            size={16}
-                            color={sliceColor(index)}
+                  {recentGroups.map((group) => (
+                    <View
+                      key={group.key}
+                      style={[styles.recentDayGroup, { backgroundColor: theme.surface, borderColor: theme.separator }]}
+                    >
+                      <View
+                        style={[
+                          styles.recentDayHeader,
+                          { borderBottomColor: theme.separator },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.recentDayTitle, { color: theme.secondaryLabel }]}
+                        >
+                          {group.title}
+                        </Text>
+                      </View>
+                      {group.data.map((transaction, index) => (
+                        <Fragment key={transaction.id}>
+                          <TransactionRow
+                            transaction={transaction}
+                            hideDate
+                            onPress={openEdit}
                           />
-                          <Text
-                            numberOfLines={1}
-                            style={[styles.topCategoryName, { color: theme.label }]}
-                          >
-                            {s.categoryName}
-                          </Text>
-                          <Text
-                            style={[styles.topCategoryPct, { color: theme.secondaryLabel }]}
-                          >
-                            {Math.round(s.pct)} %
-                          </Text>
-                          <Text
-                            numberOfLines={1}
-                            style={[styles.topCategoryAmount, { color: theme.label }]}
-                          >
-                            {formatAmount(s.total, baseCurrency)}
-                          </Text>
-                        </View>
+                          {index < group.data.length - 1 ? (
+                            <View
+                              style={{
+                                height: StyleSheet.hairlineWidth,
+                                backgroundColor: theme.separator,
+                              }}
+                            />
+                          ) : null}
+                        </Fragment>
                       ))}
                     </View>
-                  </View>
-                </SectionCard>
+                  ))}
+                </ContentSection>
               ) : null}
 
-              {recent.length > 0 ? (
-                <View
-                  style={{
-                    backgroundColor: theme.surface,
-                    borderRadius: radius.lg,
-                    overflow: "hidden",
+              {upcomingGroups.length > 0 ? (
+                <ContentSection
+                  title="Prochains mouvements"
+                  action={{
+                    label: "Tout voir",
+                    onPress: () => router.push("/(tabs)/(transactions)"),
                   }}
                 >
-                  <View style={styles.recentHeader}>
-                    <Text
-                      accessibilityRole="header"
-                      style={{ color: theme.label, fontSize: 15, fontWeight: "700" }}
+                  {upcomingGroups.map((group) => (
+                    <View
+                      key={group.key}
+                      style={[styles.recentDayGroup, { backgroundColor: theme.surface, borderColor: theme.separator }]}
                     >
-                      Transactions récentes
-                    </Text>
-                    <Pressable
-                      onPress={() => router.push("/(tabs)/(transactions)")}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.cardAction, pressed && styles.pressed]}
-                    >
-                      <Text
-                        style={{ color: theme.accent, fontWeight: "700", fontSize: 13 }}
+                      <View
+                        style={[
+                          styles.recentDayHeader,
+                          { borderBottomColor: theme.separator },
+                        ]}
                       >
-                        Tout voir
-                      </Text>
-                    </Pressable>
-                  </View>
-                  {recent.map((t, index) => (
-                    <Fragment key={t.id}>
-                      <TransactionRow
-                        transaction={t}
-                        hideDate
-                        onPress={() => openEdit(t.id)}
-                      />
-                      {index < recent.length - 1 ? (
-                        <View
-                          style={{
-                            height: StyleSheet.hairlineWidth,
-                            backgroundColor: theme.separator,
-                            marginLeft: spacing.lg + 22,
-                            marginRight: spacing.lg,
-                          }}
-                        />
-                      ) : null}
-                    </Fragment>
+                        <Text
+                          style={[styles.recentDayTitle, { color: theme.secondaryLabel }]}
+                        >
+                          {group.title}
+                        </Text>
+                      </View>
+                      {group.data.map((transaction, index) => (
+                        <Fragment key={transaction.id}>
+                          <TransactionRow
+                            transaction={transaction}
+                            hideDate
+                            onPress={openEdit}
+                          />
+                          {index < group.data.length - 1 ? (
+                            <View
+                              style={{
+                                height: StyleSheet.hairlineWidth,
+                                backgroundColor: theme.separator,
+                              }}
+                            />
+                          ) : null}
+                        </Fragment>
+                      ))}
+                    </View>
                   ))}
-                  <View style={{ height: spacing.sm }} />
-                </View>
+                </ContentSection>
+              ) : null}
+
+              {!budgets.length || !goals.length || !savingsRules.length ? (
+                <ContentSection title="Premiers réglages">
+                  {!budgets.length ? (
+                    <Pressable
+                      onPress={() => router.push("/budgets")}
+                      accessibilityRole="button"
+                      accessibilityLabel="Créer un budget"
+                      accessibilityHint="Ouvre la création d’un budget."
+                      style={({ pressed }) => [styles.setupRow, pressed && styles.pressed]}
+                    >
+                      <View style={styles.planningCopy}>
+                        <Text style={[styles.planningTitle, { color: theme.label }]}>Créer un budget</Text>
+                        <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>Suivez vos dépenses par catégorie.</Text>
+                      </View>
+                      <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                    </Pressable>
+                  ) : null}
+                  {!goals.length ? (
+                    <Pressable
+                      onPress={() => router.push("/goals/new")}
+                      accessibilityRole="button"
+                      accessibilityLabel="Définir un objectif"
+                      accessibilityHint="Ouvre la création d’un objectif."
+                      style={({ pressed }) => [styles.setupRow, pressed && styles.pressed]}
+                    >
+                      <View style={styles.planningCopy}>
+                        <Text style={[styles.planningTitle, { color: theme.label }]}>Définir un objectif</Text>
+                        <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>Mettez de côté pour un projet précis.</Text>
+                      </View>
+                      <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                    </Pressable>
+                  ) : null}
+                  {!savingsRules.length ? (
+                    <Pressable
+                      onPress={() => router.push("/savings")}
+                      accessibilityRole="button"
+                      accessibilityLabel="Configurer une épargne"
+                      accessibilityHint="Ouvre la configuration de l’épargne."
+                      style={({ pressed }) => [styles.setupRow, pressed && styles.pressed]}
+                    >
+                      <View style={styles.planningCopy}>
+                        <Text style={[styles.planningTitle, { color: theme.label }]}>Configurer une épargne</Text>
+                        <Text style={[styles.planningDetail, { color: theme.secondaryLabel }]}>Mettez régulièrement de côté.</Text>
+                      </View>
+                      <ChevronRight size={18} strokeWidth={2} color={theme.secondaryLabel} />
+                    </Pressable>
+                  ) : null}
+                </ContentSection>
               ) : null}
             </>
           )}
         </ScrollView>
       )}
-      {hasAccounts ? (
-        <Pressable
-          onPress={openNew}
-          accessibilityLabel="Ajouter une transaction"
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.fab,
-            {
-              backgroundColor: theme.accent,
-              bottom: insets.bottom + spacing.lg,
-              boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
-            },
-            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
-          ]}
-        >
-          <Plus size={30} strokeWidth={2.5} color={theme.onAccent} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
-  cardAction: {
-    minHeight: 48,
-    minWidth: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.xs,
-  },
-  card: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
   planningRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -517,10 +643,18 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   planningTitle: {
-    fontWeight: "700",
+    fontWeight: "500",
   },
   planningDetail: {
     fontSize: 13,
+  },
+  setupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+    minHeight: 56,
+    paddingVertical: spacing.xs,
   },
   budgetRow: {
     flexDirection: "row",
@@ -546,7 +680,7 @@ const styles = StyleSheet.create({
   },
   budgetTitle: {
     flex: 1,
-    fontWeight: "600",
+    fontWeight: "500",
   },
   budgetAmount: {
     fontSize: 12,
@@ -557,76 +691,64 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     overflow: "hidden",
   },
-  goalsRow: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  goalCard: {
-    flex: 1,
-    aspectRatio: 1,
+  recentDayGroup: {
+    overflow: "hidden",
     borderRadius: radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    padding: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  goalName: {
-    fontWeight: "700",
-    fontSize: 13,
-    maxWidth: "100%",
-  },
-  goalDetail: {
-    fontSize: 11,
-  },
-  goalAmount: {
-    fontWeight: "800",
-    fontSize: 12,
-    fontVariant: ["tabular-nums"],
-    maxWidth: "100%",
-  },
-  topCategoriesRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.lg,
-  },
-  topCategoriesLegend: {
-    flex: 1,
-    gap: spacing.sm,
-  },
-  topCategoryLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  topCategoryName: {
-    flex: 1,
-    fontSize: 13,
-  },
-  topCategoryPct: {
-    fontSize: 12,
-    fontVariant: ["tabular-nums"],
-  },
-  topCategoryAmount: {
-    fontSize: 12,
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-  },
-  recentHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  recentDayHeader: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  fab: {
-    position: "absolute",
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
+  recentDayTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  statsGrid: {
+    gap: spacing.md,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 100,
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: "continuous",
+  },
+  statLabel: {
+    fontSize: 12,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  insightCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    borderCurve: "continuous",
+  },
+  insightCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  insightTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  insightBody: {
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

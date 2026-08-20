@@ -4,6 +4,7 @@ import { getSetting } from "@/db/settings";
 import { getLockEnabled } from "@/security/store";
 import { collectLogs } from "@/utils/log-store";
 import { getSessionId, getRecentLogs, log, type LogEntry } from "@/utils/logger";
+import { getPerformanceSummary, type PerformanceSummary } from "@/services/performance";
 
 export type DiagnosticStatus = "ok" | "warn" | "fail";
 
@@ -20,6 +21,7 @@ export interface DiagnosticReport {
   appVersion: string;
   sessionId: string;
   items: DiagnosticItem[];
+  performance: PerformanceSummary[];
   logs: LogEntry[];
 }
 
@@ -118,6 +120,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
     appVersion: Constants.expoConfig?.version ?? "1.0.0",
     sessionId: getSessionId(),
     items,
+    performance: getPerformanceSummary(),
     logs,
   };
 }

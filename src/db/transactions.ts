@@ -2,10 +2,18 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import { normalizeCategoryIcon } from "@/constants/category-icons";
 import type {
   Transaction,
+  TransactionAmountRow,
   TransactionInput,
   TransactionSearchCriteria,
+  TransactionDetail,
   TransactionType,
 } from "../types";
+import {
+  createJournalTransaction,
+  deleteJournalTransaction,
+  getJournalRelations,
+  updateJournalTransaction,
+} from "./journal";
 
 interface TransactionRow {
   id: number;
@@ -26,6 +34,7 @@ interface TransactionRow {
   exchangeRateDate: string | null;
   exchangeRateProvider: string | null;
   note: string | null;
+  merchant: string | null;
   transactionDate: number;
   createdAt: number;
 }
@@ -47,6 +56,7 @@ const SELECT_FIELDS = `
   t.exchange_rate_date AS exchangeRateDate,
   t.exchange_rate_provider AS exchangeRateProvider,
   t.note,
+  t.merchant,
   t.transaction_date AS transactionDate,
   t.created_at AS createdAt
 `;
@@ -79,6 +89,7 @@ function mapTransaction(row: TransactionRow): Transaction {
     exchangeRateDate: row.exchangeRateDate,
     exchangeRateProvider: row.exchangeRateProvider,
     note: row.note,
+    merchant: row.merchant,
     transactionDate: row.transactionDate,
     createdAt: row.createdAt,
   };
@@ -107,14 +118,11 @@ function validateInput(input: TransactionInput): TransactionInput {
   switch (input.type) {
     case "income":
     case "expense":
-      if (input.categoryId == null) {
+      if (input.categoryId == null && (input.allocations?.length ?? 0) === 0) {
         throw new Error("Une catégorie est requise pour ce type de transaction.");
       }
       return {
-        type: input.type,
-        amount: input.amount,
-        categoryId: input.categoryId,
-        accountId: input.accountId,
+        ...input,
         destinationAccountId: null,
         fee: null,
         destinationAmount: null,
@@ -122,7 +130,6 @@ function validateInput(input: TransactionInput): TransactionInput {
         exchangeRateDate: null,
         exchangeRateProvider: null,
         note: note || null,
-        transactionDate: input.transactionDate,
       };
     case "transfer":
       if (input.destinationAccountId == null) {
@@ -147,6 +154,8 @@ function validateInput(input: TransactionInput): TransactionInput {
         exchangeRateProvider: input.exchangeRateProvider ?? null,
         note: note || null,
         transactionDate: input.transactionDate,
+        allocations: input.allocations,
+        reimbursements: input.reimbursements,
       };
   }
 }
@@ -197,6 +206,11 @@ async function normalizeTransfer(
 
 export interface TransactionFilter {
   accountId?: number | null;
+  accountIds?: readonly number[] | null;
+  types?: readonly TransactionType[] | null;
+  categoryIds?: readonly number[] | null;
+  tagIds?: readonly number[] | null;
+  merchant?: string | null;
   startMs?: number | null;
   endMs?: number | null;
   order?: "asc" | "desc";
@@ -213,6 +227,50 @@ export function listTransactions(
   if (filter.accountId != null) {
     conditions.push("(t.account_id = ? OR t.destination_account_id = ?)");
     params.push(filter.accountId, filter.accountId);
+  }
+  if (filter.accountIds != null) {
+    if (filter.accountIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.accountIds.map(() => "?").join(", ");
+      conditions.push(
+        `(t.account_id IN (${placeholders}) OR t.destination_account_id IN (${placeholders}))`,
+      );
+      params.push(...filter.accountIds, ...filter.accountIds);
+    }
+  }
+  if (filter.types != null) {
+    if (filter.types.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.types.map(() => "?").join(", ");
+      conditions.push(`t.type IN (${placeholders})`);
+      params.push(...filter.types);
+    }
+  }
+  if (filter.categoryIds != null) {
+    if (filter.categoryIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.categoryIds.map(() => "?").join(", ");
+      conditions.push(`t.category_id IN (${placeholders})`);
+      params.push(...filter.categoryIds);
+    }
+  }
+  if (filter.tagIds != null) {
+    if (filter.tagIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.tagIds.map(() => "?").join(", ");
+      conditions.push(
+        `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id IN (${placeholders}))`,
+      );
+      params.push(...filter.tagIds);
+    }
+  }
+  if (filter.merchant?.trim()) {
+    conditions.push("t.merchant LIKE ? ESCAPE '\\'");
+    params.push(`%${filter.merchant.trim().replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")}%`);
   }
   if (filter.startMs != null) {
     conditions.push("t.transaction_date >= ?");
@@ -244,6 +302,33 @@ export function listTransactions(
       params,
     )
     .then((rows) => rows.map(mapTransaction));
+}
+
+export function listTransactionAmountRows(
+  db: SQLiteDatabase,
+  filter: Pick<TransactionFilter, "startMs" | "endMs"> = {},
+): Promise<TransactionAmountRow[]> {
+  const conditions: string[] = [];
+  const params: number[] = [];
+  if (filter.startMs != null) {
+    conditions.push("t.transaction_date >= ?");
+    params.push(filter.startMs);
+  }
+  if (filter.endMs != null) {
+    conditions.push("t.transaction_date < ?");
+    params.push(filter.endMs);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return db.getAllAsync<TransactionAmountRow>(
+    `SELECT t.type,
+            t.amount,
+            t.fee,
+            a.currency_code AS accountCurrencyCode
+     FROM transactions t
+     JOIN accounts a ON a.id = t.account_id AND a.deleted_at IS NULL
+     ${where}`,
+    params,
+  );
 }
 
 export function listTransactionsByMonth(
@@ -292,13 +377,16 @@ export function searchTransactionsByText(
       `SELECT ${SELECT_FIELDS}
        ${FROM_JOINS}
        WHERE t.note LIKE ? ESCAPE '\\'
+          OR t.merchant LIKE ? ESCAPE '\\'
           OR c.name LIKE ? ESCAPE '\\'
           OR a.name LIKE ? ESCAPE '\\'
           OR da.name LIKE ? ESCAPE '\\'
+          OR EXISTS (SELECT 1 FROM transaction_tags stt JOIN tags st ON st.id = stt.tag_id
+                     WHERE stt.transaction_id = t.id AND st.name LIKE ? ESCAPE '\\')
           OR CAST(t.amount AS TEXT) LIKE ? ESCAPE '\\'
        ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC
        LIMIT ?`,
-      [pattern, pattern, pattern, pattern, pattern, limit],
+      [pattern, pattern, pattern, pattern, pattern, pattern, pattern, limit],
     )
     .then((rows) => rows.map(mapTransaction));
 }
@@ -321,11 +409,13 @@ export function searchTransactions(
         .replace(/_/g, "\\_") +
       "%";
     conditions.push(
-      "(t.note LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\' OR " +
+      "(t.note LIKE ? ESCAPE '\\' OR t.merchant LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\' OR " +
         "a.name LIKE ? ESCAPE '\\' OR da.name LIKE ? ESCAPE '\\' OR " +
+        "EXISTS (SELECT 1 FROM transaction_tags stt JOIN tags st ON st.id = stt.tag_id " +
+        "WHERE stt.transaction_id = t.id AND st.name LIKE ? ESCAPE '\\') OR " +
         "CAST(t.amount AS TEXT) LIKE ? ESCAPE '\\')",
     );
-    params.push(pattern, pattern, pattern, pattern, pattern);
+    params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern);
   }
 
   if (criteria.startDate != null) {
@@ -381,6 +471,17 @@ export function searchTransactions(
       params.push(...criteria.categoryIds);
     }
   }
+  if (criteria.tagIds != null) {
+    if (criteria.tagIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = criteria.tagIds.map(() => "?").join(", ");
+      conditions.push(
+        `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id IN (${placeholders}))`,
+      );
+      params.push(...criteria.tagIds);
+    }
+  }
 
   const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
   const safeLimit = Math.max(1, Math.floor(limit));
@@ -402,7 +503,8 @@ export function listTransactionsByAccount(
   db: SQLiteDatabase,
   accountId: number,
 ): Promise<Transaction[]> {
-  return listTransactions(db, { accountId, order: "desc" });
+  // Une opération future appartient au forecast, pas à l'historique du compte.
+  return listTransactions(db, { accountId, endMs: Date.now(), order: "desc" });
 }
 
 export async function getTransaction(
@@ -423,27 +525,7 @@ export async function createTransaction(
   input: TransactionInput,
 ): Promise<number> {
   const valid = await normalizeTransfer(db, validateInput(input));
-  const result = await db.runAsync(
-    `INSERT INTO transactions
-       (type, amount, category_id, account_id, destination_account_id, fee,
-        note, transaction_date, created_at, destination_amount, exchange_rate,
-        exchange_rate_date, exchange_rate_provider)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    valid.type,
-    valid.amount,
-    valid.categoryId,
-    valid.accountId,
-    valid.destinationAccountId,
-    valid.fee,
-    valid.note,
-    valid.transactionDate,
-    Date.now(),
-    valid.destinationAmount ?? null,
-    valid.exchangeRate ?? null,
-    valid.exchangeRateDate ?? null,
-    valid.exchangeRateProvider ?? null,
-  );
-  return Number(result.lastInsertRowId);
+  return createJournalTransaction(db, valid);
 }
 
 export async function updateTransaction(
@@ -452,40 +534,24 @@ export async function updateTransaction(
   input: TransactionInput,
 ): Promise<void> {
   const valid = await normalizeTransfer(db, validateInput(input));
-  await db.runAsync(
-    `UPDATE transactions SET
-       type = ?,
-       amount = ?,
-       category_id = ?,
-       account_id = ?,
-       destination_account_id = ?,
-       fee = ?,
-       destination_amount = ?,
-       exchange_rate = ?,
-       exchange_rate_date = ?,
-       exchange_rate_provider = ?,
-       note = ?,
-       transaction_date = ?
-     WHERE id = ?`,
-    valid.type,
-    valid.amount,
-    valid.categoryId,
-    valid.accountId,
-    valid.destinationAccountId,
-    valid.fee,
-    valid.destinationAmount ?? null,
-    valid.exchangeRate ?? null,
-    valid.exchangeRateDate ?? null,
-    valid.exchangeRateProvider ?? null,
-    valid.note,
-    valid.transactionDate,
-    id,
-  );
+  await updateJournalTransaction(db, id, valid);
 }
 
 export async function deleteTransaction(
   db: SQLiteDatabase,
   id: number,
 ): Promise<void> {
-  await db.runAsync("DELETE FROM transactions WHERE id = ?", id);
+  await deleteJournalTransaction(db, id);
+}
+
+export async function getTransactionDetail(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<TransactionDetail | null> {
+  const transaction = await getTransaction(db, id);
+  if (!transaction) {
+    return null;
+  }
+  const relations = await getJournalRelations(db, id);
+  return { transaction, ...relations };
 }

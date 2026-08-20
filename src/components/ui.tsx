@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +13,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
+import { AnimatedPressable } from "@/components/motion";
 
 type ActionButtonVariant = "primary" | "secondary" | "destructive";
 
@@ -24,6 +24,39 @@ interface ActionButtonProps {
   disabled?: boolean;
   variant?: ActionButtonVariant;
   accessibilityLabel?: string;
+}
+
+interface ContentSectionProps {
+  title: string;
+  action?: { label: string; onPress: () => void };
+  children: ReactNode;
+}
+
+export function ContentSection({ title, action, children }: ContentSectionProps) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.contentSection, { borderTopColor: theme.separator }]}>
+      <View style={styles.contentSectionHeader}>
+        <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: theme.label }]}>
+          {title}
+        </Text>
+        {action ? (
+          <AnimatedPressable
+            onPress={action.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            style={styles.contentSectionAction}
+          >
+            <Text style={[styles.contentSectionActionLabel, { color: theme.accent }]}>
+              {action.label}
+            </Text>
+          </AnimatedPressable>
+        ) : null}
+      </View>
+      <View style={styles.contentSectionBody}>{children}</View>
+    </View>
+  );
 }
 
 export function ActionButton({
@@ -36,33 +69,33 @@ export function ActionButton({
   const theme = useTheme();
   const backgroundColor =
     variant === "primary"
-      ? theme.accentSurface
+      ? theme.accent
       : variant === "destructive"
         ? withAlpha(theme.expense, "18")
-        : theme.surface;
+        : theme.surfaceElevated;
   const labelColor =
     variant === "primary"
-      ? theme.accentSurfaceText
+      ? theme.onAccent
       : variant === "destructive"
         ? theme.expense
         : theme.label;
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
+      style={[
         styles.actionButton,
-        { backgroundColor, borderColor: theme.outline },
+        { backgroundColor, borderColor: variant === "secondary" ? theme.outline : backgroundColor },
         variant === "secondary" && styles.secondaryButton,
-        (pressed || disabled) && styles.pressed,
+        disabled && styles.pressed,
       ]}
     >
       <Text style={[styles.actionLabel, { color: labelColor }]}>{label}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -86,24 +119,24 @@ export function IconButton({
   const theme = useTheme();
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
       accessibilityState={{ disabled, selected }}
-      style={({ pressed }) => [
+      style={[
         styles.iconButton,
         selected && {
           backgroundColor: withAlpha(theme.accent, "18"),
           borderRadius: radius.md,
         },
-        (pressed || disabled) && styles.pressed,
+        disabled && styles.pressed,
       ]}
     >
       {icon}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -187,7 +220,7 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
     >
       <Text style={[styles.inlineErrorText, { color: theme.expense }]}>{message}</Text>
       {onRetry ? (
-        <Pressable
+        <AnimatedPressable
           onPress={onRetry}
           accessibilityRole="button"
           accessibilityLabel="Réessayer"
@@ -195,7 +228,7 @@ export function InlineError({ message, onRetry }: InlineErrorProps) {
           style={styles.inlineRetry}
         >
           <Text style={[styles.inlineRetryText, { color: theme.expense }]}>Réessayer</Text>
-        </Pressable>
+        </AnimatedPressable>
       ) : null}
     </View>
   );
@@ -251,12 +284,39 @@ export function KeyboardAwareScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  actionButton: {
+  contentSection: {
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  contentSectionHeader: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  contentSectionTitle: {
+    flex: 1,
+    ...typography.section,
+  },
+  contentSectionAction: {
     minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  contentSectionActionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  contentSectionBody: {
+    gap: spacing.md,
+  },
+  actionButton: {
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderCurve: "continuous",
   },
@@ -264,7 +324,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   actionLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     lineHeight: 20,
   },
@@ -276,7 +336,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.65 },
   field: { gap: spacing.xs + 2 },
-  fieldLabel: { fontSize: 13 },
+  fieldLabel: { ...typography.label },
   fieldHint: { fontSize: 12, lineHeight: 17 },
   fieldError: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
   screenState: {
@@ -286,8 +346,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
   },
-  screenStateTitle: { fontSize: 16, fontWeight: "700", textAlign: "center" },
-  screenStateMessage: { textAlign: "center", lineHeight: 19 },
+  screenStateTitle: { ...typography.section, textAlign: "center" },
+  screenStateMessage: { ...typography.body, textAlign: "center" },
   inlineError: {
     flexDirection: "row",
     alignItems: "center",
@@ -297,6 +357,6 @@ const styles = StyleSheet.create({
   },
   inlineErrorText: { flex: 1, lineHeight: 18 },
   inlineRetry: { minHeight: 48, justifyContent: "center" },
-  inlineRetryText: { fontWeight: "800", lineHeight: 18 },
+  inlineRetryText: { fontWeight: "600", lineHeight: 18 },
   keyboardContent: { paddingBottom: spacing.xxl },
 });

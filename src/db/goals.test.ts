@@ -37,6 +37,9 @@ describe("createGoal", () => {
     expect(calls[0].sql).toContain("INSERT INTO goals");
     expect(calls[0].params).toEqual([
       "PS5",
+      null,
+      null,
+      null,
       350_000,
       new Date(2027, 0, 1).getTime(),
       expect.any(Number),
@@ -48,6 +51,41 @@ describe("createGoal", () => {
     await expect(
       createGoal(db, { name: "   ", targetAmount: 100, targetDate: 1 }),
     ).rejects.toThrow("ne peut pas être vide");
+  });
+
+  it("persiste la description, le lien et la référence d’image", async () => {
+    const { db, calls } = mockDb();
+    await createGoal(db, {
+      name: "Ordinateur",
+      description: "Pour travailler",
+      linkUrl: "https://example.com/ordinateur",
+      imageUri: "content://image/1",
+      targetAmount: 800_000,
+      targetDate: 1,
+    });
+
+    expect(calls[0].params).toEqual([
+      "Ordinateur",
+      "Pour travailler",
+      "content://image/1",
+      "https://example.com/ordinateur",
+      800_000,
+      1,
+      expect.any(Number),
+    ]);
+  });
+
+  it("accepte une date cible passée pour documenter un objectif en retard", async () => {
+    const { db, calls } = mockDb();
+    const pastDate = new Date(2020, 0, 1).getTime();
+
+    await createGoal(db, {
+      name: "Objectif passé",
+      targetAmount: 100_000,
+      targetDate: pastDate,
+    });
+
+    expect(calls[0].params).toContain(pastDate);
   });
 
   it("rejette un montant non entier ou négatif", async () => {
@@ -72,6 +110,9 @@ describe("updateGoal", () => {
     expect(calls[0].sql).toContain("UPDATE goals SET name");
     expect(calls[0].params).toEqual([
       "Nouveau nom",
+      null,
+      null,
+      null,
       500_000,
       new Date(2028, 5, 15).getTime(),
       7,
