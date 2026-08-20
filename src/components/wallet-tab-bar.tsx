@@ -1,16 +1,16 @@
 import {
   BarChart3,
   LayoutDashboard,
-  ListChecks,
+  PiggyBank,
   ReceiptText,
   WalletCards,
   type LucideIcon,
 } from "lucide-react-native";
+import { router } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AddFab, QuickAddMenu } from "@/components/quick-add-menu";
+import { AddFab } from "@/components/quick-add-menu";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
 
 interface TabDefinition {
@@ -22,7 +22,7 @@ const TAB_ORDER = ["(dashboard)", "(transactions)", "(plans)", "(statistics)", "
 const TAB_DEFINITIONS: Record<string, TabDefinition> = {
   "(dashboard)": { label: "Accueil", icon: LayoutDashboard },
   "(transactions)": { label: "Activité", icon: ReceiptText },
-  "(plans)": { label: "Planification", icon: ListChecks },
+  "(plans)": { label: "Planification", icon: PiggyBank },
   "(statistics)": { label: "Statistiques", icon: BarChart3 },
   "(accounts)": { label: "Comptes", icon: WalletCards },
 };
@@ -30,8 +30,6 @@ const TAB_DEFINITIONS: Record<string, TabDefinition> = {
 export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [showAddMenu, setShowAddMenu] = React.useState(false);
-
   const routes = state.routes
     .filter((route) => TAB_ORDER.includes(route.name))
     .sort((a, b) => TAB_ORDER.indexOf(a.name) - TAB_ORDER.indexOf(b.name));
@@ -78,11 +76,10 @@ export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarPro
           {routes.map(renderTab)}
         </View>
         <AddFab
-          onPress={() => setShowAddMenu(true)}
+          onPress={() => router.push("/new-transaction")}
           bottom={Math.max(insets.bottom, spacing.sm) + 80}
         />
       </View>
-      <QuickAddMenu visible={showAddMenu} onClose={() => setShowAddMenu(false)} />
     </>
   );
 }
