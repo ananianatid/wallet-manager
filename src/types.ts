@@ -68,8 +68,71 @@ export interface Transaction {
   exchangeRateDate?: string | null;
   exchangeRateProvider?: string | null;
   note: string | null;
+  merchant?: string | null;
   transactionDate: number;
   createdAt: number;
+}
+
+export interface TransactionSplit {
+  id: number;
+  transactionId: number;
+  categoryId: number;
+  categoryName: string | null;
+  amount: number;
+  createdAt: number;
+}
+
+export interface TransactionSplitInput {
+  categoryId: number;
+  amount: number;
+}
+
+export type ReimbursementDirection = "owed_to_me" | "i_owe";
+
+export interface Person {
+  id: number;
+  name: string;
+  createdAt: number;
+}
+
+export interface PersonInput {
+  name: string;
+}
+
+export interface ReimbursementSettlement {
+  id: number;
+  reimbursementId: number;
+  settlementTransactionId: number;
+  amount: number;
+  createdAt: number;
+}
+
+export interface Reimbursement {
+  id: number;
+  transactionId: number;
+  personId: number;
+  personName: string;
+  direction: ReimbursementDirection;
+  amount: number;
+  settledAmount: number;
+  remainingAmount: number;
+  note: string | null;
+  createdAt: number;
+  settlements: ReimbursementSettlement[];
+}
+
+export interface ReimbursementInput {
+  personId?: number | null;
+  personName?: string | null;
+  direction: ReimbursementDirection;
+  amount: number;
+  note?: string | null;
+}
+
+export interface TransactionDetail {
+  transaction: Transaction;
+  splits: TransactionSplit[];
+  reimbursements: Reimbursement[];
 }
 
 export interface TransactionAmountRow {
@@ -112,6 +175,8 @@ export interface TransactionInput {
   exchangeRateProvider?: string | null;
   note: string | null;
   transactionDate: number;
+  allocations?: TransactionSplitInput[];
+  reimbursements?: ReimbursementInput[];
 }
 
 export interface Budget {

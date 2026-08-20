@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 15;
+export const DATABASE_VERSION = 16;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -58,6 +58,52 @@ CREATE TABLE transactions (
 CREATE INDEX idx_transactions_account ON transactions (account_id);
 CREATE INDEX idx_transactions_destination ON transactions (destination_account_id);
 CREATE INDEX idx_transactions_date ON transactions (transaction_date);
+
+CREATE TABLE transaction_splits (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  category_id    INTEGER NOT NULL REFERENCES categories(id),
+  amount         INTEGER NOT NULL CHECK (amount > 0),
+  created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_transaction_splits_transaction ON transaction_splits (transaction_id);
+CREATE INDEX idx_transaction_splits_category ON transaction_splits (category_id);
+
+CREATE TABLE people (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX ux_people_name ON people (name COLLATE NOCASE);
+
+CREATE TABLE reimbursements (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  person_id      INTEGER NOT NULL REFERENCES people(id),
+  direction      TEXT NOT NULL CHECK (direction IN ('owed_to_me', 'i_owe')),
+  amount         INTEGER NOT NULL CHECK (amount > 0),
+  note           TEXT,
+  created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_reimbursements_transaction ON reimbursements (transaction_id);
+CREATE INDEX idx_reimbursements_person ON reimbursements (person_id);
+
+CREATE TABLE reimbursement_settlements (
+  id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+  reimbursement_id         INTEGER NOT NULL REFERENCES reimbursements(id) ON DELETE CASCADE,
+  settlement_transaction_id INTEGER NOT NULL REFERENCES transactions(id),
+  amount                   INTEGER NOT NULL CHECK (amount > 0),
+  created_at               INTEGER NOT NULL,
+  UNIQUE (reimbursement_id, settlement_transaction_id)
+);
+
+CREATE INDEX idx_reimbursement_settlements_reimbursement
+  ON reimbursement_settlements (reimbursement_id);
+CREATE INDEX idx_reimbursement_settlements_transaction
+  ON reimbursement_settlements (settlement_transaction_id);
 
 CREATE TABLE budgets (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -414,6 +460,54 @@ export const MIGRATION_V15 = `
   WHERE is_seed = 1 AND type IN ('income', 'expense') AND icon = 'tag';
 `;
 
+export const MIGRATION_V16 = `
+  CREATE TABLE transaction_splits (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    category_id    INTEGER NOT NULL REFERENCES categories(id),
+    amount         INTEGER NOT NULL CHECK (amount > 0),
+    created_at     INTEGER NOT NULL
+  );
+
+  CREATE INDEX idx_transaction_splits_transaction ON transaction_splits (transaction_id);
+  CREATE INDEX idx_transaction_splits_category ON transaction_splits (category_id);
+
+  CREATE TABLE people (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX ux_people_name ON people (name COLLATE NOCASE);
+
+  CREATE TABLE reimbursements (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    person_id      INTEGER NOT NULL REFERENCES people(id),
+    direction      TEXT NOT NULL CHECK (direction IN ('owed_to_me', 'i_owe')),
+    amount         INTEGER NOT NULL CHECK (amount > 0),
+    note           TEXT,
+    created_at     INTEGER NOT NULL
+  );
+
+  CREATE INDEX idx_reimbursements_transaction ON reimbursements (transaction_id);
+  CREATE INDEX idx_reimbursements_person ON reimbursements (person_id);
+
+  CREATE TABLE reimbursement_settlements (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    reimbursement_id          INTEGER NOT NULL REFERENCES reimbursements(id) ON DELETE CASCADE,
+    settlement_transaction_id INTEGER NOT NULL REFERENCES transactions(id),
+    amount                    INTEGER NOT NULL CHECK (amount > 0),
+    created_at                INTEGER NOT NULL,
+    UNIQUE (reimbursement_id, settlement_transaction_id)
+  );
+
+  CREATE INDEX idx_reimbursement_settlements_reimbursement
+    ON reimbursement_settlements (reimbursement_id);
+  CREATE INDEX idx_reimbursement_settlements_transaction
+    ON reimbursement_settlements (settlement_transaction_id);
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -521,6 +615,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 14) {
       await db.execAsync(MIGRATION_V15);
+    }
+    if (currentDbVersion <= 15) {
+      await db.execAsync(MIGRATION_V16);
     }
   }
 

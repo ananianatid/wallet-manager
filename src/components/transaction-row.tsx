@@ -96,7 +96,7 @@ export const TransactionRow = memo(function TransactionRow({
       accessible
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint="Ouvre la transaction pour la modifier."
+      accessibilityHint="Ouvre le détail de la transaction."
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
     >
       {content}

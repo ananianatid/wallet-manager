@@ -8,6 +8,7 @@ import {
   MIGRATION_V13,
   MIGRATION_V14,
   MIGRATION_V15,
+  MIGRATION_V16,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -71,6 +72,7 @@ const MIGRATIONS: Record<number, string> = {
   13: MIGRATION_V13,
   14: MIGRATION_V14,
   15: MIGRATION_V15,
+  16: MIGRATION_V16,
 };
 
 class SqliteDb {
@@ -259,6 +261,14 @@ function assertMigratedState(db: SqliteDb, era: number): void {
   expect(tableNames(db)).toEqual(
     expect.arrayContaining(["currencies", "fx_rates"]),
   );
+  expect(tableNames(db)).toEqual(
+    expect.arrayContaining([
+      "transaction_splits",
+      "people",
+      "reimbursements",
+      "reimbursement_settlements",
+    ]),
+  );
   if (era >= 10) {
     expect(tableNames(db)).toContain("settings");
   }
@@ -365,6 +375,10 @@ describe("migrations versionnées", () => {
         "account_groups",
         "currencies",
         "fx_rates",
+        "transaction_splits",
+        "people",
+        "reimbursements",
+        "reimbursement_settlements",
       ]),
     );
     const categoryCount = db.db

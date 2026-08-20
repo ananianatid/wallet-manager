@@ -59,6 +59,11 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "(tabs)" | "onb
             name="new-transaction"
             options={{ presentation: "modal", title: "Nouvelle transaction" }}
           />
+          <Stack.Screen name="transaction-detail" options={{ title: "Détail de la transaction" }} />
+          <Stack.Screen
+            name="reimbursement-settlement"
+            options={{ presentation: "modal", title: "Enregistrer le règlement" }}
+          />
           <Stack.Screen name="accounts/[id]" options={{ title: "Compte" }} />
           <Stack.Screen
             name="accounts/[id]/edit"

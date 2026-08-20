@@ -5,8 +5,15 @@ import type {
   TransactionAmountRow,
   TransactionInput,
   TransactionSearchCriteria,
+  TransactionDetail,
   TransactionType,
 } from "../types";
+import {
+  createJournalTransaction,
+  deleteJournalTransaction,
+  getJournalRelations,
+  updateJournalTransaction,
+} from "./journal";
 
 interface TransactionRow {
   id: number;
@@ -108,14 +115,11 @@ function validateInput(input: TransactionInput): TransactionInput {
   switch (input.type) {
     case "income":
     case "expense":
-      if (input.categoryId == null) {
+      if (input.categoryId == null && (input.allocations?.length ?? 0) === 0) {
         throw new Error("Une catégorie est requise pour ce type de transaction.");
       }
       return {
-        type: input.type,
-        amount: input.amount,
-        categoryId: input.categoryId,
-        accountId: input.accountId,
+        ...input,
         destinationAccountId: null,
         fee: null,
         destinationAmount: null,
@@ -123,7 +127,6 @@ function validateInput(input: TransactionInput): TransactionInput {
         exchangeRateDate: null,
         exchangeRateProvider: null,
         note: note || null,
-        transactionDate: input.transactionDate,
       };
     case "transfer":
       if (input.destinationAccountId == null) {
@@ -148,6 +151,8 @@ function validateInput(input: TransactionInput): TransactionInput {
         exchangeRateProvider: input.exchangeRateProvider ?? null,
         note: note || null,
         transactionDate: input.transactionDate,
+        allocations: input.allocations,
+        reimbursements: input.reimbursements,
       };
   }
 }
@@ -484,27 +489,7 @@ export async function createTransaction(
   input: TransactionInput,
 ): Promise<number> {
   const valid = await normalizeTransfer(db, validateInput(input));
-  const result = await db.runAsync(
-    `INSERT INTO transactions
-       (type, amount, category_id, account_id, destination_account_id, fee,
-        note, transaction_date, created_at, destination_amount, exchange_rate,
-        exchange_rate_date, exchange_rate_provider)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    valid.type,
-    valid.amount,
-    valid.categoryId,
-    valid.accountId,
-    valid.destinationAccountId,
-    valid.fee,
-    valid.note,
-    valid.transactionDate,
-    Date.now(),
-    valid.destinationAmount ?? null,
-    valid.exchangeRate ?? null,
-    valid.exchangeRateDate ?? null,
-    valid.exchangeRateProvider ?? null,
-  );
-  return Number(result.lastInsertRowId);
+  return createJournalTransaction(db, valid);
 }
 
 export async function updateTransaction(
@@ -513,40 +498,24 @@ export async function updateTransaction(
   input: TransactionInput,
 ): Promise<void> {
   const valid = await normalizeTransfer(db, validateInput(input));
-  await db.runAsync(
-    `UPDATE transactions SET
-       type = ?,
-       amount = ?,
-       category_id = ?,
-       account_id = ?,
-       destination_account_id = ?,
-       fee = ?,
-       destination_amount = ?,
-       exchange_rate = ?,
-       exchange_rate_date = ?,
-       exchange_rate_provider = ?,
-       note = ?,
-       transaction_date = ?
-     WHERE id = ?`,
-    valid.type,
-    valid.amount,
-    valid.categoryId,
-    valid.accountId,
-    valid.destinationAccountId,
-    valid.fee,
-    valid.destinationAmount ?? null,
-    valid.exchangeRate ?? null,
-    valid.exchangeRateDate ?? null,
-    valid.exchangeRateProvider ?? null,
-    valid.note,
-    valid.transactionDate,
-    id,
-  );
+  await updateJournalTransaction(db, id, valid);
 }
 
 export async function deleteTransaction(
   db: SQLiteDatabase,
   id: number,
 ): Promise<void> {
-  await db.runAsync("DELETE FROM transactions WHERE id = ?", id);
+  await deleteJournalTransaction(db, id);
+}
+
+export async function getTransactionDetail(
+  db: SQLiteDatabase,
+  id: number,
+): Promise<TransactionDetail | null> {
+  const transaction = await getTransaction(db, id);
+  if (!transaction) {
+    return null;
+  }
+  const relations = await getJournalRelations(db, id);
+  return { transaction, ...relations };
 }

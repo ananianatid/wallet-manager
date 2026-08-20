@@ -186,9 +186,9 @@ export default function TransactionsScreen() {
   const monthRows = transactions ?? [];
 
   const openNew = () => router.push("/new-transaction");
-  const openEdit = useCallback(
+  const openDetail = useCallback(
     (id: number) =>
-      router.push({ pathname: "/new-transaction", params: { id: String(id) } }),
+      router.push({ pathname: "/transaction-detail" as never, params: { id: String(id) } }),
     [],
   );
 
@@ -264,7 +264,7 @@ export default function TransactionsScreen() {
               <TransactionRow
                 transaction={item}
                 hideDate={filters.mode === "month"}
-                onPress={openEdit}
+                onPress={openDetail}
               />
               {!isLast ? (
                 <View

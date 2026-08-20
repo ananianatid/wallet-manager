@@ -8,6 +8,7 @@ import {
   Keyboard,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -23,11 +24,17 @@ import { createGoalReservation, listGoals } from "@/db/goals";
 import {
   createTransaction,
   deleteTransaction,
-  getTransaction,
+  getTransactionDetail,
   updateTransaction,
 } from "@/db/transactions";
 import { radius, spacing, useTheme } from "@/theme";
-import type { Account, Category, Goal, TransactionType } from "@/types";
+import type {
+  Account,
+  Category,
+  Goal,
+  ReimbursementDirection,
+  TransactionType,
+} from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 import { calculateTransferFee } from "@/utils/transfer-fees";
 import { log } from "@/utils/logger";
@@ -79,6 +86,12 @@ export default function NewTransactionScreen() {
   const [feeMode, setFeeMode] = useState<TransferFeeMode>("manual");
   const [debitedAmount, setDebitedAmount] = useState("");
   const [note, setNote] = useState("");
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitRows, setSplitRows] = useState<{ categoryId: number | null; amount: string }[]>([]);
+  const [reimbursementEnabled, setReimbursementEnabled] = useState(false);
+  const [reimbursementPerson, setReimbursementPerson] = useState("");
+  const [reimbursementDirection, setReimbursementDirection] = useState<ReimbursementDirection>("owed_to_me");
+  const [reimbursementAmount, setReimbursementAmount] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -90,12 +103,13 @@ export default function NewTransactionScreen() {
 
   const load = useCallback(async () => {
     const db = await getDatabase();
-    const [accs, cats, goalRows, existing] = await Promise.all([
+    const [accs, cats, goalRows, detail] = await Promise.all([
       listAccountsByUsage(db),
       listCategoriesByUsage(db),
       listGoals(db),
-      transactionId ? getTransaction(db, transactionId) : Promise.resolve(null),
+      transactionId ? getTransactionDetail(db, transactionId) : Promise.resolve(null),
     ]);
+    const existing = detail?.transaction ?? null;
     setAccounts(accs);
     if (!existing && accs.length === 1) {
       setAccountId(accs[0].id);
@@ -130,6 +144,26 @@ export default function NewTransactionScreen() {
       setDebitedAmount("");
       setNote(existing.note ?? "");
       setDate(new Date(existing.transactionDate));
+      if (detail) {
+        const detailSourceCurrency =
+          accs.find((account) => account.id === existing.accountId)?.currencyCode ?? "XOF";
+        setSplitEnabled(detail.splits.length > 0);
+        setSplitRows(
+          detail.splits.map((split) => ({
+            categoryId: split.categoryId,
+            amount: (split.amount / 10 ** currencyDigits(detailSourceCurrency)).toString(),
+          })),
+        );
+        const reimbursement = detail.reimbursements[0];
+        setReimbursementEnabled(detail.reimbursements.length > 0);
+        setReimbursementPerson(reimbursement?.personName ?? "");
+        setReimbursementDirection(reimbursement?.direction ?? "owed_to_me");
+        setReimbursementAmount(
+          reimbursement
+            ? (reimbursement.amount / 10 ** currencyDigits(detailSourceCurrency)).toString()
+            : "",
+        );
+      }
     } else {
       setType(resolveInitialTransactionType(typeParam, goalParam));
     }
@@ -305,9 +339,49 @@ export default function NewTransactionScreen() {
       setErrors({ account: "Choisissez un compte." });
       return;
     }
-    if (type !== "transfer" && categoryId == null) {
+    if (type !== "transfer" && categoryId == null && !splitEnabled) {
       setErrors({ category: "Choisissez une catégorie." });
       return;
+    }
+    let allocations: { categoryId: number; amount: number }[] | undefined;
+    if (splitEnabled) {
+      if (type === "transfer") {
+        setErrors({ category: "Un transfert ne peut pas être fractionné." });
+        return;
+      }
+      allocations = [];
+      for (const row of splitRows) {
+        const parsed = parseMoneyInput(row.amount, sourceCurrency);
+        if (row.categoryId == null || parsed == null || !Number.isInteger(parsed) || parsed <= 0) {
+          setErrors({ split: "Chaque répartition doit avoir une catégorie et un montant positif." });
+          return;
+        }
+        allocations.push({ categoryId: row.categoryId, amount: parsed });
+      }
+      if (allocations.length === 0 || allocations.reduce((total, row) => total + row.amount, 0) !== parsedAmount) {
+        setErrors({ split: "La somme des répartitions doit être exactement égale au montant." });
+        return;
+      }
+    }
+    let reimbursements:
+      | { personName: string; direction: ReimbursementDirection; amount: number }
+      | undefined;
+    if (reimbursementEnabled) {
+      const parsedReimbursementAmount = parseMoneyInput(reimbursementAmount, sourceCurrency);
+      if (
+        !reimbursementPerson.trim() ||
+        parsedReimbursementAmount == null ||
+        !Number.isInteger(parsedReimbursementAmount) ||
+        parsedReimbursementAmount <= 0
+      ) {
+        setErrors({ reimbursement: "Saisissez une personne et un montant positif." });
+        return;
+      }
+      reimbursements = {
+        personName: reimbursementPerson.trim(),
+        direction: reimbursementDirection,
+        amount: parsedReimbursementAmount,
+      };
     }
     if (type === "transfer" && destinationId == null && goalReservationId == null) {
       setErrors({
@@ -396,7 +470,7 @@ export default function NewTransactionScreen() {
     const input = {
       type,
       amount: parsedAmount,
-      categoryId,
+      categoryId: splitEnabled ? null : categoryId,
       accountId: accountId!,
       destinationAccountId,
       fee: type === "transfer" && !isGoalReservation ? parsedFee : null,
@@ -406,6 +480,8 @@ export default function NewTransactionScreen() {
       exchangeRateProvider: isGoalReservation ? null : savedExchangeRateProvider,
       note: note.trim() || null,
       transactionDate: date.getTime(),
+      allocations,
+      reimbursements: reimbursements ? [reimbursements] : undefined,
     };
 
     setSaving(true);
@@ -440,6 +516,12 @@ export default function NewTransactionScreen() {
         setFeeMode("manual");
         setDebitedAmount("");
         setNote("");
+        setSplitEnabled(false);
+        setSplitRows([]);
+        setReimbursementEnabled(false);
+        setReimbursementPerson("");
+        setReimbursementAmount("");
+        setReimbursementDirection("owed_to_me");
         setDate(new Date());
         setExchangeRate(null);
         setExchangeRateDate(null);
@@ -677,6 +759,155 @@ export default function NewTransactionScreen() {
             />
           </FormField>
         )}
+
+        {type !== "transfer" ? (
+          <View style={[styles.journalSection, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flex: 1, gap: spacing.xs }}>
+                <Text style={{ color: theme.label, fontWeight: "700" }}>Fractionner</Text>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                  Répartissez cette transaction entre plusieurs catégories.
+                </Text>
+              </View>
+              <Switch
+                value={splitEnabled}
+                onValueChange={(enabled) => {
+                  setSplitEnabled(enabled);
+                  if (enabled && splitRows.length === 0) {
+                    setSplitRows([{ categoryId: null, amount: "" }, { categoryId: null, amount: "" }]);
+                  }
+                  setErrors((current) => ({ ...current, category: "", split: "" }));
+                }}
+                trackColor={{ false: theme.separator, true: theme.accent }}
+                accessibilityLabel="Activer le fractionnement"
+              />
+            </View>
+            {splitEnabled ? (
+              <View style={styles.subSection}>
+                {splitRows.map((row, index) => (
+                  <View key={index} style={styles.splitRow}>
+                    <View style={{ flex: 1 }}>
+                      <SelectField
+                        label={`Catégorie ${index + 1}`}
+                        value={categoryOptions.find((option) => option.id === row.categoryId)?.label ?? null}
+                        options={categoryOptions}
+                        layout="grid"
+                        onChange={(value) =>
+                          setSplitRows((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, categoryId: value } : item,
+                            ),
+                          )
+                        }
+                      />
+                    </View>
+                    <View style={{ width: 120, gap: spacing.xs }}>
+                      <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>Montant</Text>
+                      <TextInput
+                        value={row.amount}
+                        onChangeText={(value) =>
+                          setSplitRows((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, amount: value } : item,
+                            ),
+                          )
+                        }
+                        placeholder="0"
+                        placeholderTextColor={theme.secondaryLabel}
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                        style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.separator, color: theme.label }]}
+                      />
+                    </View>
+                    {splitRows.length > 1 ? (
+                      <Pressable
+                        onPress={() => setSplitRows((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Supprimer la répartition ${index + 1}`}
+                        style={{ paddingTop: spacing.lg }}
+                      >
+                        <Text style={{ color: theme.expense, fontWeight: "700" }}>Retirer</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+                <Pressable
+                  onPress={() => setSplitRows((current) => [...current, { categoryId: null, amount: "" }])}
+                  accessibilityRole="button"
+                  style={[styles.secondaryAction, { borderColor: theme.separator }]}
+                >
+                  <Text style={{ color: theme.accent, fontWeight: "700" }}>Ajouter une répartition</Text>
+                </Pressable>
+                {errors.split ? <Text style={{ color: theme.expense, fontSize: 13 }}>{errors.split}</Text> : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {type === "expense" ? (
+          <View style={[styles.journalSection, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flex: 1, gap: spacing.xs }}>
+                <Text style={{ color: theme.label, fontWeight: "700" }}>Remboursement</Text>
+                <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
+                  Notez une dette locale sans créer d&apos;écriture supplémentaire.
+                </Text>
+              </View>
+              <Switch
+                value={reimbursementEnabled}
+                onValueChange={(enabled) => {
+                  setReimbursementEnabled(enabled);
+                  setErrors((current) => ({ ...current, reimbursement: "" }));
+                }}
+                trackColor={{ false: theme.separator, true: theme.accent }}
+                accessibilityLabel="Activer un remboursement"
+              />
+            </View>
+            {reimbursementEnabled ? (
+              <View style={styles.subSection}>
+                <FormField label="Personne" error={errors.reimbursement}>
+                  <TextInput
+                    value={reimbursementPerson}
+                    onChangeText={setReimbursementPerson}
+                    placeholder="Nom de la personne"
+                    placeholderTextColor={theme.secondaryLabel}
+                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.separator, color: theme.label }]}
+                  />
+                </FormField>
+                <View style={styles.directionRow}>
+                  {([
+                    ["owed_to_me", "On me doit"],
+                    ["i_owe", "Je dois"],
+                  ] as const).map(([value, label]) => {
+                    const active = reimbursementDirection === value;
+                    return (
+                      <Pressable
+                        key={value}
+                        onPress={() => setReimbursementDirection(value)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: active }}
+                        style={[styles.directionButton, { backgroundColor: active ? theme.accent : theme.surface, borderColor: active ? theme.accent : theme.separator }]}
+                      >
+                        <Text style={{ color: active ? theme.onAccent : theme.secondaryLabel, fontWeight: "600" }}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <FormField label={`Montant dû (${sourceCurrency})`}>
+                  <TextInput
+                    value={reimbursementAmount}
+                    onChangeText={setReimbursementAmount}
+                    placeholder="0"
+                    placeholderTextColor={theme.secondaryLabel}
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.separator, color: theme.label }]}
+                  />
+                </FormField>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {type === "transfer" && goalReservationId == null ? (
           <View style={styles.feeSection}>
@@ -926,6 +1157,45 @@ const styles = StyleSheet.create({
   },
   feeSection: {
     gap: spacing.sm,
+  },
+  journalSection: {
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  subSection: {
+    gap: spacing.md,
+  },
+  splitRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.sm,
+  },
+  directionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  directionButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  secondaryAction: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   feeModeRow: {
     flexDirection: "row",
