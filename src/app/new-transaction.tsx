@@ -1,6 +1,13 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router/stack";
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -57,6 +64,12 @@ const FEE_MODES: { value: TransferFeeMode; label: string }[] = [
   { value: "calculated", label: "Calcul automatique" },
 ];
 
+const TRANSACTION_TABS = [
+  { value: "expense", label: "Dépense", icon: ArrowDownLeft },
+  { value: "income", label: "Revenu", icon: ArrowUpRight },
+  { value: "transfer", label: "Transfert", icon: ArrowLeftRight },
+] as const satisfies { value: TransactionType; label: string; icon: typeof ArrowDownLeft }[];
+
 export default function NewTransactionScreen() {
   const theme = useTheme();
   const { id, goalId: goalParam, type: typeParam } = useLocalSearchParams<{
@@ -95,6 +108,7 @@ export default function NewTransactionScreen() {
   const [reimbursementPerson, setReimbursementPerson] = useState("");
   const [reimbursementDirection, setReimbursementDirection] = useState<ReimbursementDirection>("owed_to_me");
   const [reimbursementAmount, setReimbursementAmount] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -148,6 +162,12 @@ export default function NewTransactionScreen() {
       setNote(existing.note ?? "");
       setMerchant(existing.merchant ?? "");
       setTags(detail?.tags.map((tag) => tag.name) ?? []);
+      setAdvancedOpen(
+        Boolean(existing.merchant) ||
+          (detail?.tags.length ?? 0) > 0 ||
+          (detail?.splits.length ?? 0) > 0 ||
+          (detail?.reimbursements.length ?? 0) > 0,
+      );
       setDate(new Date(existing.transactionDate));
       if (detail) {
         const detailSourceCurrency =
@@ -331,6 +351,33 @@ export default function NewTransactionScreen() {
 
     return parsedDebitedAmount - parsedAmount;
   }, [amount, debitedAmount, feeMode, sourceCurrency]);
+
+  const selectType = (nextType: TransactionType) => {
+    if (nextType === type) {
+      return;
+    }
+    setType(nextType);
+    setCategoryId(null);
+    setDestinationId(null);
+    setDestinationAmount("");
+    setDestinationEdited(false);
+    setPreserveStoredConversion(false);
+    setGoalReservationId(null);
+    setFee("");
+    setFeeMode("manual");
+    setDebitedAmount("");
+    setExchangeRate(null);
+    setExchangeRateDate(null);
+    setExchangeRateProvider(null);
+    setRateError(null);
+    setSplitEnabled(false);
+    setSplitRows([]);
+    setReimbursementEnabled(false);
+    setReimbursementPerson("");
+    setReimbursementAmount("");
+    setReimbursementDirection("owed_to_me");
+    setErrors({});
+  };
 
   const save = async (mode: "close" | "continue") => {
     setErrors({});
@@ -610,6 +657,35 @@ export default function NewTransactionScreen() {
             <Text style={{ color: theme.secondaryLabel }}>Préparation du formulaire…</Text>
           </View>
         ) : null}
+        <View
+          accessible
+          accessibilityRole="tablist"
+          accessibilityLabel="Type de transaction"
+          style={[styles.typeTabs, { backgroundColor: theme.surfaceMuted, borderColor: theme.separator }]}
+        >
+          {TRANSACTION_TABS.map(({ value, label, icon: Icon }) => {
+            const active = type === value;
+            return (
+              <Pressable
+                key={value}
+                onPress={() => selectType(value)}
+                accessibilityRole="tab"
+                accessibilityLabel={label}
+                accessibilityState={{ selected: active }}
+                style={({ pressed }) => [
+                  styles.typeTab,
+                  active && { backgroundColor: theme.accent },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Icon size={17} color={active ? theme.onAccent : theme.secondaryLabel} strokeWidth={2.2} />
+                <Text style={[styles.typeTabLabel, { color: active ? theme.onAccent : theme.secondaryLabel }]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
         <FormField
           label={type === "transfer" ? `Montant débité (${sourceCurrency})` : `Montant (${sourceCurrency})`}
           error={errors.amount}
@@ -770,7 +846,27 @@ export default function NewTransactionScreen() {
           </FormField>
         )}
 
-        {type !== "transfer" ? (
+        <Pressable
+          onPress={() => setAdvancedOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityLabel={advancedOpen ? "Masquer les options avancées" : "Afficher les options avancées"}
+          accessibilityState={{ expanded: advancedOpen }}
+          style={({ pressed }) => [styles.advancedToggle, { borderColor: theme.separator }, pressed && styles.pressed]}
+        >
+          <View style={styles.advancedToggleCopy}>
+            <Text style={{ color: theme.label, fontWeight: "700" }}>Avancé</Text>
+            <Text style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+              {type === "transfer"
+                ? "Marchand et tags"
+                : type === "income"
+                  ? "Fractionnement, marchand et tags"
+                  : "Fractionnement, remboursement, marchand et tags"}
+            </Text>
+          </View>
+          {advancedOpen ? <ChevronUp size={19} color={theme.accent} /> : <ChevronDown size={19} color={theme.accent} />}
+        </Pressable>
+
+        {advancedOpen && type !== "transfer" ? (
           <View style={[styles.journalSection, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
             <View style={styles.sectionHeader}>
               <View style={{ flex: 1, gap: spacing.xs }}>
@@ -854,7 +950,7 @@ export default function NewTransactionScreen() {
           </View>
         ) : null}
 
-        {type === "expense" ? (
+        {advancedOpen && type === "expense" ? (
           <View style={[styles.journalSection, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
             <View style={styles.sectionHeader}>
               <View style={{ flex: 1, gap: spacing.xs }}>
@@ -1097,7 +1193,7 @@ export default function NewTransactionScreen() {
           />
         ) : null}
 
-        <FormField label="Marchand (optionnel)">
+        {advancedOpen ? <FormField label="Marchand (optionnel)">
           <TextInput
             value={merchant}
             onChangeText={setMerchant}
@@ -1107,9 +1203,9 @@ export default function NewTransactionScreen() {
             accessibilityLabel="Marchand optionnel"
             style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.separator, color: theme.label }]}
           />
-        </FormField>
+        </FormField> : null}
 
-        <FormField label="Tags (optionnels)">
+        {advancedOpen ? <FormField label="Tags (optionnels)">
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <TextInput
               value={tagInput}
@@ -1155,7 +1251,7 @@ export default function NewTransactionScreen() {
               ))}
             </View>
           ) : null}
-        </FormField>
+        </FormField> : null}
 
         <FormField label="Note (optionnel)">
           <TextInput
@@ -1210,6 +1306,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.sm,
     minHeight: 32,
+  },
+  typeTabs: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    padding: spacing.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
+  },
+  typeTab: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+  },
+  typeTabLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  advancedToggle: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+  },
+  advancedToggleCopy: {
+    flex: 1,
+    gap: spacing.xs,
   },
   saveActions: {
     flexDirection: "row",
@@ -1308,4 +1439,5 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
   },
+  pressed: { opacity: 0.7 },
 });

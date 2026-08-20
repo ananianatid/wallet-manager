@@ -2,7 +2,7 @@ import { router, usePathname } from "expo-router";
 import {
   BarChart3,
   LayoutDashboard,
-  ListChecks,
+  PiggyBank,
   Plus,
   ReceiptText,
   Settings2,
@@ -18,7 +18,7 @@ export const DESKTOP_BREAKPOINT = 1080;
 const WEB_NAV_ITEMS: { label: string; href: string; icon: LucideIcon; match: string[] }[] = [
   { label: "Accueil", href: "/app", icon: LayoutDashboard, match: ["/", "/app"] },
   { label: "Activité", href: "/app/activity", icon: ReceiptText, match: ["/app/activity", "/search"] },
-  { label: "Planification", href: "/app/planning", icon: ListChecks, match: ["/app/planning", "/plans", "/budgets", "/goals", "/savings", "/recurring"] },
+  { label: "Planification", href: "/app/planning", icon: PiggyBank, match: ["/app/planning", "/plans", "/budgets", "/goals", "/savings", "/recurring"] },
   { label: "Statistiques", href: "/app/statistics", icon: BarChart3, match: ["/app/statistics", "/statistics"] },
   { label: "Comptes", href: "/app/accounts", icon: WalletCards, match: ["/app/accounts", "/accounts", "/account-groups"] },
 ];

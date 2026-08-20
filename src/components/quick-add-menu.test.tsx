@@ -1,24 +1,17 @@
 /// <reference types="jest" />
 
-import { render } from "@testing-library/react-native";
-import { QuickAddMenu } from "./quick-add-menu";
+import { fireEvent, render } from "@testing-library/react-native";
+import { AddFab } from "./quick-add-menu";
 
-jest.mock("lucide-react-native", () => ({
-  ArrowDownLeft: () => null,
-  ArrowLeftRight: () => null,
-  ArrowUpRight: () => null,
-  Plus: () => null,
-  X: () => null,
-}));
+jest.mock("lucide-react-native", () => ({ Plus: () => null }));
 
-describe("QuickAddMenu", () => {
-  it("exposes the three operation actions", async () => {
-    const { getByText } = await render(<QuickAddMenu visible onClose={() => undefined} />);
+describe("AddFab", () => {
+  it("opens the transaction form directly", async () => {
+    const onPress = jest.fn();
+    const { getByRole } = await render(<AddFab onPress={onPress} bottom={80} />);
 
-    expect(getByText("Ajouter")).toBeTruthy();
-    expect(getByText("Dépense")).toBeTruthy();
-    expect(getByText("Revenu")).toBeTruthy();
-    expect(getByText("Transfert")).toBeTruthy();
+    expect(getByRole("button", { name: "Ajouter une opération" })).toBeTruthy();
+    await fireEvent.press(getByRole("button", { name: "Ajouter une opération" }));
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
-
 });

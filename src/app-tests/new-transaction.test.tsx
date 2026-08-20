@@ -5,6 +5,14 @@ import { Alert } from "react-native";
 import type { ReactNode } from "react";
 import NewTransactionScreen, { resolveInitialTransactionType } from "@/app/new-transaction";
 
+jest.mock("lucide-react-native", () => ({
+  ArrowDownLeft: () => null,
+  ArrowLeftRight: () => null,
+  ArrowUpRight: () => null,
+  ChevronDown: () => null,
+  ChevronUp: () => null,
+}));
+
 let mockParams: { id?: string; goalId?: string; type?: string } = {};
 
 jest.mock("expo-router", () => {
@@ -186,14 +194,40 @@ describe("NewTransactionScreen", () => {
     expect(resolveInitialTransactionType(type, goalId)).toBe(expected);
   });
 
-  it("opens directly as an expense without rendering the type selector", async () => {
+  it("opens directly on the expense tab", async () => {
     const screen = await renderScreen();
 
     expect(screen.getByLabelText("Montant en XOF")).toBeTruthy();
-    expect(screen.queryByText("Dépense")).toBeNull();
-    expect(screen.queryByText("Revenu")).toBeNull();
-    expect(screen.queryByText("Transfert")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Dépense" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Dépense" }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole("tab", { name: "Revenu" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Transfert" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Afficher les options avancées" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Enregistrer et continuer" })).toBeTruthy();
+  });
+
+  it("reveals advanced fields only on request", async () => {
+    const screen = await renderScreen();
+
+    expect(screen.queryByText("Marchand (optionnel)")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Afficher les options avancées" }));
+    expect(screen.getByText("Marchand (optionnel)")).toBeTruthy();
+    expect(screen.getByText("Tags (optionnels)")).toBeTruthy();
+    expect(screen.getByText("Fractionner")).toBeTruthy();
+    expect(screen.getByText("Remboursement")).toBeTruthy();
+  });
+
+  it("switches the form through the transaction tabs", async () => {
+    const screen = await renderScreen();
+
+    await fireEvent.press(screen.getByRole("tab", { name: "Revenu" }));
+    expect(screen.getByLabelText("Montant en XOF")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Afficher les options avancées" }));
+    expect(screen.queryByText("Remboursement")).toBeNull();
+
+    await fireEvent.press(screen.getByRole("tab", { name: "Transfert" }));
+    expect(screen.getByLabelText("Montant débité en XOF")).toBeTruthy();
+    expect(screen.getByText("Compte de destination")).toBeTruthy();
   });
 
   it("keeps the income shortcut mode in the form", async () => {
