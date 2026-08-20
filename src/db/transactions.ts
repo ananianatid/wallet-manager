@@ -34,6 +34,7 @@ interface TransactionRow {
   exchangeRateDate: string | null;
   exchangeRateProvider: string | null;
   note: string | null;
+  merchant: string | null;
   transactionDate: number;
   createdAt: number;
 }
@@ -55,6 +56,7 @@ const SELECT_FIELDS = `
   t.exchange_rate_date AS exchangeRateDate,
   t.exchange_rate_provider AS exchangeRateProvider,
   t.note,
+  t.merchant,
   t.transaction_date AS transactionDate,
   t.created_at AS createdAt
 `;
@@ -87,6 +89,7 @@ function mapTransaction(row: TransactionRow): Transaction {
     exchangeRateDate: row.exchangeRateDate,
     exchangeRateProvider: row.exchangeRateProvider,
     note: row.note,
+    merchant: row.merchant,
     transactionDate: row.transactionDate,
     createdAt: row.createdAt,
   };
@@ -206,6 +209,8 @@ export interface TransactionFilter {
   accountIds?: readonly number[] | null;
   types?: readonly TransactionType[] | null;
   categoryIds?: readonly number[] | null;
+  tagIds?: readonly number[] | null;
+  merchant?: string | null;
   startMs?: number | null;
   endMs?: number | null;
   order?: "asc" | "desc";
@@ -251,6 +256,21 @@ export function listTransactions(
       conditions.push(`t.category_id IN (${placeholders})`);
       params.push(...filter.categoryIds);
     }
+  }
+  if (filter.tagIds != null) {
+    if (filter.tagIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = filter.tagIds.map(() => "?").join(", ");
+      conditions.push(
+        `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id IN (${placeholders}))`,
+      );
+      params.push(...filter.tagIds);
+    }
+  }
+  if (filter.merchant?.trim()) {
+    conditions.push("t.merchant LIKE ? ESCAPE '\\'");
+    params.push(`%${filter.merchant.trim().replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")}%`);
   }
   if (filter.startMs != null) {
     conditions.push("t.transaction_date >= ?");
@@ -357,13 +377,16 @@ export function searchTransactionsByText(
       `SELECT ${SELECT_FIELDS}
        ${FROM_JOINS}
        WHERE t.note LIKE ? ESCAPE '\\'
+          OR t.merchant LIKE ? ESCAPE '\\'
           OR c.name LIKE ? ESCAPE '\\'
           OR a.name LIKE ? ESCAPE '\\'
           OR da.name LIKE ? ESCAPE '\\'
+          OR EXISTS (SELECT 1 FROM transaction_tags stt JOIN tags st ON st.id = stt.tag_id
+                     WHERE stt.transaction_id = t.id AND st.name LIKE ? ESCAPE '\\')
           OR CAST(t.amount AS TEXT) LIKE ? ESCAPE '\\'
        ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC
        LIMIT ?`,
-      [pattern, pattern, pattern, pattern, pattern, limit],
+      [pattern, pattern, pattern, pattern, pattern, pattern, pattern, limit],
     )
     .then((rows) => rows.map(mapTransaction));
 }
@@ -386,11 +409,13 @@ export function searchTransactions(
         .replace(/_/g, "\\_") +
       "%";
     conditions.push(
-      "(t.note LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\' OR " +
+      "(t.note LIKE ? ESCAPE '\\' OR t.merchant LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\' OR " +
         "a.name LIKE ? ESCAPE '\\' OR da.name LIKE ? ESCAPE '\\' OR " +
+        "EXISTS (SELECT 1 FROM transaction_tags stt JOIN tags st ON st.id = stt.tag_id " +
+        "WHERE stt.transaction_id = t.id AND st.name LIKE ? ESCAPE '\\') OR " +
         "CAST(t.amount AS TEXT) LIKE ? ESCAPE '\\')",
     );
-    params.push(pattern, pattern, pattern, pattern, pattern);
+    params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern);
   }
 
   if (criteria.startDate != null) {
@@ -444,6 +469,17 @@ export function searchTransactions(
       const placeholders = criteria.categoryIds.map(() => "?").join(", ");
       conditions.push("t.category_id IN (" + placeholders + ")");
       params.push(...criteria.categoryIds);
+    }
+  }
+  if (criteria.tagIds != null) {
+    if (criteria.tagIds.length === 0) {
+      conditions.push("0 = 1");
+    } else {
+      const placeholders = criteria.tagIds.map(() => "?").join(", ");
+      conditions.push(
+        `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id IN (${placeholders}))`,
+      );
+      params.push(...criteria.tagIds);
     }
   }
 

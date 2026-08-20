@@ -4,6 +4,7 @@ import type {
   Reimbursement,
   ReimbursementInput,
   ReimbursementSettlement,
+  Tag,
   TransactionInput,
   TransactionSplit,
   TransactionSplitInput,
@@ -133,11 +134,63 @@ async function validateCategories(
 export async function validateJournalRelations(
   db: SQLiteDatabase,
   input: TransactionInput,
-): Promise<{ allocations: TransactionSplitInput[]; reimbursements: ReimbursementInput[] }> {
+): Promise<{ allocations: TransactionSplitInput[]; reimbursements: ReimbursementInput[]; tags: string[] }> {
   const allocations = validateAllocations(input);
   const reimbursements = validateReimbursements(input);
   await validateCategories(db, input, allocations);
-  return { allocations, reimbursements };
+  const tags = [...new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean))];
+  return { allocations, reimbursements, tags };
+}
+
+async function replaceTransactionTags(
+  db: SQLiteDatabase,
+  transactionId: number,
+  tags: string[],
+  now: number,
+): Promise<void> {
+  await db.runAsync("DELETE FROM transaction_tags WHERE transaction_id = ?", transactionId);
+  for (const name of tags) {
+    await db.runAsync(
+      "INSERT OR IGNORE INTO tags (name, created_at) VALUES (?, ?)",
+      name,
+      now,
+    );
+    const tag = await db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM tags WHERE name = ? COLLATE NOCASE",
+      name,
+    );
+    if (!tag) {
+      throw relationError("Le tag n'a pas pu être enregistré.");
+    }
+    await db.runAsync(
+      `INSERT OR IGNORE INTO transaction_tags
+         (transaction_id, tag_id, created_at)
+       VALUES (?, ?, ?)`,
+      transactionId,
+      tag.id,
+      now,
+    );
+  }
+}
+
+export async function listTags(db: SQLiteDatabase): Promise<Tag[]> {
+  return db.getAllAsync<Tag>(
+    "SELECT id, name, created_at AS createdAt FROM tags ORDER BY name COLLATE NOCASE",
+  );
+}
+
+export async function listTransactionTags(
+  db: SQLiteDatabase,
+  transactionId: number,
+): Promise<Tag[]> {
+  return db.getAllAsync<Tag>(
+    `SELECT t.id, t.name, t.created_at AS createdAt
+     FROM tags t
+     JOIN transaction_tags tt ON tt.tag_id = t.id
+     WHERE tt.transaction_id = ?
+     ORDER BY t.name COLLATE NOCASE`,
+    transactionId,
+  );
 }
 
 export async function insertJournalTransaction(
@@ -145,13 +198,13 @@ export async function insertJournalTransaction(
   input: TransactionInput,
   now = Date.now(),
 ): Promise<number> {
-  const { allocations, reimbursements } = await validateJournalRelations(db, input);
+  const { allocations, reimbursements, tags } = await validateJournalRelations(db, input);
   const result = await db.runAsync(
     `INSERT INTO transactions
        (type, amount, category_id, account_id, destination_account_id, fee,
         note, transaction_date, created_at, destination_amount, exchange_rate,
-        exchange_rate_date, exchange_rate_provider)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        exchange_rate_date, exchange_rate_provider, merchant)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     input.type,
     input.amount,
     allocations.length > 0 ? null : input.categoryId,
@@ -165,6 +218,7 @@ export async function insertJournalTransaction(
     input.exchangeRate ?? null,
     input.exchangeRateDate ?? null,
     input.exchangeRateProvider ?? null,
+    input.merchant?.trim() || null,
   );
   const transactionId = Number(result.lastInsertRowId);
   for (const allocation of allocations) {
@@ -192,6 +246,7 @@ export async function insertJournalTransaction(
       now,
     );
   }
+  await replaceTransactionTags(db, transactionId, tags, now);
   return transactionId;
 }
 
@@ -243,13 +298,13 @@ export async function updateJournalTransaction(
 ): Promise<void> {
   await assertTransactionCanChange(db, id);
   await db.withTransactionAsync(async () => {
-    const { allocations, reimbursements } = await validateJournalRelations(db, input);
+    const { allocations, reimbursements, tags } = await validateJournalRelations(db, input);
     const result = await db.runAsync(
       `UPDATE transactions SET
          type = ?, amount = ?, category_id = ?, account_id = ?,
          destination_account_id = ?, fee = ?, destination_amount = ?,
          exchange_rate = ?, exchange_rate_date = ?, exchange_rate_provider = ?,
-         note = ?, transaction_date = ?
+         note = ?, merchant = ?, transaction_date = ?
        WHERE id = ?`,
       input.type,
       input.amount,
@@ -262,6 +317,7 @@ export async function updateJournalTransaction(
       input.exchangeRateDate ?? null,
       input.exchangeRateProvider ?? null,
       input.note,
+      input.merchant?.trim() || null,
       input.transactionDate,
       id,
     );
@@ -270,6 +326,7 @@ export async function updateJournalTransaction(
     }
     await db.runAsync("DELETE FROM transaction_splits WHERE transaction_id = ?", id);
     await db.runAsync("DELETE FROM reimbursements WHERE transaction_id = ?", id);
+    await replaceTransactionTags(db, id, tags, Date.now());
     for (const allocation of allocations) {
       await db.runAsync(
         `INSERT INTO transaction_splits
@@ -393,12 +450,13 @@ export async function getReimbursement(
 export async function getJournalRelations(
   db: SQLiteDatabase,
   transactionId: number,
-): Promise<Pick<TransactionDetail, "splits" | "reimbursements">> {
-  const [splits, reimbursements] = await Promise.all([
+): Promise<Pick<TransactionDetail, "splits" | "reimbursements" | "tags">> {
+  const [splits, reimbursements, tags] = await Promise.all([
     listTransactionSplits(db, transactionId),
     listReimbursementsForTransaction(db, transactionId),
+    listTransactionTags(db, transactionId),
   ]);
-  return { splits, reimbursements };
+  return { splits, reimbursements, tags };
 }
 
 export async function settleReimbursement(

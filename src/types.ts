@@ -13,6 +13,7 @@ export interface TransactionSearchCriteria {
   accountIds: number[] | null;
   types: TransactionType[];
   categoryIds: number[] | null;
+  tagIds?: number[] | null;
 }
 
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
@@ -69,8 +70,26 @@ export interface Transaction {
   exchangeRateProvider?: string | null;
   note: string | null;
   merchant?: string | null;
+  tags?: Tag[];
   transactionDate: number;
   createdAt: number;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  createdAt: number;
+}
+
+export interface TransactionAttachment {
+  id: number;
+  transactionId: number;
+  originalName: string;
+  mimeType: string;
+  storagePath: string;
+  size: number;
+  createdAt: number;
+  exists: boolean;
 }
 
 export interface TransactionSplit {
@@ -133,6 +152,7 @@ export interface TransactionDetail {
   transaction: Transaction;
   splits: TransactionSplit[];
   reimbursements: Reimbursement[];
+  tags: Tag[];
 }
 
 export interface TransactionAmountRow {
@@ -175,6 +195,8 @@ export interface TransactionInput {
   exchangeRateProvider?: string | null;
   note: string | null;
   transactionDate: number;
+  merchant?: string | null;
+  tags?: string[];
   allocations?: TransactionSplitInput[];
   reimbursements?: ReimbursementInput[];
 }

@@ -3,8 +3,10 @@ import { createTestDb } from "@/test-utils/in-memory-db";
 import { createTransaction, deleteTransaction, updateTransaction } from "./transactions";
 import {
   listReimbursementsForTransaction,
+  listTransactionTags,
   settleReimbursement,
 } from "./journal";
+import { searchTransactions } from "./transactions";
 import type { TransactionInput } from "@/types";
 
 async function ids(db: SQLiteDatabase): Promise<{ income: number; expense: number }> {
@@ -150,5 +152,35 @@ describe("journal financier", () => {
     await expect(updateTransaction(db, debtTransactionId, input({ categoryId: expense })))
       .rejects.toThrow("déjà réglée");
     await expect(deleteTransaction(db, debtTransactionId)).rejects.toThrow("déjà réglée");
+  });
+
+  it("normalise les tags sans sensibilité à la casse et recherche le marchand", async () => {
+    const db = await setupDb();
+    const { expense } = await ids(db);
+    const transactionId = await createTransaction(
+      db,
+      input({
+        categoryId: expense,
+        merchant: "Marché central",
+        tags: ["Courses", "courses", "Maison"],
+      }),
+    );
+    expect(await listTransactionTags(db, transactionId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Courses" }),
+        expect.objectContaining({ name: "Maison" }),
+      ]),
+    );
+    const rows = await searchTransactions(db, {
+      query: "central",
+      startDate: null,
+      endDate: null,
+      minAmount: null,
+      maxAmount: null,
+      accountIds: null,
+      types: ["expense"],
+      categoryIds: null,
+    });
+    expect(rows.map((row) => row.id)).toContain(transactionId);
   });
 });

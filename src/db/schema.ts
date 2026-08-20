@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 16;
+export const DATABASE_VERSION = 17;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -51,6 +51,7 @@ CREATE TABLE transactions (
   exchange_rate_date     TEXT,
   exchange_rate_provider TEXT,
   note                   TEXT,
+  merchant               TEXT,
   transaction_date       INTEGER NOT NULL,
   created_at             INTEGER NOT NULL
 );
@@ -104,6 +105,36 @@ CREATE INDEX idx_reimbursement_settlements_reimbursement
   ON reimbursement_settlements (reimbursement_id);
 CREATE INDEX idx_reimbursement_settlements_transaction
   ON reimbursement_settlements (settlement_transaction_id);
+
+CREATE TABLE tags (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX ux_tags_name ON tags (name COLLATE NOCASE);
+
+CREATE TABLE transaction_tags (
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  tag_id         INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  created_at     INTEGER NOT NULL,
+  PRIMARY KEY (transaction_id, tag_id)
+);
+
+CREATE INDEX idx_transaction_tags_tag ON transaction_tags (tag_id);
+
+CREATE TABLE transaction_attachments (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  original_name  TEXT NOT NULL,
+  mime_type      TEXT NOT NULL,
+  storage_path   TEXT NOT NULL,
+  size           INTEGER NOT NULL CHECK (size >= 0),
+  created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_transaction_attachments_transaction
+  ON transaction_attachments (transaction_id);
 
 CREATE TABLE budgets (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -508,6 +539,40 @@ export const MIGRATION_V16 = `
     ON reimbursement_settlements (settlement_transaction_id);
 `;
 
+export const MIGRATION_V17 = `
+  ALTER TABLE transactions ADD COLUMN merchant TEXT;
+
+  CREATE TABLE tags (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX ux_tags_name ON tags (name COLLATE NOCASE);
+
+  CREATE TABLE transaction_tags (
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    tag_id         INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    created_at     INTEGER NOT NULL,
+    PRIMARY KEY (transaction_id, tag_id)
+  );
+
+  CREATE INDEX idx_transaction_tags_tag ON transaction_tags (tag_id);
+
+  CREATE TABLE transaction_attachments (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    original_name  TEXT NOT NULL,
+    mime_type      TEXT NOT NULL,
+    storage_path   TEXT NOT NULL,
+    size           INTEGER NOT NULL CHECK (size >= 0),
+    created_at     INTEGER NOT NULL
+  );
+
+  CREATE INDEX idx_transaction_attachments_transaction
+    ON transaction_attachments (transaction_id);
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -618,6 +683,9 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     if (currentDbVersion <= 15) {
       await db.execAsync(MIGRATION_V16);
+    }
+    if (currentDbVersion <= 16) {
+      await db.execAsync(MIGRATION_V17);
     }
   }
 

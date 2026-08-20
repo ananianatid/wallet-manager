@@ -86,6 +86,9 @@ export default function NewTransactionScreen() {
   const [feeMode, setFeeMode] = useState<TransferFeeMode>("manual");
   const [debitedAmount, setDebitedAmount] = useState("");
   const [note, setNote] = useState("");
+  const [merchant, setMerchant] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState<{ categoryId: number | null; amount: string }[]>([]);
   const [reimbursementEnabled, setReimbursementEnabled] = useState(false);
@@ -143,6 +146,8 @@ export default function NewTransactionScreen() {
       setFeeMode("manual");
       setDebitedAmount("");
       setNote(existing.note ?? "");
+      setMerchant(existing.merchant ?? "");
+      setTags(detail?.tags.map((tag) => tag.name) ?? []);
       setDate(new Date(existing.transactionDate));
       if (detail) {
         const detailSourceCurrency =
@@ -480,6 +485,8 @@ export default function NewTransactionScreen() {
       exchangeRateProvider: isGoalReservation ? null : savedExchangeRateProvider,
       note: note.trim() || null,
       transactionDate: date.getTime(),
+      merchant: merchant.trim() || null,
+      tags,
       allocations,
       reimbursements: reimbursements ? [reimbursements] : undefined,
     };
@@ -516,6 +523,9 @@ export default function NewTransactionScreen() {
         setFeeMode("manual");
         setDebitedAmount("");
         setNote("");
+        setMerchant("");
+        setTags([]);
+        setTagInput("");
         setSplitEnabled(false);
         setSplitRows([]);
         setReimbursementEnabled(false);
@@ -1086,6 +1096,66 @@ export default function NewTransactionScreen() {
             onDismiss={() => setShowTimePicker(false)}
           />
         ) : null}
+
+        <FormField label="Marchand (optionnel)">
+          <TextInput
+            value={merchant}
+            onChangeText={setMerchant}
+            placeholder="Ex. : Marché central"
+            placeholderTextColor={theme.secondaryLabel}
+            maxLength={120}
+            accessibilityLabel="Marchand optionnel"
+            style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.separator, color: theme.label }]}
+          />
+        </FormField>
+
+        <FormField label="Tags (optionnels)">
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <TextInput
+              value={tagInput}
+              onChangeText={setTagInput}
+              placeholder="Ajouter un tag"
+              placeholderTextColor={theme.secondaryLabel}
+              maxLength={40}
+              onSubmitEditing={() => {
+                const value = tagInput.trim();
+                if (value && !tags.some((tag) => tag.toLocaleLowerCase() === value.toLocaleLowerCase())) {
+                  setTags((current) => [...current, value]);
+                }
+                setTagInput("");
+              }}
+              style={[styles.input, { flex: 1, backgroundColor: theme.surface, borderColor: theme.separator, color: theme.label }]}
+            />
+            <Pressable
+              onPress={() => {
+                const value = tagInput.trim();
+                if (value && !tags.some((tag) => tag.toLocaleLowerCase() === value.toLocaleLowerCase())) {
+                  setTags((current) => [...current, value]);
+                }
+                setTagInput("");
+              }}
+              accessibilityRole="button"
+              style={[styles.secondaryAction, { paddingHorizontal: spacing.md, borderColor: theme.separator }]}
+            >
+              <Text style={{ color: theme.accent, fontWeight: "700" }}>Ajouter</Text>
+            </Pressable>
+          </View>
+          {tags.length > 0 ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+              {tags.map((tag) => (
+                <Pressable
+                  key={tag}
+                  onPress={() => setTags((current) => current.filter((item) => item !== tag))}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retirer le tag ${tag}`}
+                  style={{ backgroundColor: theme.surfaceElevated, borderRadius: radius.xl, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }}
+                >
+                  <Text style={{ color: theme.label }}>#{tag} ×</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </FormField>
 
         <FormField label="Note (optionnel)">
           <TextInput

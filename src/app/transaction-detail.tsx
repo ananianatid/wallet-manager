@@ -1,9 +1,16 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import { useCallback, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { getTransactionDetail } from "@/db/transactions";
+import {
+  createTransactionAttachment,
+  deleteTransactionAttachment,
+  listTransactionAttachments,
+} from "@/db/attachments";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
@@ -19,11 +26,17 @@ export default function TransactionDetailScreen() {
   }, [transactionId]);
   const resource = useAsyncResource(load, "transaction.detail");
   const reload = resource.reload;
+  const [attachments, setAttachments] = useState<Awaited<ReturnType<typeof listTransactionAttachments>>>([]);
+  const reloadAttachments = useCallback(async () => {
+    const db = await getDatabase();
+    setAttachments(await listTransactionAttachments(db, transactionId));
+  }, [transactionId]);
 
   useFocusEffect(
     useCallback(() => {
       void reload();
-    }, [reload]),
+      void reloadAttachments();
+    }, [reload, reloadAttachments]),
   );
 
   if (!resource.data && resource.status !== "ready") {
@@ -44,6 +57,49 @@ export default function TransactionDetailScreen() {
   }
 
   const { transaction, splits, reimbursements } = resource.data;
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    try {
+      const db = await getDatabase();
+      await createTransactionAttachment(
+        db,
+        transaction.id,
+        asset.uri,
+        asset.fileName ?? "image.jpg",
+        asset.mimeType ?? "image/jpeg",
+      );
+      await reloadAttachments();
+    } catch (error) {
+      Alert.alert("Pièce jointe impossible", userMessage(error));
+    }
+  };
+  const pickPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "application/pdf",
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    try {
+      const db = await getDatabase();
+      await createTransactionAttachment(
+        db,
+        transaction.id,
+        asset.uri,
+        asset.name,
+        asset.mimeType ?? "application/pdf",
+      );
+      await reloadAttachments();
+    } catch (error) {
+      Alert.alert("Pièce jointe impossible", userMessage(error));
+    }
+  };
   return (
     <>
       <Stack.Screen
@@ -116,6 +172,40 @@ export default function TransactionDetailScreen() {
             ))}
           </View>
         ) : null}
+
+        <View style={{ gap: spacing.md }}>
+          <Text style={{ color: theme.label, fontWeight: "700" }}>Justificatifs</Text>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <View style={{ flex: 1 }}><ActionButton label="Ajouter une image" variant="secondary" onPress={() => void pickImage()} /></View>
+            <View style={{ flex: 1 }}><ActionButton label="Ajouter un PDF" variant="secondary" onPress={() => void pickPdf()} /></View>
+          </View>
+          {attachments.map((attachment) => (
+            <View key={attachment.id} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.label }}>{attachment.originalName}</Text>
+                <Text style={{ color: attachment.exists ? theme.secondaryLabel : theme.expense, fontSize: 12 }}>
+                  {attachment.exists ? `${attachment.mimeType} · ${attachment.size} octets` : "Fichier manquant"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() =>
+                  Alert.alert("Supprimer le justificatif ?", "La transaction sera conservée.", [
+                    { text: "Annuler", style: "cancel" },
+                    { text: "Supprimer", style: "destructive", onPress: async () => {
+                      const db = await getDatabase();
+                      await deleteTransactionAttachment(db, attachment.id);
+                      await reloadAttachments();
+                    } },
+                  ])
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Supprimer ${attachment.originalName}`}
+              >
+                <Text style={{ color: theme.expense, fontWeight: "700" }}>Supprimer</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
 
         {resource.status === "error" ? (
           <InlineError message={userMessage(resource.error)} onRetry={() => void resource.reload()} />

@@ -40,6 +40,14 @@
       "expo-secure-store",
       "expo-sharing",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Wallet accède à vos photos pour joindre un justificatif.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Déverrouiller Wallet avec Face ID."
