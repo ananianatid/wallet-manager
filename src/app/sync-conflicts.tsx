@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { getDatabase } from "@/db/database";
 import { listSyncConflicts, resolveSyncConflict, type SyncConflict } from "@/cloud/sync";
-import { spacing, typography, useTheme } from "@/theme";
+import { humanEntityLabel, formatConflictPayload } from "@/cloud/conflict-format";
+import { spacing, typography, useTheme, withAlpha } from "@/theme";
 
 export default function SyncConflictsScreen() {
   const theme = useTheme();
@@ -48,14 +49,30 @@ export default function SyncConflictsScreen() {
         </View>
         {error ? <InlineError message={error} onRetry={() => { setError(null); void load(); }} /> : null}
         {conflicts.length === 0 ? (
-          <View style={[styles.card, { backgroundColor: theme.surface }]}><Text style={[styles.cardTitle, { color: theme.label }]}>Aucun conflit en attente</Text></View>
+          <View style={[styles.card, { backgroundColor: theme.surface }]}><Text style={[styles.cardTitle, { color: theme.label }]}>Aucun conflit en attente</Text><Text style={[styles.subtitle, { color: theme.secondaryLabel }]}>Vos appareils sont synchronisés.</Text></View>
         ) : conflicts.map((conflict) => {
           const key = `${conflict.entityType}:${conflict.entityId}`;
+          const rows = formatConflictPayload(conflict.serverPayload);
           return (
-            <View key={key} style={[styles.card, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.cardTitle, { color: theme.label }]}>{conflict.entityType}</Text>
-              <Text style={[styles.meta, { color: theme.secondaryLabel }]}>Version distante : {conflict.serverVersion}</Text>
-              <Text style={[styles.payload, { color: theme.secondaryLabel }]} numberOfLines={5}>{JSON.stringify(conflict.serverPayload)}</Text>
+            <View key={key} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+              <View style={styles.cardHeader}>
+                <Text style={[styles.cardTitle, { color: theme.label }]}>{humanEntityLabel(conflict.entityType)}</Text>
+                <View style={[styles.badge, { backgroundColor: withAlpha(theme.warning, "16") }]}>
+                  <Text style={[styles.badgeLabel, { color: theme.warning }]}>Conflit</Text>
+                </View>
+              </View>
+              <Text style={[styles.meta, { color: theme.secondaryLabel }]}>Version distante · v{conflict.serverVersion} · ID {conflict.entityId.slice(0, 8)}</Text>
+              <View style={[styles.payloadBox, { backgroundColor: theme.surfaceElevated, borderColor: theme.separator }]}>
+                {rows.map((row) => (
+                  <View key={row.label} style={styles.payloadRow}>
+                    <Text style={[styles.payloadLabel, { color: theme.secondaryLabel }]}>{row.label}</Text>
+                    <Text style={[styles.payloadValue, { color: theme.label }]} numberOfLines={2}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={[styles.hint, { color: theme.secondaryLabel }]}>
+                Choisissez quelle version conserver. L’autre sera écrasée lors de la prochaine synchronisation.
+              </Text>
               <ActionButton label={busyKey === key ? "Résolution…" : "Garder la version distante"} onPress={() => void resolve(conflict, "server")} disabled={busyKey !== null} />
               <ActionButton label="Garder ma version locale" variant="secondary" onPress={() => void resolve(conflict, "local")} disabled={busyKey !== null} />
             </View>
@@ -71,8 +88,15 @@ const styles = StyleSheet.create({
   intro: { gap: spacing.sm },
   title: { ...typography.display },
   subtitle: { ...typography.body, lineHeight: 22 },
-  card: { padding: spacing.lg, borderRadius: 20, gap: spacing.sm },
-  cardTitle: { ...typography.section },
-  meta: { fontSize: 13 },
-  payload: { fontFamily: "monospace", fontSize: 12, lineHeight: 17 },
+  card: { padding: spacing.lg, borderRadius: 20, gap: spacing.md, borderWidth: StyleSheet.hairlineWidth },
+  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  cardTitle: { ...typography.section, flex: 1 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  badgeLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
+  meta: { fontSize: 12 },
+  hint: { fontSize: 12, lineHeight: 17 },
+  payloadBox: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: spacing.md, gap: spacing.sm },
+  payloadRow: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md },
+  payloadLabel: { fontSize: 12, fontWeight: "600", flex: 1 },
+  payloadValue: { fontSize: 12, fontWeight: "500", flex: 1.4, textAlign: "right" },
 });

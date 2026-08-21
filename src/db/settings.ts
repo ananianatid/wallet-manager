@@ -19,6 +19,8 @@ export type SettingKey =
   | "cloud_sync_device_id"
   | "cloud_sync_conflicts"
   | "cloud_sync_initialized"
+  | "cloud_last_sync_at"
+  | "cloud_last_sync_error"
   | "cloud_welcome_seen";
 
 export async function getSetting(

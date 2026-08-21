@@ -14,6 +14,7 @@ import { CategoryIcon } from "@/components/category-icons";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { ContentSection, ScreenState } from "@/components/ui";
+import { SyncBanner } from "@/components/sync-banner";
 import { MotionEntrance } from "@/components/motion";
 import { listBudgets } from "@/db/budgets";
 import {
@@ -277,6 +278,9 @@ export default function DashboardScreen() {
             gap: spacing.xl,
           }}
         >
+          <View style={{ marginHorizontal: -spacing.lg }}>
+            <SyncBanner />
+          </View>
           {!hasAccounts ? (
             <EmptyState
               title="Ajoutez votre premier compte financier"

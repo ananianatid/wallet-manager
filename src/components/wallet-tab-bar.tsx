@@ -1,5 +1,7 @@
 import {
+  AlertTriangle,
   BarChart3,
+  CloudOff,
   LayoutDashboard,
   PiggyBank,
   ReceiptText,
@@ -9,7 +11,7 @@ import {
 import { router } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { useEffect, useRef } from "react";
-import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddFab } from "@/components/quick-add-menu";
 import { getTabAnimation, motion, useReduceMotion } from "@/components/motion";
@@ -60,10 +62,22 @@ export function shouldAnimateTabIndicator(platform: string, reducedMotion: boole
   return getTabAnimation(platform, reducedMotion) === "shift";
 }
 
+function useOptionalSyncStatus(): { kind: string; pending: number; conflicts: number; isSyncing: boolean; isCloudEnabled: boolean; error: string | null } | null {
+  try {
+    // Lazy require to avoid crash when provider not mounted (tests)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("@/cloud/sync-status") as typeof import("@/cloud/sync-status");
+    return mod.useSyncStatus() as unknown as { kind: string; pending: number; conflicts: number; isSyncing: boolean; isCloudEnabled: boolean; error: string | null };
+  } catch {
+    return null;
+  }
+}
+
 export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReduceMotion();
+  const sync = useOptionalSyncStatus();
   const routes = state.routes
     .filter((route) => TAB_ORDER.includes(route.name))
     .sort((a, b) => TAB_ORDER.indexOf(a.name) - TAB_ORDER.indexOf(b.name));
@@ -146,6 +160,26 @@ export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarPro
     );
   };
 
+  const showSyncStrip = Boolean(sync?.isCloudEnabled && (sync.kind === "conflicts" || sync.kind === "offline" || sync.kind === "syncing" || sync.kind === "error"));
+  const syncStripLabel =
+    sync?.kind === "conflicts"
+      ? `${sync.conflicts} conflit${sync.conflicts > 1 ? "s" : ""} à résoudre`
+      : sync?.kind === "offline"
+        ? `${sync.pending} en attente · hors ligne`
+        : sync?.kind === "error"
+          ? "Sync interrompue"
+          : sync?.kind === "syncing"
+            ? "Synchronisation…"
+            : null;
+  const syncStripColor =
+    sync?.kind === "conflicts" || sync?.kind === "error" ? theme.expense : sync?.kind === "offline" ? theme.warning : theme.accent;
+  const syncStripBg =
+    sync?.kind === "conflicts" || sync?.kind === "error"
+      ? withAlpha(theme.expense, "14")
+      : sync?.kind === "offline"
+        ? withAlpha(theme.warning, "14")
+        : withAlpha(theme.accent, "10");
+
   return (
     <>
       <View
@@ -154,6 +188,28 @@ export function WalletTabBar({ state, descriptors, navigation }: BottomTabBarPro
           { paddingBottom: insets.bottom },
         ]}
       >
+        {showSyncStrip && syncStripLabel ? (
+          <Pressable
+            onPress={() => router.push(sync?.kind === "conflicts" ? "/sync-conflicts" : "/cloud-account")}
+            accessibilityRole="button"
+            accessibilityLabel={`État synchronisation : ${syncStripLabel}`}
+            style={[styles.syncStrip, { backgroundColor: syncStripBg, borderColor: withAlpha(syncStripColor, "22") }]}
+          >
+            {sync?.kind === "syncing" ? (
+              <ActivityIndicator size="small" color={syncStripColor} />
+            ) : sync?.kind === "conflicts" ? (
+              <AlertTriangle size={14} color={syncStripColor} />
+            ) : (
+              <CloudOff size={14} color={syncStripColor} />
+            )}
+            <Text style={[styles.syncStripLabel, { color: syncStripColor }]}>{syncStripLabel}</Text>
+            {sync?.kind === "conflicts" && sync.conflicts > 0 ? (
+              <View style={[styles.syncBadge, { backgroundColor: theme.expense }]}>
+                <Text style={styles.syncBadgeLabel}>{sync.conflicts > 9 ? "9+" : String(sync.conflicts)}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
         <View
           accessibilityRole="tablist"
           accessibilityLabel="Navigation principale"
@@ -188,6 +244,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     position: "relative",
   },
+  syncStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  syncStripLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 0.1 },
+  syncBadge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, marginLeft: 2 },
+  syncBadgeLabel: { color: "#FFFFFF", fontSize: 11, fontWeight: "800", lineHeight: 13 },
   bar: { minHeight: 72, flexDirection: "row", alignItems: "center", marginHorizontal: spacing.sm, padding: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.xl, overflow: "visible", position: "relative" },
   indicator: { position: "absolute", top: spacing.sm, bottom: spacing.sm, left: spacing.xs, borderRadius: radius.lg, zIndex: 0 },
   item: { flex: 1, minWidth: 0, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 2, borderRadius: radius.lg, zIndex: 1 },

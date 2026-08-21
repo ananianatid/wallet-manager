@@ -24,6 +24,7 @@ import { setTransactionFilters, useTransactionFilters } from "@/state/transactio
 import { radius, spacing, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
+import { SyncBanner } from "@/components/sync-banner";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
@@ -300,6 +301,7 @@ export default function TransactionsScreen() {
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <View style={{ gap: spacing.lg }}>
+              <SyncBanner />
               {monthTotals && accounts.length > 0 ? (
                 <MonthlySummaryCard totals={monthTotals} />
               ) : null}

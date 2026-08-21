@@ -23,6 +23,7 @@ import { runStartupHealth } from "@/utils/diagnostics";
 import { applyDueRecurring } from "@/db/recurring";
 import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 import { CloudAuthProvider } from "@/cloud/auth-context";
+import { SyncStatusProvider } from "@/cloud/sync-status";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
 
 const SPLASH_MIN_DURATION_MS = 800;
@@ -226,15 +227,17 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <CloudAuthProvider>
-        <AppThemeProvider>
-          <CurrencyProvider>
-            {Platform.OS === "web" ? (
-              <RootNavigator initialRouteName="index" />
-            ) : (
-              <RootNavigator initialRouteName={needsCloudWelcome ? "cloud-welcome" : needsOnboarding ? "onboarding" : "(tabs)"} />
-            )}
-          </CurrencyProvider>
-        </AppThemeProvider>
+        <SyncStatusProvider>
+          <AppThemeProvider>
+            <CurrencyProvider>
+              {Platform.OS === "web" ? (
+                <RootNavigator initialRouteName="index" />
+              ) : (
+                <RootNavigator initialRouteName={needsCloudWelcome ? "cloud-welcome" : needsOnboarding ? "onboarding" : "(tabs)"} />
+              )}
+            </CurrencyProvider>
+          </AppThemeProvider>
+        </SyncStatusProvider>
       </CloudAuthProvider>
     </SafeAreaProvider>
   );
