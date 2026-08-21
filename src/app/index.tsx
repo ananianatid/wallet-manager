@@ -11,9 +11,9 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react-native";
-import { Image } from "expo-image";
+import { Image as ExpoImage } from "expo-image";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Image as NativeImage, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { radius } from "@/theme";
 
 const DOWNLOAD_PATH = "https://github.com/ananianatid/wallet-manager/releases/latest/download/app-release.apk";
@@ -137,21 +137,23 @@ function ScreenshotFrame({
     markComplete(sequence);
   };
 
+  const imageProps = {
+    source,
+    accessibilityLabel: label,
+    onLoadStart: () => setStatus("loading"),
+    onLoad: () => complete("ready"),
+    onError: () => complete("error"),
+    style: styles.screenshotImage,
+  };
+
   return (
     <View style={[styles.screenshotFrame, prominent && styles.screenshotFrameProminent]}>
       {canLoad ? (
-        <Image
-          source={source}
-          alt={label}
-          accessibilityLabel={label}
-          contentFit="contain"
-          cachePolicy="disk"
-          loading="eager"
-          onLoadStart={() => setStatus("loading")}
-          onLoad={() => complete("ready")}
-          onError={() => complete("error")}
-          style={styles.screenshotImage}
-        />
+        Platform.OS === "web" ? (
+          <NativeImage {...imageProps} resizeMode="contain" />
+        ) : (
+          <ExpoImage {...imageProps} alt={label} contentFit="contain" cachePolicy="disk" loading="eager" />
+        )
       ) : null}
       {status !== "ready" ? (
         <View
