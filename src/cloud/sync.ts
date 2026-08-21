@@ -48,6 +48,13 @@ const RELATIONS: Record<string, Record<string, string>> = {
   transaction_tags: { transaction_id: "transactions", tag_id: "tags" },
 };
 
+const NATURAL_KEYS: Record<string, string[]> = {
+  categories: ["type", "name"],
+  account_groups: ["name"],
+  people: ["name"],
+  tags: ["name"],
+};
+
 interface LocalSyncPayload {
   fields: Record<string, unknown>;
   refs: Record<string, string | null>;
@@ -213,14 +220,16 @@ async function applyRemoteChanges(
       onProgress?.(index + 1);
       continue;
     }
-    // Les catégories ont une clé métier unique (type, name), alors que leurs
-    // sync_id peuvent différer entre les seeds locales et le serveur.
-    // Réutiliser la ligne locale évite un doublon SQLite lors du pull initial.
-    if (!existing && table === "categories" && typeof payload.fields.type === "string" && typeof payload.fields.name === "string") {
+    // Ces tables ont une clé métier unique, alors que leurs sync_id peuvent
+    // différer entre deux installations (seeds locales vs serveur). Réutiliser
+    // la ligne locale évite les doublons SQLite pendant le pull initial.
+    const naturalKeys = NATURAL_KEYS[table];
+    if (!existing && naturalKeys && naturalKeys.every((key) => typeof payload.fields[key] === "string")) {
+      const where = naturalKeys.map((key) => `${key}${table === "people" || table === "tags" ? " COLLATE NOCASE" : ""} = ?`).join(" AND ");
+      const activeClause = table === "account_groups" ? " AND deleted_at IS NULL" : "";
       existing = await db.getFirstAsync<{ id: number; sync_id: string }>(
-        "SELECT id, sync_id FROM categories WHERE type = ? AND name = ?",
-        payload.fields.type,
-        payload.fields.name,
+        `SELECT id, sync_id FROM ${table} WHERE ${where}${activeClause}`,
+        ...naturalKeys.map((key) => payload.fields[key] as string),
       );
       if (existing) await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", existing.sync_id);
     }
