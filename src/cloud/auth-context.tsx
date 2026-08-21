@@ -41,9 +41,14 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     if ((await getSetting(db, "cloud_sync_initialized")) !== "1") return;
     syncInFlight.current = true;
     try {
-      await runSync(db);
-    } catch {
-      // A temporary network/API failure must never prevent local-first usage.
+      const result = await runSync(db);
+      await setSetting(db, "cloud_last_sync_at" as never, String(Date.now()));
+      await setSetting(db, "cloud_last_sync_error" as never, "");
+      void result;
+    } catch (e) {
+      try {
+        await setSetting(await getDatabase(), "cloud_last_sync_error" as never, e instanceof Error ? e.message.slice(0, 280) : "Échec de synchronisation.");
+      } catch {}
     } finally {
       syncInFlight.current = false;
     }
@@ -114,7 +119,16 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
       const db = await getDatabase();
       const result = await runSync(db);
       if (result.conflicts.length === 0) await setSetting(db, "cloud_sync_initialized", "1");
+      try {
+        await setSetting(db, "cloud_last_sync_at" as never, String(Date.now()));
+        await setSetting(db, "cloud_last_sync_error" as never, "");
+      } catch {}
       return result;
+    } catch (e) {
+      try {
+        await setSetting(await getDatabase(), "cloud_last_sync_error" as never, e instanceof Error ? e.message.slice(0, 280) : "Échec de synchronisation.");
+      } catch {}
+      throw e;
     } finally {
       syncInFlight.current = false;
     }

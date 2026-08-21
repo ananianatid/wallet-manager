@@ -190,7 +190,9 @@ export default function OnboardingScreen() {
         await setSetting(db, "onboarding_completed", "1");
       });
       void refresh();
-      router.replace("/(tabs)/(dashboard)");
+      const welcomeSeen = await getSetting(db, "cloud_welcome_seen");
+      if (welcomeSeen !== "1") router.replace("/cloud-welcome");
+      else router.replace("/(tabs)/(dashboard)");
     } catch (cause) {
       log.error("onboarding.finish", "Échec de la finalisation de l’onboarding", cause);
       setError(userMessage(cause, "Impossible de terminer la configuration."));

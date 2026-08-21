@@ -4,6 +4,7 @@ import { Stack } from "expo-router/stack";
 import { useCallback, useMemo, useState } from "react";
 import {
   Pressable,
+  RefreshControl,
   SectionList,
   StyleSheet,
   Text,
@@ -24,6 +25,7 @@ import { setTransactionFilters, useTransactionFilters } from "@/state/transactio
 import { radius, spacing, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
+import { SyncBanner } from "@/components/sync-banner";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
@@ -54,6 +56,7 @@ export default function TransactionsScreen() {
   const filters = useTransactionFilters();
   const [recurringError, setRecurringError] = useState<string | null>(null);
   const [recurringNotice, setRecurringNotice] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -192,6 +195,23 @@ export default function TransactionsScreen() {
   const hasTransactions = monthRows.length > 0;
   const openSearch = () => router.push("/search");
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      try {
+        const db = await getDatabase();
+        const cursorRaw = await getSetting(db, "cloud_sync_cursor");
+        if (cursorRaw !== null) {
+          const syncMod = await import("@/cloud/sync");
+          await syncMod.runSync(db).catch(() => {});
+        }
+      } catch {}
+      await reload();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reload]);
+
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen
@@ -245,6 +265,7 @@ export default function TransactionsScreen() {
         onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
         scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
         contentInsetAdjustmentBehavior="automatic"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={theme.accent} colors={[theme.accent]} />}
         contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl, flexGrow: 1 }}
         sections={sections}
         keyExtractor={(t) => String(t.id)}
@@ -300,6 +321,7 @@ export default function TransactionsScreen() {
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <View style={{ gap: spacing.lg }}>
+              <SyncBanner />
               {monthTotals && accounts.length > 0 ? (
                 <MonthlySummaryCard totals={monthTotals} />
               ) : null}

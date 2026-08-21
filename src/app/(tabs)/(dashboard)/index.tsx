@@ -1,8 +1,9 @@
-import { Fragment, useCallback, useMemo } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { AlertTriangle, ChevronRight } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +15,8 @@ import { CategoryIcon } from "@/components/category-icons";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
 import { ContentSection, ScreenState } from "@/components/ui";
+import { SyncBanner } from "@/components/sync-banner";
+import { CloudPromoCard } from "@/components/cloud-promo-card";
 import { MotionEntrance } from "@/components/motion";
 import { listBudgets } from "@/db/budgets";
 import {
@@ -90,6 +93,7 @@ export default function DashboardScreen() {
   const convert = useCurrencyConverter();
   const onScroll = useScrollPerformance("dashboard.scroll");
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const db = await getDatabase();
@@ -256,6 +260,32 @@ export default function DashboardScreen() {
     [],
   );
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Tentative de sync cloud si disponible, sans bloquer le refresh local
+      try {
+        const { getDatabase } = await import("@/db/database");
+        const { getSetting } = await import("@/db/settings");
+        const db = await getDatabase();
+        const { useCloudAuth } = await import("@/cloud/auth-context");
+        void useCloudAuth;
+        // On tente une sync directe si le compte est vérifié ; les erreurs restent silencieuses (mode local-first)
+        const syncMod = await import("@/cloud/sync");
+        const authMod = await import("@/cloud/api");
+        void authMod;
+        // Seule tentative si une session cloud existe – runSync gère l'absence de réseau
+        const cursorRaw = await getSetting(db, "cloud_sync_cursor");
+        if (cursorRaw !== null) {
+          await syncMod.runSync(db).catch(() => {});
+        }
+      } catch {}
+      await reload();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reload]);
+
   return (
     <View style={{ flex: 1 }}>
       {!resource.data ? (
@@ -270,6 +300,7 @@ export default function DashboardScreen() {
           onScroll={isPerformanceProfilingEnabled() ? onScroll : undefined}
           scrollEventThrottle={isPerformanceProfilingEnabled() ? 16 : undefined}
           contentInsetAdjustmentBehavior="automatic"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={theme.accent} colors={[theme.accent]} />}
           contentContainerStyle={{
             paddingTop: insets.top + spacing.sm,
             paddingHorizontal: spacing.lg,
@@ -277,6 +308,12 @@ export default function DashboardScreen() {
             gap: spacing.xl,
           }}
         >
+          <View style={{ marginHorizontal: -spacing.lg }}>
+            <SyncBanner />
+          </View>
+          <View style={{ marginHorizontal: -spacing.lg }}>
+            <CloudPromoCard />
+          </View>
           {!hasAccounts ? (
             <EmptyState
               title="Ajoutez votre premier compte financier"

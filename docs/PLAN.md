@@ -1,12 +1,12 @@
 # PLAN — Wallet The App (gestion de finances personnelles)
 
-App **Expo SDK 57** (Expo Router, TypeScript), **Android**, usage personnel, **offline**, un utilisateur. UI en français, devise **XOF (FCFA)**, montants en **entiers** (indivisible, pas de décimales).
+App **Expo SDK 57** (Expo Router, TypeScript), **Android**, usage personnel, **local-first + cloud optionnel**, un utilisateur. UI en français, devise **XOF (FCFA)**, montants en **entiers** (indivisible, pas de décimales). Offline d'abord, sync après vérification email, jamais bloquante.
 
 ## 1. Décisions validées (grilling)
 
 ### Stockage
-- **SQLite local** via `expo-sqlite`. Pas de cloud, pas de compte, pas de synchronisation.
-- Migrations versionnées + seed exécuté à la première ouverture.
+- **SQLite local** via `expo-sqlite`, source de vérité. **Cloud optionnel** via `expo-secure-store` (refresh token) + PostgreSQL/MinIO côté serveur, file d'attente `sync_outbox`, `sync_id/sync_version`, centre de conflits.
+- Migrations versionnées + seed exécuté à la première ouverture. Online-mode progressif : `cloud_welcome_seen`, `cloud_sync_initialized`, `cloud_last_sync_at/error`, `SyncStatusProvider`, `SyncBanner`.
 
 ### Comptes
 - Champs : `nom`, `catégorie` (classe compte), `created_at`.
@@ -73,12 +73,13 @@ App **Expo SDK 57** (Expo Router, TypeScript), **Android**, usage personnel, **o
 ### Périmètre v1 (hors périmètre)
 | Inclus | Exclu |
 |---|---|
-| Transactions (liste, filtre **mois** seul, ‹ ›, défaut mois courant) | Statistiques / graphiques |
-| Comptes (liste + détail : transactions liées) | Budgets / plafonds |
-| Saisie de transaction (formulaire unique) | Corbeille / archive |
-| Catégories (CRUD) | Multi-devises |
-| Verrouillage (PIN + biométrie) | Chiffrement de la DB au repos (SQLCipher non supporté par expo-sqlite) |
-| Export/restauration chiffrée (`.wlbak`) | Sauvegarde automatique / cloud |
+| Transactions (liste, filtre **mois** seul, ‹ ›, défaut mois courant) | Paiement externe |
+| Comptes (liste + détail : transactions liées) | Corbeille / archive |
+| Saisie de transaction (formulaire unique) | Chiffrement DB au repos (SQLCipher non supporté) |
+| Catégories (CRUD) | Multi-devises avancé |
+| Verrouillage (PIN + biométrie) |  |
+| Export/restauration chiffrée (`.wlbak`) |  |
+| **Sync cloud optionnelle** (après onboarding, banner, pull-to-refresh, centre de conflits) | Sync temps réel obligatoire |
 
 ## 2. Schéma SQLite
 

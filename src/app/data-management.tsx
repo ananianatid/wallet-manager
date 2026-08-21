@@ -12,6 +12,8 @@ import { formatDate } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { technicalErrorMessage, userMessage } from "@/utils/user-message";
 import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
+import { useCloudAuth } from "@/cloud/auth-context";
+import { useSyncStatus, formatLastSyncedAt } from "@/cloud/sync-status";
 
 type ImportStatus = "idle" | "reading" | "confirming" | "applying" | "success" | "error";
 
@@ -24,12 +26,17 @@ function exportReadyMessage(result: ExportedBackup): string {
 
 export default function DataManagementScreen() {
   const theme = useTheme();
+  const { status, user, syncNow } = useCloudAuth();
+  const sync = useSyncStatus();
   const [lastBackup, setLastBackup] = useState<number | null>(null);
   const [plainExportBusy, setPlainExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
   const [importError, setImportError] = useState<string | null>(null);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const importing = importStatus === "reading" || importStatus === "confirming" || importStatus === "applying";
 
   useFocusEffect(
@@ -136,6 +143,27 @@ export default function DataManagementScreen() {
     }
   };
 
+  const handleSync = async () => {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    setSyncError(null);
+    setSyncMessage(null);
+    sync.setSyncing(true);
+    try {
+      const result = await syncNow();
+      await sync.markSynced(result.cursor);
+      await sync.refresh();
+      setSyncMessage(result.conflicts.length > 0 ? `${result.conflicts.length} conflit(s) à résoudre.` : `${result.pushed} envoyé(s), ${result.pulled} reçu(s).`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Synchronisation impossible.";
+      setSyncError(msg);
+      await sync.markError(msg);
+    } finally {
+      sync.setSyncing(false);
+      setSyncBusy(false);
+    }
+  };
+
   return (
     <>
       <Stack.Screen options={{ title: "Données" }} />
@@ -146,7 +174,53 @@ export default function DataManagementScreen() {
       >
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Données</Text>
-          <Text style={[styles.description, { color: theme.secondaryLabel }]}>Exportez, restaurez ou importez vos données depuis un seul espace.</Text>
+          <Text style={[styles.description, { color: theme.secondaryLabel }]}>Exportez, restaurez, importez ou synchronisez vos données.</Text>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator, borderWidth: StyleSheet.hairlineWidth }]}>
+          <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.label }]}>Synchronisation cloud</Text>
+          {status === "guest" ? (
+            <>
+              <Text style={[styles.cardText, { color: theme.secondaryLabel }]}>Vous êtes en mode local. Activez la synchronisation pour retrouver vos données sur votre téléphone et votre PC.</Text>
+              <ActionButton label="Activer la synchronisation" onPress={() => router.push("/cloud-account")} />
+            </>
+          ) : user && !user.emailVerified ? (
+            <>
+              <Text style={[styles.cardText, { color: theme.secondaryLabel }]}>Compte {user.email} — vérifiez votre adresse email pour activer la synchronisation.</Text>
+              <InlineError message="Vérification requise. Consultez vos emails." />
+              <ActionButton label="Gérer le compte" variant="secondary" onPress={() => router.push("/cloud-account")} />
+            </>
+          ) : (
+            <>
+              <Text style={[styles.cardText, { color: theme.secondaryLabel }]}>
+                Compte {user?.email ?? ""} · {formatLastSyncedAt(sync.lastSyncedAt) ? `Dernière sync ${formatLastSyncedAt(sync.lastSyncedAt)}` : "Jamais synchronisé"}
+              </Text>
+              <View style={[styles.syncStats, { backgroundColor: theme.surfaceElevated, borderColor: theme.separator }]}>
+                <View style={styles.syncStat}>
+                  <Text style={[styles.syncStatLabel, { color: theme.secondaryLabel }]}>En attente</Text>
+                  <Text style={[styles.syncStatValue, { color: sync.pending > 0 ? theme.warning : theme.label }]}>{sync.pending}</Text>
+                </View>
+                <View style={[styles.syncStatDivider, { backgroundColor: theme.separator }]} />
+                <View style={styles.syncStat}>
+                  <Text style={[styles.syncStatLabel, { color: theme.secondaryLabel }]}>Conflits</Text>
+                  <Text style={[styles.syncStatValue, { color: sync.conflicts > 0 ? theme.expense : theme.label }]}>{sync.conflicts}</Text>
+                </View>
+                <View style={[styles.syncStatDivider, { backgroundColor: theme.separator }]} />
+                <View style={styles.syncStat}>
+                  <Text style={[styles.syncStatLabel, { color: theme.secondaryLabel }]}>État</Text>
+                  <Text style={[styles.syncStatValue, { color: sync.kind === "synced" ? theme.income : sync.kind === "error" ? theme.expense : theme.label }]}>
+                    {sync.kind === "synced" ? "À jour" : sync.kind === "syncing" ? "Sync…" : sync.kind === "offline" ? "Hors ligne" : sync.kind === "conflicts" ? "Conflits" : sync.kind === "error" ? "Erreur" : "Local"}
+                  </Text>
+                </View>
+              </View>
+              {sync.error ? <InlineError message={sync.error} /> : null}
+              {syncError ? <InlineError message={syncError} onRetry={() => void handleSync()} /> : null}
+              {syncMessage ? <Text style={[styles.successText, { color: theme.income }]}>{syncMessage}</Text> : null}
+              <ActionButton label={syncBusy || sync.isSyncing ? "Synchronisation…" : "Synchroniser maintenant"} onPress={() => void handleSync()} disabled={syncBusy || sync.isSyncing} />
+              {sync.conflicts > 0 ? <ActionButton label="Voir les conflits" variant="secondary" onPress={() => router.push("/sync-conflicts")} /> : null}
+              <ActionButton label="Gérer le compte et les appareils" variant="secondary" onPress={() => router.push("/cloud-account")} />
+            </>
+          )}
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
@@ -198,4 +272,9 @@ const styles = StyleSheet.create({
   warningTitle: { fontSize: 13, fontWeight: "700" },
   warningText: { fontSize: 13, lineHeight: 18 },
   successText: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  syncStats: { flexDirection: "row", borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: spacing.md, gap: spacing.md },
+  syncStat: { flex: 1, alignItems: "center", gap: 4 },
+  syncStatLabel: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3, textTransform: "uppercase" },
+  syncStatValue: { fontSize: 16, fontWeight: "800" },
+  syncStatDivider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch" },
 });

@@ -23,6 +23,7 @@ import { runStartupHealth } from "@/utils/diagnostics";
 import { applyDueRecurring } from "@/db/recurring";
 import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 import { CloudAuthProvider } from "@/cloud/auth-context";
+import { SyncStatusProvider } from "@/cloud/sync-status";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
 
 const SPLASH_MIN_DURATION_MS = 800;
@@ -169,7 +170,8 @@ export default function RootLayout() {
           await setSetting(db, "onboarding_completed", "1");
         }
         shouldOnboard = completed !== "1" && (!hasAccounts || started === "1");
-        shouldShowCloudWelcome = cloudWelcomeSeen !== "1";
+        // Progressif : cloud-welcome seulement après l'onboarding terminé, jamais avant.
+        shouldShowCloudWelcome = cloudWelcomeSeen !== "1" && completed === "1" && !shouldOnboard;
       } catch {
         // The regular app shell remains available if the startup check fails.
       }
@@ -216,7 +218,10 @@ export default function RootLayout() {
     }
 
     hasRoutedToDashboard.current = true;
-    router.replace(needsCloudWelcome ? "/cloud-welcome" : needsOnboarding ? "/onboarding" : "/(tabs)/(dashboard)");
+    // Priorité onboarding, puis cloud-welcome progressif
+    if (needsOnboarding) router.replace("/onboarding");
+    else if (needsCloudWelcome) router.replace("/cloud-welcome");
+    else router.replace("/(tabs)/(dashboard)");
   }, [isReady, needsCloudWelcome, needsOnboarding, router]);
 
   if (!isReady) {
@@ -226,15 +231,21 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <CloudAuthProvider>
-        <AppThemeProvider>
-          <CurrencyProvider>
+        <SyncStatusProvider>
+          <AppThemeProvider>
+            <CurrencyProvider>
             {Platform.OS === "web" ? (
               <RootNavigator initialRouteName="index" />
+            ) : needsOnboarding ? (
+              <RootNavigator initialRouteName="onboarding" />
+            ) : needsCloudWelcome ? (
+              <RootNavigator initialRouteName="cloud-welcome" />
             ) : (
-              <RootNavigator initialRouteName={needsCloudWelcome ? "cloud-welcome" : needsOnboarding ? "onboarding" : "(tabs)"} />
+              <RootNavigator initialRouteName="(tabs)" />
             )}
-          </CurrencyProvider>
-        </AppThemeProvider>
+            </CurrencyProvider>
+          </AppThemeProvider>
+        </SyncStatusProvider>
       </CloudAuthProvider>
     </SafeAreaProvider>
   );
