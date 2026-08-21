@@ -37,7 +37,7 @@ La racine web présente Wallet Manager dans la même direction visuelle que l'ap
 
 L'application utilisable sur grand écran est disponible sous `/app`. Elle conserve le même cœur local-first que la version Android : tableau de bord, activité, planification, statistiques, comptes, réglages, import CSV, sauvegardes et récurrences réutilisent les modules métier existants. À partir de 1080 px, la navigation devient une barre latérale ; les écrans plus étroits gardent une barre de navigation basse adaptée au tactile.
 
-La base du navigateur est indépendante de la base Android et reste stockée localement. La version web utilise SQLite WASM ; l'hébergement doit donc envoyer `Cross-Origin-Embedder-Policy: credentialless` et `Cross-Origin-Opener-Policy: same-origin`. La configuration Nginx du dépôt applique également le type MIME `application/wasm`.
+Le web est réservé aux comptes cloud vérifiés : les données sont chargées et enregistrées via l'API Fastify dans l'espace PostgreSQL de l'utilisateur. Le navigateur ne reçoit jamais les identifiants PostgreSQL et n'ouvre pas SQLite WASM. Android reste local-first avec SQLite et peut fonctionner sans compte.
 
 En développement, ouvrez `http://localhost:8081/app` après avoir lancé le serveur web Expo. En production, le chemin attendu est `https://votre-domaine/app`.
 
@@ -52,7 +52,22 @@ Le fichier `public/app-release.apk` est ignoré par Git. Après le build, publie
 
 ## Déploiement Docker sur un VPS
 
-La production web est une image statique Nginx. Elle ne démarre ni Laravel ni un serveur Node, et les données restent locales au navigateur.
+### API, PostgreSQL et synchronisation
+
+Le backend de synchronisation se trouve dans `server/`. Il utilise Fastify, PostgreSQL et SMTP Infomaniak pour les emails de vérification et de récupération. En production, copiez `server/.env.example` vers `server/.env`, renseignez les secrets hors Git, puis lancez :
+
+```bash
+POSTGRES_PASSWORD='mot-de-passe-fort' \
+MINIO_ROOT_USER='wallet-minio' \
+MINIO_ROOT_PASSWORD='mot-de-passe-minio-fort' \
+docker compose -f docker-compose.sync.yml up -d --build
+```
+
+Le fichier `server/.env` doit contenir au minimum `DATABASE_URL`, `WEB_ORIGIN`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` et `PUBLIC_API_URL`. Pour PostgreSQL interne au réseau privé, laissez `DATABASE_SSL=false` ; activez-le uniquement si le serveur PostgreSQL distant impose TLS. PostgreSQL et MinIO ne publient aucun port sur Internet ; Nginx transmet uniquement `/api/` au conteneur Fastify. Ne commitez jamais ces variables ni les mots de passe SMTP, PostgreSQL ou MinIO. Pour un APK Android, renseignez aussi `EXPO_PUBLIC_API_URL` avec l’URL absolue publique terminant par `/api` avant le build ; `/api` seul est réservé au web servi par le même domaine.
+
+Les routes d’authentification disponibles sont `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/verify-email`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/api/auth/delete-account`, `/api/auth/recover-account`, `/api/auth/sessions` et `/api/auth/me`. La synchronisation structurée utilise `/api/sync/push` et `/api/sync/pull` avec contrôle de version et réponse de conflit. Les pièces jointes cloud utilisent `/api/attachments` et sont limitées à 10 Mo par fichier.
+
+La production web est une image statique Nginx. Elle ne démarre ni Laravel ni un serveur Node ; elle transmet `/api/` au service Fastify, qui protège l'accès à PostgreSQL. Aucun stockage métier n'est conservé dans le navigateur.
 
 Construisez l'image web :
 
@@ -69,7 +84,7 @@ gh release create v1.0.0 public/app-release.apk \
   --notes "Première version Android distribuable."
 ```
 
-La vitrine ne dépend pas de la présence locale de l'APK pendant le build Docker. Pour lancer l'image localement :
+La vitrine ne dépend pas de la présence locale de l’APK pendant le build Docker. Pour lancer uniquement le web localement :
 
 ```bash
 docker run --rm \
@@ -97,6 +112,40 @@ docker run -d \
 ```
 
 Le reverse proxy du domaine doit ensuite transmettre le trafic vers `127.0.0.1:8080`. Le endpoint `/healthz` est prévu pour le contrôle de disponibilité.
+
+Pour un domaine avec compte cloud, utilisez `docker-compose.sync.yml` : le Nginx de cette image transmet `/api/` au service `wallet-api` du réseau Compose privé. Un conteneur web lancé seul sert les écrans locaux mais ne peut pas joindre l’API cloud.
+
+Sur ce VPS, `docker-stack.vps.yml` est un déploiement Docker Swarm manuel réalisé à côté de Dokploy. Il rejoint le réseau externe `dokploy-network` déjà utilisé par la vitrine, tout en gardant PostgreSQL et MinIO sur un réseau privé. Cette méthode n’apparaît pas dans l’historique des déploiements de l’application Dokploy ; pour obtenir cet historique, il faudra créer l’API comme application Dokploy et la déployer depuis Dokploy :
+
+```bash
+export WALLET_API_IMAGE='wallet-manager-api:release-YYYYMMDD-HHMM'
+export WALLET_WEB_IMAGE='wallet-manager-web:release-YYYYMMDD-HHMM'
+export POSTGRES_PASSWORD='mot-de-passe-fort'
+export MINIO_ROOT_USER='wallet-minio'
+export MINIO_ROOT_PASSWORD='mot-de-passe-minio-fort'
+docker stack deploy --compose-file docker-stack.vps.yml wallet-manager
+```
+
+Pour automatiser le contrôle des variables, la validation de la configuration et l’attente de la convergence de l’API, utilisez [`ops/deploy-vps-stack.sh`](ops/deploy-vps-stack.sh) depuis le manager Swarm :
+
+```bash
+WALLET_API_IMAGE='wallet-manager-api:release-YYYYMMDD-HHMM' \
+WALLET_WEB_IMAGE='wallet-manager-web:release-YYYYMMDD-HHMM' \
+POSTGRES_PASSWORD='...' \
+MINIO_ROOT_USER='...' \
+MINIO_ROOT_PASSWORD='...' \
+bash ops/deploy-vps-stack.sh
+```
+
+Si le SMTP n’est pas encore disponible, les services de données peuvent être amorcés seuls avec [`docker-stack.data.vps.yml`](docker-stack.data.vps.yml). Ils utilisent le même réseau et les mêmes volumes que la stack complète ; aucun port PostgreSQL ou MinIO n’est publié sur Internet.
+
+Avant le déploiement, `server/.env` doit exister sur le VPS et utiliser `wallet-postgres` comme hôte PostgreSQL. Chargez l’image API sur le nœud Swarm avec `docker load` ou utilisez un registre privé ; ne déployez jamais une image locale non chargée sur tous les nœuds d’un cluster multi-nœuds.
+
+### Sauvegardes PostgreSQL
+
+Le script [`ops/backup-postgres.sh`](ops/backup-postgres.sh) réalise un dump PostgreSQL, le chiffre localement avec AES-256-CBC/PBKDF2, vérifie le dump avec `pg_restore`, calcule un HMAC-SHA256, puis envoie l’archive et son fichier d’intégrité vers un stockage S3-compatible. Configurez ses variables uniquement dans le job cron/systemd du VPS (`DATABASE_URL`, endpoint/bucket/identifiants S3 et `BACKUP_ENCRYPTION_PASSPHRASE`). Testez régulièrement le déchiffrement et la restauration dans une base isolée ; ne restaurez jamais directement dans la base de production.
+
+La restauration contrôlée se fait avec [`ops/restore-postgres.sh`](ops/restore-postgres.sh) et exige `RESTORE_CONFIRM=I_UNDERSTAND` ainsi qu’un `TARGET_DATABASE_URL` explicite. Avant un déploiement, exécutez [`ops/check-deployment-env.sh`](ops/check-deployment-env.sh) avec les variables du VPS et une `EXPO_PUBLIC_API_URL` HTTPS absolue.
 
 ## Get a fresh project
 

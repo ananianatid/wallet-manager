@@ -1,6 +1,6 @@
-import StatisticsScreen from "../(tabs)/(statistics)/index";
 import { WebAppShell } from "@/components/web-app-shell";
+import WebCloudStatistics from "@/components/web-cloud-statistics";
 
 export default function WebStatisticsEntry() {
-  return <WebAppShell><StatisticsScreen /></WebAppShell>;
+  return <WebAppShell><WebCloudStatistics /></WebAppShell>;
 }

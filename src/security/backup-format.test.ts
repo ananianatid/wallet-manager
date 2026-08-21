@@ -5,9 +5,12 @@ import {
   BackupFormatError,
   KDF_ID_PBKDF2_SHA256,
   KDF_SALT_BYTES,
+  SQLITE_MAGIC,
   decodeBackupHeader,
+  detectBackupFormat,
   encodeBackupHeader,
   isBackupFile,
+  isPlainBackupFile,
 } from "./backup-format";
 
 const SALT = Uint8Array.from({ length: KDF_SALT_BYTES }, (_, i) => i + 1);
@@ -97,5 +100,30 @@ describe("isBackupFile", () => {
     other.set(header);
     other[0] = "Y".charCodeAt(0);
     expect(isBackupFile(other)).toBe(false);
+  });
+});
+
+describe("detectBackupFormat", () => {
+  it("détecte une sauvegarde SQLite non chiffrée", () => {
+    const bytes = new Uint8Array(SQLITE_MAGIC.length + 8);
+    bytes.set(Uint8Array.from([...SQLITE_MAGIC].map((character) => character.charCodeAt(0))));
+
+    expect(isPlainBackupFile(bytes)).toBe(true);
+    expect(detectBackupFormat(bytes)).toBe("plain");
+  });
+
+  it("détecte une sauvegarde Wallet chiffrée", () => {
+    const header = encodeBackupHeader({
+      formatVersion: BACKUP_FORMAT_VERSION,
+      kdfId: KDF_ID_PBKDF2_SHA256,
+      iterations: 100_000,
+      salt: SALT,
+    });
+
+    expect(detectBackupFormat(header)).toBe("encrypted");
+  });
+
+  it("rejette un fichier inconnu", () => {
+    expect(() => detectBackupFormat(new Uint8Array([1, 2, 3]))).toThrow(BackupFormatError);
   });
 });

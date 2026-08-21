@@ -48,6 +48,32 @@ const USER_FACING_PATTERNS = [
   /^L'import attend la devise de référence\b.*\.$/i,
 ];
 
+/**
+ * Exposes the technical details needed to diagnose a local failure.
+ * Keep this out of normal user-facing flows; it is intentionally verbose.
+ */
+export function technicalErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message || error.name || "Erreur inconnue";
+    const details = error.name && error.name !== "Error"
+      ? `${error.name}: ${message}`
+      : message;
+    const cause = (error as Error & { cause?: unknown }).cause;
+    return cause == null
+      ? details
+      : `${details}\nCause : ${technicalErrorMessage(cause)}`;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized && serialized !== "{}" ? serialized : String(error);
+  } catch {
+    return String(error);
+  }
+}
+
 function codeMessage(code: string): string | null {
   switch (code) {
     case ErrorCodes.DB_OPEN_FAILED:

@@ -12,6 +12,8 @@ import {
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { useTheme } from "@/theme";
+import { useCloudAuth } from "@/cloud/auth-context";
+import { ActionButton } from "@/components/ui";
 
 export const DESKTOP_BREAKPOINT = 1080;
 
@@ -98,8 +100,8 @@ export function WebSidebar({ pathname }: { pathname: string }) {
           <Text style={styles.sidebarItemText}>Réglages</Text>
         </Pressable>
         <View style={styles.sidebarNote}>
-          <Text style={styles.sidebarNoteTitle}>Vos données restent locales.</Text>
-          <Text style={styles.sidebarNoteBody}>Ce navigateur garde sa propre base Wallet.</Text>
+          <Text style={styles.sidebarNoteTitle}>Vos données sont cloud.</Text>
+          <Text style={styles.sidebarNoteBody}>Ce navigateur utilise votre espace PostgreSQL sécurisé.</Text>
         </View>
       </View>
     </View>
@@ -117,7 +119,7 @@ export function WebTopBar() {
         <Text style={[styles.webTopBarTitle, { color: theme.label }]}>{item?.label ?? "Wallet"}</Text>
       </View>
       <View style={styles.webTopBarActions}>
-        <Text style={[styles.webTopBarHint, { color: theme.secondaryLabel }]}>Local · hors ligne · maîtrisé</Text>
+        <Text style={[styles.webTopBarHint, { color: theme.secondaryLabel }]}>Cloud · sécurisé · synchronisé</Text>
         <Pressable
           onPress={() => navigate("/new-transaction")}
           accessibilityRole="button"
@@ -160,6 +162,7 @@ function WebMobileNav({ pathname }: { pathname: string }) {
 export function WebAppShell({ children }: { children: ReactNode }) {
   const theme = useTheme();
   const pathname = usePathname();
+  const { status, user } = useCloudAuth();
   const { width } = useWindowDimensions();
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -170,6 +173,25 @@ export function WebAppShell({ children }: { children: ReactNode }) {
 
   if (!mounted) {
     return <View style={[styles.webBootPlaceholder, { backgroundColor: theme.background }]} />;
+  }
+
+  if (status === "loading") {
+    return (
+      <View style={[styles.webAccessState, { backgroundColor: theme.background }]}>
+        <Text style={[styles.webAccessTitle, { color: theme.label }]}>Connexion au cloud…</Text>
+        <Text style={[styles.webAccessBody, { color: theme.secondaryLabel }]}>Vérification de votre session.</Text>
+      </View>
+    );
+  }
+
+  if (!user || !user.emailVerified) {
+    return (
+      <View style={[styles.webAccessState, { backgroundColor: theme.background }]}>
+        <Text style={[styles.webAccessTitle, { color: theme.label }]}>Compte requis sur PC</Text>
+        <Text style={[styles.webAccessBody, { color: theme.secondaryLabel }]}>Le navigateur utilise vos données cloud PostgreSQL. Connectez-vous avec une adresse email vérifiée pour continuer.</Text>
+        <ActionButton label="Se connecter ou créer un compte" onPress={() => router.replace("/cloud-account")} />
+      </View>
+    );
   }
 
   if (!desktop) {
@@ -193,6 +215,9 @@ export function WebAppShell({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  webAccessState: { flex: 1, minHeight: 420, alignItems: "center", justifyContent: "center", padding: 32, gap: 14 },
+  webAccessTitle: { fontSize: 24, fontWeight: "800", textAlign: "center" },
+  webAccessBody: { maxWidth: 560, fontSize: 16, lineHeight: 24, textAlign: "center" },
   webShell: { flex: 1, flexDirection: "row", minHeight: "100%" },
   sidebar: { width: 248, minHeight: "100%", paddingHorizontal: 18, paddingTop: 28, paddingBottom: 22 },
   sidebarBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 8, marginBottom: 34 },

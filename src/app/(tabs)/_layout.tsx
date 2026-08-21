@@ -21,7 +21,14 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
-        tabBarStyle: { backgroundColor: "transparent" },
+        tabBarStyle: {
+          backgroundColor: "transparent",
+          borderTopColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowColor: "transparent",
+          shadowOpacity: 0,
+        },
         sceneStyle: { backgroundColor: theme.background },
         popToTopOnBlur: true,
         animation: tabAnimation,

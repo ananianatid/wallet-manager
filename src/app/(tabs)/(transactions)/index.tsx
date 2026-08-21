@@ -1,4 +1,4 @@
-import { Plus, Search } from "lucide-react-native";
+import { Search } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Stack } from "expo-router/stack";
 import { useCallback, useMemo, useState } from "react";
@@ -21,13 +21,12 @@ import { schedulePendingRecurringNotifications } from "@/services/recurring-noti
 import { getSetting, setSetting } from "@/db/settings";
 import { listTransactionAmountRows, listTransactions } from "@/db/transactions";
 import { setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
-import { radius, spacing, useTheme, withAlpha } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   formatAmount,
   formatDayLabel,
@@ -51,7 +50,6 @@ export default function TransactionsScreen() {
   const theme = useTheme();
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
-  const insets = useSafeAreaInsets();
   const onScroll = useScrollPerformance("transactions.scroll");
   const filters = useTransactionFilters();
   const [recurringError, setRecurringError] = useState<string | null>(null);
@@ -341,24 +339,6 @@ export default function TransactionsScreen() {
         }
       />
       )}
-      {hasTransactions ? (
-        <Pressable
-          onPress={openNew}
-          accessibilityLabel="Ajouter une transaction"
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.fab,
-            {
-              backgroundColor: theme.accent,
-              bottom: insets.bottom + spacing.lg,
-              boxShadow: `0 4px 12px ${withAlpha(theme.label, "59")}`,
-            },
-            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
-          ]}
-        >
-          <Plus size={30} strokeWidth={2.5} color={theme.onAccent} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -406,15 +386,5 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
     paddingBottom: spacing.md + spacing.sm,
-  },
-  fab: {
-    position: "absolute",
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

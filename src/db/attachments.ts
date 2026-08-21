@@ -33,6 +33,8 @@ interface AttachmentRow {
   mimeType: string;
   storagePath: string;
   size: number;
+  cloudAttachmentId: string | null;
+  cloudUrl: string | null;
   createdAt: number;
 }
 
@@ -43,7 +45,7 @@ function mapAttachment(row: AttachmentRow): TransactionAttachment {
   } catch {
     exists = false;
   }
-  return { ...row, exists };
+  return { ...row, exists: exists || Boolean(row.cloudUrl), cloudAttachmentId: row.cloudAttachmentId, cloudUrl: row.cloudUrl };
 }
 
 export async function createTransactionAttachment(
@@ -94,6 +96,8 @@ export async function listTransactionAttachments(
             mime_type AS mimeType,
             storage_path AS storagePath,
             size,
+            cloud_attachment_id AS cloudAttachmentId,
+            cloud_url AS cloudUrl,
             created_at AS createdAt
      FROM transaction_attachments
      WHERE transaction_id = ?
@@ -114,12 +118,28 @@ export async function getTransactionAttachment(
             mime_type AS mimeType,
             storage_path AS storagePath,
             size,
+            cloud_attachment_id AS cloudAttachmentId,
+            cloud_url AS cloudUrl,
             created_at AS createdAt
      FROM transaction_attachments
      WHERE id = ?`,
     id,
   );
   return rows[0] ? mapAttachment(rows[0]) : null;
+}
+
+export async function markAttachmentCloudUploaded(
+  db: SQLiteDatabase,
+  id: number,
+  cloudAttachmentId: string,
+  cloudUrl: string,
+): Promise<void> {
+  await db.runAsync(
+    "UPDATE transaction_attachments SET cloud_attachment_id = ?, cloud_url = ? WHERE id = ?",
+    cloudAttachmentId,
+    cloudUrl,
+    id,
+  );
 }
 
 export async function deleteTransactionAttachment(

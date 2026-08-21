@@ -7,7 +7,7 @@ import { exportEncryptedBackup } from "@/backup/export";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { radius, spacing, typography, useTheme } from "@/theme";
 import { log } from "@/utils/logger";
-import { userMessage } from "@/utils/user-message";
+import { technicalErrorMessage } from "@/utils/user-message";
 
 const MIN_PASSPHRASE_LENGTH = 8;
 
@@ -71,17 +71,17 @@ export default function BackupExportScreen() {
     }
     setBusy(true);
     try {
-      const name = await exportEncryptedBackup(passphrase);
+      const result = await exportEncryptedBackup(passphrase);
       setPassphrase("");
       setConfirmation("");
       Alert.alert(
         "Sauvegarde créée",
-        `Le fichier « ${name} » est prêt. Enregistrez-le dans un endroit sûr (Drive, carte SD, ordinateur…).\n\nSans ce mot de passe, personne — y compris vous — ne pourra lire la sauvegarde.`,
+        `${result.shared ? `Le fichier « ${result.name} » est prêt et le menu de partage a été ouvert.` : `Le fichier « ${result.name} » a été créé dans les documents de Wallet.`} Enregistrez-le dans un endroit sûr (Drive, carte SD, ordinateur…).\n\nSans ce mot de passe, personne — y compris vous — ne pourra lire la sauvegarde.`,
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (e) {
       log.error("backup.export", "Échec de l'export de la sauvegarde", e);
-      setError(userMessage(e, "L'export a échoué."));
+      setError(technicalErrorMessage(e));
     } finally {
       setBusy(false);
     }

@@ -5,8 +5,11 @@ export const KDF_SALT_BYTES = 16;
 export const KDF_MAX_ITERATIONS = 2_000_000;
 export const GCM_IV_BYTES = 12;
 export const GCM_TAG_BYTES = 16;
+export const SQLITE_MAGIC = "SQLite format 3\u0000";
 export const BACKUP_HEADER_BYTES =
   BACKUP_MAGIC.length + 4 + 2 + 4 + KDF_SALT_BYTES;
+
+export type BackupStorageFormat = "encrypted" | "plain";
 
 export class BackupFormatError extends Error {
   constructor(message: string) {
@@ -100,4 +103,26 @@ export function isBackupFile(bytes: Uint8Array): boolean {
     }
   }
   return true;
+}
+
+export function isPlainBackupFile(bytes: Uint8Array): boolean {
+  if (bytes.length < SQLITE_MAGIC.length) {
+    return false;
+  }
+  for (let i = 0; i < SQLITE_MAGIC.length; i++) {
+    if (bytes[i] !== SQLITE_MAGIC.charCodeAt(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function detectBackupFormat(bytes: Uint8Array): BackupStorageFormat {
+  if (isBackupFile(bytes)) {
+    return "encrypted";
+  }
+  if (isPlainBackupFile(bytes)) {
+    return "plain";
+  }
+  throw new BackupFormatError("Ce fichier n'est pas une sauvegarde Wallet.");
 }

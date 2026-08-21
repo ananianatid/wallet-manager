@@ -9,6 +9,7 @@ import {
   ChevronUp,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Platform } from "react-native";
 import {
   Alert,
   ActivityIndicator,
@@ -46,6 +47,7 @@ import { formatAmount, formatDate, formatTime } from "@/utils/format";
 import { calculateTransferFee } from "@/utils/transfer-fees";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
+import WebCloudTransaction from "@/components/web-cloud-transaction";
 
 type TransferFeeMode = "manual" | "calculated";
 
@@ -71,6 +73,11 @@ const TRANSACTION_TABS = [
 ] as const satisfies { value: TransactionType; label: string; icon: typeof ArrowDownLeft }[];
 
 export default function NewTransactionScreen() {
+  if (Platform.OS === "web") return <WebCloudTransaction />;
+  return <NativeNewTransactionScreen />;
+}
+
+function NativeNewTransactionScreen() {
   const theme = useTheme();
   const { id, goalId: goalParam, type: typeParam } = useLocalSearchParams<{
     id?: string;

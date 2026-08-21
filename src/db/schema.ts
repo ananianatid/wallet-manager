@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 20;
+export const DATABASE_VERSION = 23;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -721,6 +721,143 @@ export const MIGRATION_V20 = `
     ON recurring_occurrences (recurring_transaction_id, occurrence_date);
 `;
 
+const SYNCABLE_TABLES = [
+  "categories",
+  "account_groups",
+  "accounts",
+  "transactions",
+  "transaction_splits",
+  "people",
+  "reimbursements",
+  "reimbursement_settlements",
+  "tags",
+  "transaction_attachments",
+  "budget_plans",
+  "budget_periods",
+  "recurring_transactions",
+  "recurring_occurrences",
+  "savings_rules",
+  "goals",
+  "goal_reservations",
+] as const;
+
+export const MIGRATION_V21 = `
+  CREATE TABLE IF NOT EXISTS sync_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sync_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL,
+    local_id INTEGER NOT NULL,
+    sync_id TEXT NOT NULL,
+    operation TEXT NOT NULL CHECK (operation IN ('upsert', 'delete')),
+    changed_at INTEGER NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sync_outbox_order ON sync_outbox (id);
+  CREATE INDEX IF NOT EXISTS idx_sync_outbox_entity ON sync_outbox (entity_type, local_id);
+` + SYNCABLE_TABLES.map((table) => `
+  ALTER TABLE ${table} ADD COLUMN sync_id TEXT;
+  ALTER TABLE ${table} ADD COLUMN sync_version INTEGER NOT NULL DEFAULT 0;
+  UPDATE ${table} SET sync_id = lower(
+    hex(randomblob(4)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    hex(randomblob(6))
+  ) WHERE sync_id IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_${table}_sync_id ON ${table} (sync_id);
+  CREATE TRIGGER IF NOT EXISTS trg_${table}_sync_insert
+  AFTER INSERT ON ${table}
+  BEGIN
+    UPDATE ${table}
+    SET sync_id = lower(
+      hex(randomblob(4)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(6))
+    )
+    WHERE id = NEW.id AND sync_id IS NULL;
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+    SELECT '${table}', id, sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000
+    FROM ${table} WHERE id = NEW.id;
+  END;
+  CREATE TRIGGER IF NOT EXISTS trg_${table}_sync_update
+  AFTER UPDATE ON ${table}
+  WHEN OLD.sync_id = NEW.sync_id
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+    VALUES ('${table}', NEW.id, NEW.sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000);
+  END;
+  CREATE TRIGGER IF NOT EXISTS trg_${table}_sync_delete
+  BEFORE DELETE ON ${table}
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+    VALUES ('${table}', OLD.id, OLD.sync_id, 'delete', CAST(strftime('%s','now') AS INTEGER) * 1000);
+  END;
+  INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+  SELECT '${table}', id, sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000
+  FROM ${table};
+`).join("");
+
+const TRANSACTION_TAG_SYNC_SQL = `
+  ALTER TABLE transaction_tags ADD COLUMN sync_id TEXT;
+  ALTER TABLE transaction_tags ADD COLUMN sync_version INTEGER NOT NULL DEFAULT 0;
+  UPDATE transaction_tags SET sync_id = lower(
+    hex(randomblob(4)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    hex(randomblob(6))
+  ) WHERE sync_id IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_transaction_tags_sync_id ON transaction_tags (sync_id);
+  CREATE TRIGGER IF NOT EXISTS trg_transaction_tags_sync_insert
+  AFTER INSERT ON transaction_tags
+  BEGIN
+    UPDATE transaction_tags
+    SET sync_id = lower(
+      hex(randomblob(4)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(6))
+    )
+    WHERE rowid = NEW.rowid AND sync_id IS NULL;
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+    SELECT 'transaction_tags', rowid, sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000
+    FROM transaction_tags WHERE rowid = NEW.rowid;
+  END;
+  CREATE TRIGGER IF NOT EXISTS trg_transaction_tags_sync_update
+  AFTER UPDATE ON transaction_tags
+  WHEN OLD.sync_id = NEW.sync_id
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+    VALUES ('transaction_tags', NEW.rowid, NEW.sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000);
+  END;
+  CREATE TRIGGER IF NOT EXISTS trg_transaction_tags_sync_delete
+  BEFORE DELETE ON transaction_tags
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+    VALUES ('transaction_tags', OLD.rowid, OLD.sync_id, 'delete', CAST(strftime('%s','now') AS INTEGER) * 1000);
+  END;
+  INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at)
+  SELECT 'transaction_tags', rowid, sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000
+  FROM transaction_tags;
+`;
+
+export const MIGRATION_V22 = TRANSACTION_TAG_SYNC_SQL;
+
+export const MIGRATION_V23 = `
+  ALTER TABLE transaction_attachments ADD COLUMN cloud_attachment_id TEXT;
+  ALTER TABLE transaction_attachments ADD COLUMN cloud_url TEXT;
+  CREATE INDEX IF NOT EXISTS idx_transaction_attachments_cloud
+    ON transaction_attachments (cloud_attachment_id);
+`;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -844,6 +981,18 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     if (currentDbVersion <= 19) {
       await db.execAsync(MIGRATION_V20);
     }
+  }
+
+  if (currentDbVersion <= 20) {
+    await db.execAsync(MIGRATION_V21);
+  }
+
+  if (currentDbVersion <= 21) {
+    await db.execAsync(MIGRATION_V22);
+  }
+
+  if (currentDbVersion <= 22) {
+    await db.execAsync(MIGRATION_V23);
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

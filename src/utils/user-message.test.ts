@@ -2,6 +2,7 @@ import {
   ErrorCodes,
   errorWithCode,
   GENERIC_MESSAGE,
+  technicalErrorMessage,
   userMessage,
 } from "./user-message";
 
@@ -116,5 +117,21 @@ describe("userMessage", () => {
     expect(userMessage(new Error("TypeError: Cannot read property 'x' of null"))).toBe(
       GENERIC_MESSAGE,
     );
+  });
+});
+
+describe("technicalErrorMessage", () => {
+  it("conserve le nom, le message et la cause d'une erreur", () => {
+    const cause = new Error("file.create: Operation not permitted");
+    const error = Object.assign(new TypeError("Unable to write backup"), { cause });
+
+    expect(technicalErrorMessage(error)).toBe(
+      "TypeError: Unable to write backup\nCause : file.create: Operation not permitted",
+    );
+  });
+
+  it("conserve les erreurs qui ne sont pas des instances d'Error", () => {
+    expect(technicalErrorMessage("raw export failure")).toBe("raw export failure");
+    expect(technicalErrorMessage({ code: "EACCES" })).toBe('{"code":"EACCES"}');
   });
 });

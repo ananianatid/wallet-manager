@@ -16,6 +16,7 @@ import {
   FlatList,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -63,7 +64,7 @@ function ReorderRow({
   const [dragging, setDragging] = useState(false);
 
   const reset = useCallback(() => {
-    Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+    Animated.spring(translateY, { toValue: 0, useNativeDriver: Platform.OS !== "web" }).start();
     setDragging(false);
   }, [translateY]);
 
