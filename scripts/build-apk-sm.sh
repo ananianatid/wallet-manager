@@ -10,7 +10,7 @@ artifact="android/app/build/outputs/apk/release/app-release.apk"
 # L’APK doit utiliser une URL absolue : `/api` ne peut être résolu que par le
 # navigateur qui partage le domaine de la vitrine. Une valeur explicitement
 # fournie par l’environnement reste prioritaire pour les builds de test.
-export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://wallet-manager.causalset.sbs/api}"
+export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://wallet-api.causalset.sbs/api}"
 echo "==> API cloud embarquée: $EXPO_PUBLIC_API_URL"
 
 echo "==> Régénération Android propre..."

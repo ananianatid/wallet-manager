@@ -25,7 +25,7 @@ set +a
 
 # Le fichier de contrôle refuse les valeurs de démonstration et vérifie aussi
 # l'URL HTTPS destinée aux builds Android.
-export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://wallet-manager.causalset.sbs/api}"
+export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://wallet-api.causalset.sbs/api}"
 export POSTGRES_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD
 bash ops/check-deployment-env.sh
 
