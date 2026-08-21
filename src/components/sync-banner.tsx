@@ -72,11 +72,17 @@ export function SyncBanner({ compact = false }: { compact?: boolean }) {
   }
 
   if (sync.kind === "syncing") {
+    const progress = sync.progress.total > 0 ? Math.round((sync.progress.completed / sync.progress.total) * 100) : null;
     return (
       <View style={[styles.card, styles.syncingCard, { backgroundColor: withAlpha(theme.accent, "10"), borderColor: withAlpha(theme.accent, "18") }]}>
-        <ActivityIndicator size="small" color={theme.accent} />
-        <Text style={[styles.body, { color: theme.secondaryLabel }]}>Synchronisation en cours…</Text>
-        {compact ? null : <Text style={[styles.meta, { color: theme.secondaryLabel }]}>{sync.pending > 0 ? `${sync.pending} en attente` : ""}</Text>}
+        <View style={styles.syncingHeader}>
+          <ActivityIndicator size="small" color={theme.accent} />
+          <Text style={[styles.body, styles.syncingMessage, { color: theme.secondaryLabel }]}>{sync.progress.message || "Synchronisation en cours…"}</Text>
+          {compact ? null : <Text style={[styles.meta, { color: theme.secondaryLabel }]}>{progress == null ? "…" : `${progress}%`}</Text>}
+        </View>
+        {!compact ? <View accessibilityRole="progressbar" accessibilityLabel="Progression de la synchronisation" accessibilityValue={progress == null ? undefined : { min: 0, max: 100, now: progress }} style={[styles.progressTrack, { backgroundColor: withAlpha(theme.accent, "20") }]}>
+          {progress == null ? null : <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: theme.accent }]} />}
+        </View> : null}
       </View>
     );
   }
@@ -166,9 +172,14 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
   },
   syncingCard: {
-    justifyContent: "flex-start",
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: spacing.sm,
   },
+  syncingHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, width: "100%" },
+  syncingMessage: { flex: 1 },
+  progressTrack: { height: 5, width: "100%", overflow: "hidden", borderRadius: 99 },
+  progressFill: { height: "100%", borderRadius: 99 },
   row: { flex: 1, flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
   copy: { flex: 1, gap: 2 },
   title: { fontSize: 13, fontWeight: "700", lineHeight: 18 },

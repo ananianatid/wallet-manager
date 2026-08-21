@@ -60,6 +60,41 @@ export interface SyncRunResult {
   cursor: number;
 }
 
+export type SyncProgressPhase = "preparing" | "uploading" | "downloading" | "applying" | "completed";
+
+export interface SyncProgress {
+  active: boolean;
+  phase: SyncProgressPhase;
+  completed: number;
+  total: number;
+  message: string;
+}
+
+const INITIAL_SYNC_PROGRESS: SyncProgress = {
+  active: false,
+  phase: "completed",
+  completed: 0,
+  total: 0,
+  message: "",
+};
+
+let syncProgress = INITIAL_SYNC_PROGRESS;
+const syncProgressListeners = new Set<(progress: SyncProgress) => void>();
+
+function publishSyncProgress(progress: SyncProgress): void {
+  syncProgress = progress;
+  for (const listener of syncProgressListeners) listener(progress);
+}
+
+export function getSyncProgress(): SyncProgress {
+  return syncProgress;
+}
+
+export function subscribeSyncProgress(listener: (progress: SyncProgress) => void): () => void {
+  syncProgressListeners.add(listener);
+  return () => syncProgressListeners.delete(listener);
+}
+
 export type ConflictResolution = "server" | "local";
 
 async function getDeviceId(db: SQLiteDatabase): Promise<string> {
@@ -147,10 +182,21 @@ function bindValue(value: unknown): string | number | null | Uint8Array {
   return JSON.stringify(value);
 }
 
-async function applyRemoteChanges(db: SQLiteDatabase, changes: SyncChange[], blocked = new Set<string>()): Promise<void> {
-  for (const change of changes) {
-    if (!SYNCABLE_TABLES.has(change.entityType)) continue;
-    if (blocked.has(`${change.entityType}:${change.entityId}`)) continue;
+async function applyRemoteChanges(
+  db: SQLiteDatabase,
+  changes: SyncChange[],
+  blocked = new Set<string>(),
+  onProgress?: (completed: number) => void,
+): Promise<void> {
+  for (const [index, change] of changes.entries()) {
+    if (!SYNCABLE_TABLES.has(change.entityType)) {
+      onProgress?.(index + 1);
+      continue;
+    }
+    if (blocked.has(`${change.entityType}:${change.entityId}`)) {
+      onProgress?.(index + 1);
+      continue;
+    }
     const table = change.entityType;
     const existing = await db.getFirstAsync<{ id: number }>(
       table === "transaction_tags"
@@ -161,10 +207,14 @@ async function applyRemoteChanges(db: SQLiteDatabase, changes: SyncChange[], blo
     if (change.operation === "delete") {
       if (existing) await db.runAsync(`DELETE FROM ${table} WHERE ${table === "transaction_tags" ? "rowid" : "id"} = ?`, existing.id);
       await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", change.entityId);
+      onProgress?.(index + 1);
       continue;
     }
     const payload = change.payload as LocalSyncPayload | null;
-    if (!payload || !payload.fields || !payload.refs) continue;
+    if (!payload || !payload.fields || !payload.refs) {
+      onProgress?.(index + 1);
+      continue;
+    }
     const relationMap = RELATIONS[table] ?? {};
     const values: Record<string, unknown> = { ...payload.fields, sync_id: change.entityId, sync_version: change.version };
     for (const [column, relatedSyncId] of Object.entries(payload.refs)) {
@@ -187,6 +237,7 @@ async function applyRemoteChanges(db: SQLiteDatabase, changes: SyncChange[], blo
       await db.runAsync(`INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, ...params);
     }
     await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", change.entityId);
+    onProgress?.(index + 1);
   }
 }
 
@@ -229,35 +280,48 @@ export async function resolveSyncConflict(db: SQLiteDatabase, conflict: SyncConf
 }
 
 export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
-  await uploadPendingCloudAttachments(db);
-  const deviceId = await getDeviceId(db);
-  const existingConflicts = await readStoredConflicts(db);
-  const blocked = new Set(existingConflicts.map((item) => `${item.entityType}:${item.entityId}`));
-  const pending = (await readOutbox(db, deviceId)).filter((item) => !blocked.has(`${item.entityType}:${item.entityId}`));
-  const pushed = pending.length > 0 ? await pushSyncChanges(pending) : { accepted: [], conflicts: [] };
-  const newConflicts = pushed.conflicts.map((conflict) => ({
-    ...conflict,
-    localId: pending.find((item) => item.entityType === conflict.entityType && item.entityId === conflict.entityId)?.localId,
-  }));
-  const allConflicts = [...existingConflicts.filter((old) => !newConflicts.some((next) => next.entityType === old.entityType && next.entityId === old.entityId)), ...newConflicts];
-  if (newConflicts.length > 0) await writeStoredConflicts(db, allConflicts);
-  const conflictKeys = new Set(allConflicts.map((item) => `${item.entityType}:${item.entityId}`));
-  for (const clientChangeId of pushed.accepted) {
-    const change = pending.find((item) => item.clientChangeId === clientChangeId);
-    if (!change || change.clientChangeId == null) continue;
-    const outboxId = change.clientChangeId;
-    if (change.operation === "upsert") {
-      const key = change.entityType === "transaction_tags" ? "rowid" : "id";
-      await db.runAsync(`UPDATE ${change.entityType} SET sync_version = ? WHERE ${key} = ?`, change.version, await localIdForChange(db, outboxId));
+  publishSyncProgress({ active: true, phase: "preparing", completed: 0, total: 0, message: "Préparation de la synchronisation…" });
+  try {
+    await uploadPendingCloudAttachments(db);
+    const deviceId = await getDeviceId(db);
+    const existingConflicts = await readStoredConflicts(db);
+    const blocked = new Set(existingConflicts.map((item) => `${item.entityType}:${item.entityId}`));
+    const pending = (await readOutbox(db, deviceId)).filter((item) => !blocked.has(`${item.entityType}:${item.entityId}`));
+    publishSyncProgress({ active: true, phase: "uploading", completed: 0, total: pending.length, message: pending.length > 0 ? `Envoi de 0/${pending.length} modification${pending.length > 1 ? "s" : ""}…` : "Aucune modification locale à envoyer…" });
+    const pushed = pending.length > 0 ? await pushSyncChanges(pending) : { accepted: [], conflicts: [] };
+    const newConflicts = pushed.conflicts.map((conflict) => ({
+      ...conflict,
+      localId: pending.find((item) => item.entityType === conflict.entityType && item.entityId === conflict.entityId)?.localId,
+    }));
+    const allConflicts = [...existingConflicts.filter((old) => !newConflicts.some((next) => next.entityType === old.entityType && next.entityId === old.entityId)), ...newConflicts];
+    if (newConflicts.length > 0) await writeStoredConflicts(db, allConflicts);
+    const conflictKeys = new Set(allConflicts.map((item) => `${item.entityType}:${item.entityId}`));
+    for (const clientChangeId of pushed.accepted) {
+      const change = pending.find((item) => item.clientChangeId === clientChangeId);
+      if (!change || change.clientChangeId == null) continue;
+      const outboxId = change.clientChangeId;
+      if (change.operation === "upsert") {
+        const key = change.entityType === "transaction_tags" ? "rowid" : "id";
+        await db.runAsync(`UPDATE ${change.entityType} SET sync_version = ? WHERE ${key} = ?`, change.version, await localIdForChange(db, outboxId));
+      }
+      await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", change.entityId);
     }
-    await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", change.entityId);
+    publishSyncProgress({ active: true, phase: "uploading", completed: pending.length, total: pending.length, message: pending.length > 0 ? `${pending.length}/${pending.length} modification${pending.length > 1 ? "s" : ""} envoyée${pending.length > 1 ? "s" : ""}` : "Envoi terminé" });
+    const cursor = Number((await getSetting(db, CURSOR_KEY as never)) ?? "0");
+    publishSyncProgress({ active: true, phase: "downloading", completed: 0, total: 0, message: "Recherche des nouveautés…" });
+    const pulled = await pullSyncChanges(cursor);
+    publishSyncProgress({ active: true, phase: "applying", completed: 0, total: pulled.changes.length, message: pulled.changes.length > 0 ? `Application de 0/${pulled.changes.length} donnée${pulled.changes.length > 1 ? "s" : ""}…` : "Données locales à jour" });
+    await applyRemoteChanges(db, pulled.changes, conflictKeys, (completed) => {
+      publishSyncProgress({ active: true, phase: "applying", completed, total: pulled.changes.length, message: `Application de ${completed}/${pulled.changes.length} donnée${pulled.changes.length > 1 ? "s" : ""}…` });
+    });
+    const nextCursor = pulled.nextCursor;
+    if (nextCursor !== cursor) await setSetting(db, CURSOR_KEY as never, String(nextCursor));
+    publishSyncProgress({ active: false, phase: "completed", completed: pulled.changes.length, total: pulled.changes.length, message: "Synchronisation terminée" });
+    return { pushed: pushed.accepted.length, pulled: pulled.changes.length, conflicts: allConflicts, cursor: nextCursor };
+  } catch (error) {
+    publishSyncProgress({ active: false, phase: "completed", completed: 0, total: 0, message: error instanceof Error ? error.message : "Synchronisation impossible." });
+    throw error;
   }
-  const cursor = Number((await getSetting(db, CURSOR_KEY as never)) ?? "0");
-  const pulled = await pullSyncChanges(cursor);
-  await applyRemoteChanges(db, pulled.changes, conflictKeys);
-  const nextCursor = pulled.nextCursor;
-  if (nextCursor !== cursor) await setSetting(db, CURSOR_KEY as never, String(nextCursor));
-  return { pushed: pushed.accepted.length, pulled: pulled.changes.length, conflicts: allConflicts, cursor: nextCursor };
 }
 
 async function localIdForChange(db: SQLiteDatabase, outboxId: number): Promise<number> {

@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
 import { useCloudAuth } from "./auth-context";
+import { getSyncProgress, subscribeSyncProgress, type SyncProgress } from "./sync";
 
 type SettingKeyWithSync = Parameters<typeof getSetting>[1] | "cloud_last_sync_at" | "cloud_last_sync_error";
 
@@ -16,6 +17,7 @@ export interface SyncStatus {
   conflicts: number;
   lastSyncedAt: number | null;
   error: string | null;
+  progress: SyncProgress;
 }
 
 interface SyncStatusContextValue extends SyncStatus {
@@ -63,6 +65,7 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [progress, setProgress] = useState<SyncProgress>(getSyncProgress());
   const mounted = useRef(true);
 
   const isCloudEnabled = status === "authenticated" && Boolean(user?.emailVerified) && Platform.OS !== "web";
@@ -107,6 +110,12 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
+  useEffect(() => subscribeSyncProgress((next) => {
+    if (!mounted.current) return;
+    setProgress(next);
+    setIsSyncing(next.active);
+  }), []);
+
   useEffect(() => {
     if (!isCloudEnabled) return;
     void refresh();
@@ -141,11 +150,12 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
     conflicts,
     lastSyncedAt,
     error,
+    progress,
     refresh,
     markSynced,
     markError,
     setSyncing,
-  }), [kind, isCloudEnabled, isSyncing, pending, conflicts, lastSyncedAt, error, refresh, markSynced, markError, setSyncing]);
+  }), [kind, isCloudEnabled, isSyncing, pending, conflicts, lastSyncedAt, error, progress, refresh, markSynced, markError, setSyncing]);
 
   return <SyncStatusContext.Provider value={value}>{children}</SyncStatusContext.Provider>;
 }
