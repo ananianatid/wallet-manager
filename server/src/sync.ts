@@ -4,10 +4,14 @@ import { authenticate } from "./auth.js";
 import { query, withTransaction } from "./db.js";
 
 const entityType = z.string().regex(/^[a-z_]+$/).max(80);
+// Les anciennes bases locales génèrent des UUID textuels sans les bits
+// version/variante RFC 4122. Ils restent des identifiants uniques valides
+// pour notre domaine, donc on valide leur forme plutôt que leur version.
+const entityId = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const changeSchema = z.object({
   clientChangeId: z.number().int().positive(),
   entityType,
-  entityId: z.string().uuid(),
+  entityId,
   version: z.number().int().positive(),
   baseVersion: z.number().int().nonnegative().nullable().default(null),
   operation: z.enum(["upsert", "delete"]),
