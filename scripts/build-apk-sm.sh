@@ -11,7 +11,9 @@ artifact="android/app/build/outputs/apk/release/app-release.apk"
 # navigateur qui partage le domaine de la vitrine. Une valeur explicitement
 # fournie par l’environnement reste prioritaire pour les builds de test.
 export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://wallet-api.causalset.sbs/api}"
+export APP_BUILD_TIMESTAMP="${APP_BUILD_TIMESTAMP:-$(date -u '+%Y-%m-%d %H:%M:%S UTC')}"
 echo "==> API cloud embarquée: $EXPO_PUBLIC_API_URL"
+echo "==> Build: $APP_BUILD_TIMESTAMP"
 
 echo "==> Régénération Android propre..."
 npx expo prebuild --clean --platform android --no-install

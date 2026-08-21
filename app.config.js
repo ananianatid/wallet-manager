@@ -18,6 +18,10 @@ module.exports = ({ config }) => {
 
   return {
     ...source,
+    extra: {
+      ...(source.extra ?? {}),
+      buildTimestamp: process.env.APP_BUILD_TIMESTAMP ?? "dev",
+    },
     plugins: [
       ...(source.plugins ?? []),
       ...(sentryPlugin ? [sentryPlugin] : []),

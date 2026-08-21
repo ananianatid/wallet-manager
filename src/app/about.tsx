@@ -7,6 +7,7 @@ export default function AboutScreen() {
   const theme = useTheme();
   const name = Constants.expoConfig?.name ?? "Wallet";
   const version = Constants.expoConfig?.version ?? "1.0.0";
+  const buildTimestamp = Constants.expoConfig?.extra?.buildTimestamp;
 
   return (
     <>
@@ -26,6 +27,9 @@ export default function AboutScreen() {
           {name}
         </Text>
         <Text style={{ color: theme.secondaryLabel }}>Version {version}</Text>
+        <Text testID="build-timestamp" style={{ color: theme.secondaryLabel, fontSize: 12 }}>
+          Build {buildTimestamp && buildTimestamp !== "dev" ? buildTimestamp : "développement"}
+        </Text>
         <View style={[styles.infoCard, { backgroundColor: theme.surface }]}>
           <Text style={{ color: theme.secondaryLabel, fontSize: 13 }}>
             Suivez vos dépenses simplement, en FCFA.
