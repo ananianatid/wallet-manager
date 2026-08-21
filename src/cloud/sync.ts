@@ -198,10 +198,10 @@ async function applyRemoteChanges(
       continue;
     }
     const table = change.entityType;
-    const existing = await db.getFirstAsync<{ id: number }>(
+    let existing = await db.getFirstAsync<{ id: number; sync_id: string }>(
       table === "transaction_tags"
-        ? `SELECT rowid AS id FROM ${table} WHERE sync_id = ?`
-        : `SELECT id FROM ${table} WHERE sync_id = ?`,
+        ? `SELECT rowid AS id, sync_id FROM ${table} WHERE sync_id = ?`
+        : `SELECT id, sync_id FROM ${table} WHERE sync_id = ?`,
       change.entityId,
     );
     if (change.operation === "delete") {
@@ -214,6 +214,17 @@ async function applyRemoteChanges(
     if (!payload || !payload.fields || !payload.refs) {
       onProgress?.(index + 1);
       continue;
+    }
+    // Les catégories ont une clé métier unique (type, name), alors que leurs
+    // sync_id peuvent différer entre les seeds locales et le serveur.
+    // Réutiliser la ligne locale évite un doublon SQLite lors du pull initial.
+    if (!existing && table === "categories" && typeof payload.fields.type === "string" && typeof payload.fields.name === "string") {
+      existing = await db.getFirstAsync<{ id: number; sync_id: string }>(
+        "SELECT id, sync_id FROM categories WHERE type = ? AND name = ?",
+        payload.fields.type,
+        payload.fields.name,
+      );
+      if (existing) await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", existing.sync_id);
     }
     const relationMap = RELATIONS[table] ?? {};
     const values: Record<string, unknown> = { ...payload.fields, sync_id: change.entityId, sync_version: change.version };
