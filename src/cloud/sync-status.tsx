@@ -114,6 +114,8 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
     if (!mounted.current) return;
     setProgress(next);
     setIsSyncing(next.active);
+    if (next.phase === "error") setError(next.message);
+    else if (next.phase === "completed") setError(null);
   }), []);
 
   useEffect(() => {

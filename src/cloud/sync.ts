@@ -60,7 +60,7 @@ export interface SyncRunResult {
   cursor: number;
 }
 
-export type SyncProgressPhase = "preparing" | "uploading" | "downloading" | "applying" | "completed";
+export type SyncProgressPhase = "preparing" | "uploading" | "downloading" | "applying" | "completed" | "error";
 
 export interface SyncProgress {
   active: boolean;
@@ -319,7 +319,7 @@ export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
     publishSyncProgress({ active: false, phase: "completed", completed: pulled.changes.length, total: pulled.changes.length, message: "Synchronisation terminée" });
     return { pushed: pushed.accepted.length, pulled: pulled.changes.length, conflicts: allConflicts, cursor: nextCursor };
   } catch (error) {
-    publishSyncProgress({ active: false, phase: "completed", completed: 0, total: 0, message: error instanceof Error ? error.message : "Synchronisation impossible." });
+    publishSyncProgress({ active: false, phase: "error", completed: 0, total: 0, message: error instanceof Error ? error.message : "Synchronisation impossible." });
     throw error;
   }
 }
