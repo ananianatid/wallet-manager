@@ -34,17 +34,20 @@ const DEFAULT_CLOUD_CATEGORIES = [
 ] as const;
 
 function setRefreshCookie(reply: FastifyReply, token: string, expiresAt: Date): void {
+  // 2 domaines séparés wallet-manager / wallet-api : cross-site nécessite SameSite=None + Secure
+  const sameSite = (config.WEB_ORIGIN !== config.PUBLIC_API_URL ? "none" : "lax") as "lax" | "none";
   reply.setCookie(refreshCookie, token, {
     httpOnly: true,
-    secure: config.COOKIE_SECURE,
-    sameSite: "lax",
+    secure: config.COOKIE_SECURE || sameSite === "none",
+    sameSite,
     path: "/api/auth",
     expires: expiresAt,
   });
 }
 
 function clearRefreshCookie(reply: FastifyReply): void {
-  reply.clearCookie(refreshCookie, { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: "lax", path: "/api/auth" });
+  const sameSite = (config.WEB_ORIGIN !== config.PUBLIC_API_URL ? "none" : "lax") as "lax" | "none";
+  reply.clearCookie(refreshCookie, { httpOnly: true, secure: config.COOKIE_SECURE || sameSite === "none", sameSite, path: "/api/auth" });
 }
 
 async function issueSession(userId: string, deviceName: string, reply: FastifyReply, client: "web" | "mobile"): Promise<{ accessToken: string; expiresIn: number; refreshToken?: string }> {
