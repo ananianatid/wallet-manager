@@ -93,11 +93,11 @@ export function WebSidebar({ pathname }: { pathname: string }) {
         <Pressable
           onPress={() => navigate("/app/settings")}
           accessibilityRole="link"
-          accessibilityLabel="Réglages"
+          accessibilityLabel="Compte et synchronisation"
           style={({ pressed }) => [styles.sidebarItem, pathname.startsWith("/app/settings") && styles.sidebarItemActive, pressed && styles.pressed]}
         >
           <Settings2 size={18} color="#B7C8BA" strokeWidth={2} />
-          <Text style={styles.sidebarItemText}>Réglages</Text>
+          <Text style={styles.sidebarItemText}>Compte et synchronisation</Text>
         </Pressable>
         <View style={styles.sidebarNote}>
           <Text style={styles.sidebarNoteTitle}>Vos données sont cloud.</Text>
