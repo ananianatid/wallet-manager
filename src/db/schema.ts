@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-export const DATABASE_VERSION = 23;
+export const DATABASE_VERSION = 24;
 
 export const SCHEMA_VERSION_1 = `
 CREATE TABLE categories (
@@ -858,6 +858,78 @@ export const MIGRATION_V23 = `
     ON transaction_attachments (cloud_attachment_id);
 `;
 
+const SYNC_OUTBOX_VERSION_TRIGGER_SQL = SYNCABLE_TABLES.map((table) => `
+  DROP TRIGGER IF EXISTS trg_${table}_sync_insert;
+  DROP TRIGGER IF EXISTS trg_${table}_sync_update;
+  DROP TRIGGER IF EXISTS trg_${table}_sync_delete;
+  CREATE TRIGGER trg_${table}_sync_insert
+  AFTER INSERT ON ${table}
+  BEGIN
+    UPDATE ${table}
+    SET sync_id = lower(
+      hex(randomblob(4)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(6))
+    )
+    WHERE id = NEW.id AND sync_id IS NULL;
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at, sync_version)
+    SELECT '${table}', id, sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000, sync_version
+    FROM ${table} WHERE id = NEW.id;
+  END;
+  CREATE TRIGGER trg_${table}_sync_update
+  AFTER UPDATE ON ${table}
+  WHEN OLD.sync_id = NEW.sync_id
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at, sync_version)
+    VALUES ('${table}', NEW.id, NEW.sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000, NEW.sync_version);
+  END;
+  CREATE TRIGGER trg_${table}_sync_delete
+  BEFORE DELETE ON ${table}
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at, sync_version)
+    VALUES ('${table}', OLD.id, OLD.sync_id, 'delete', CAST(strftime('%s','now') AS INTEGER) * 1000, OLD.sync_version);
+  END;
+`).join("") + `
+  DROP TRIGGER IF EXISTS trg_transaction_tags_sync_insert;
+  DROP TRIGGER IF EXISTS trg_transaction_tags_sync_update;
+  DROP TRIGGER IF EXISTS trg_transaction_tags_sync_delete;
+  CREATE TRIGGER trg_transaction_tags_sync_insert
+  AFTER INSERT ON transaction_tags
+  BEGIN
+    UPDATE transaction_tags
+    SET sync_id = lower(
+      hex(randomblob(4)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(2)) || '-' ||
+      hex(randomblob(6))
+    )
+    WHERE rowid = NEW.rowid AND sync_id IS NULL;
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at, sync_version)
+    SELECT 'transaction_tags', rowid, sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000, sync_version
+    FROM transaction_tags WHERE rowid = NEW.rowid;
+  END;
+  CREATE TRIGGER trg_transaction_tags_sync_update
+  AFTER UPDATE ON transaction_tags
+  WHEN OLD.sync_id = NEW.sync_id
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at, sync_version)
+    VALUES ('transaction_tags', NEW.rowid, NEW.sync_id, 'upsert', CAST(strftime('%s','now') AS INTEGER) * 1000, NEW.sync_version);
+  END;
+  CREATE TRIGGER trg_transaction_tags_sync_delete
+  BEFORE DELETE ON transaction_tags
+  BEGIN
+    INSERT INTO sync_outbox (entity_type, local_id, sync_id, operation, changed_at, sync_version)
+    VALUES ('transaction_tags', OLD.rowid, OLD.sync_id, 'delete', CAST(strftime('%s','now') AS INTEGER) * 1000, OLD.sync_version);
+  END;
+`;
+
+export const MIGRATION_V24 = `
+  ALTER TABLE sync_outbox ADD COLUMN sync_version INTEGER NOT NULL DEFAULT 0;
+` + SYNC_OUTBOX_VERSION_TRIGGER_SQL;
+
 export async function seedCategories(db: SQLiteDatabase): Promise<void> {
   for (const [type, names] of Object.entries(SEED_CATEGORIES)) {
     for (const name of names) {
@@ -993,6 +1065,10 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
 
   if (currentDbVersion <= 22) {
     await db.execAsync(MIGRATION_V23);
+  }
+
+  if (currentDbVersion <= 23) {
+    await db.execAsync(MIGRATION_V24);
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
