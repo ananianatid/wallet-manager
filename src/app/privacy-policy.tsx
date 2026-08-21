@@ -80,7 +80,7 @@ export default function PrivacyPolicyScreen() {
 
         <View style={styles.introduction}>
             <Text accessibilityRole="header" style={[styles.title, { color: theme.label }]}>Politique de confidentialité</Text>
-          <Text style={[styles.updated, { color: theme.secondaryLabel }]}>Dernière mise à jour : 9 août 2026</Text>
+          <Text style={[styles.updated, { color: theme.secondaryLabel }]}>Dernière mise à jour : 21 août 2026</Text>
           <Text style={[styles.body, { color: theme.secondaryLabel }]}>Cette page explique quelles données Wallet utilise, où elles sont conservées et dans quels cas elles quittent votre appareil.</Text>
         </View>
 
