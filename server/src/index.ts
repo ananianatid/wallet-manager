@@ -17,6 +17,7 @@ const app = Fastify({ logger: config.NODE_ENV !== "test" });
 
 app.setErrorHandler((error, request, reply) => {
   if (error instanceof ZodError) {
+    request.log.warn({ issues: error.issues.map(({ code, path, message }) => ({ code, path, message })) }, "Invalid request payload");
     return reply.code(400).send({ code: "VALIDATION_ERROR", message: "Les données envoyées sont invalides." });
   }
   const httpError = error as { statusCode?: number; code?: string };

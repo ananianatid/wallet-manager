@@ -37,7 +37,11 @@ export default function CloudAccountScreen() {
     }
     const execute = () => void syncNow()
       .then((result) => setSyncMessage(result.conflicts.length > 0 ? `${result.conflicts.length} conflit(s) à résoudre.` : `${result.pushed} élément(s) envoyé(s), ${result.pulled} reçu(s).`))
-      .catch((cause) => setError(cause instanceof Error ? cause.message : "Synchronisation impossible."));
+      .catch((cause) => {
+        const message = cause instanceof Error ? cause.message : "Synchronisation impossible.";
+        setError(message);
+        Alert.alert("Synchronisation impossible", message);
+      });
     void getDatabase().then((db) => getSetting(db, "cloud_sync_initialized")).then((initialized) => {
       if (initialized === "1") execute();
       else Alert.alert("Première synchronisation", "Wallet va comparer les données locales et cloud. Vous pourrez choisir la version à garder en cas de conflit.", [{ text: "Annuler", style: "cancel" }, { text: "Continuer", onPress: execute }]);

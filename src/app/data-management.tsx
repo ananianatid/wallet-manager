@@ -158,6 +158,7 @@ export default function DataManagementScreen() {
       const msg = e instanceof Error ? e.message : "Synchronisation impossible.";
       setSyncError(msg);
       await sync.markError(msg);
+      Alert.alert("Synchronisation impossible", msg);
     } finally {
       sync.setSyncing(false);
       setSyncBusy(false);
