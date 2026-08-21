@@ -63,6 +63,14 @@ services:
         delay: 5s
         max_attempts: 3
         window: 60s
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=dokploy-network
+        - traefik.http.routers.wallet-api.rule=Host(`wallet-api.causalset.sbs`)
+        - traefik.http.routers.wallet-api.entrypoints=websecure
+        - traefik.http.routers.wallet-api.tls.certresolver=letsencrypt
+        - traefik.http.routers.wallet-api.priority=10
+        - traefik.http.services.wallet-api.loadbalancer.server.port=3000
       update_config:
         parallelism: 1
         order: start-first
