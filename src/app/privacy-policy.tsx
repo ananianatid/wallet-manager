@@ -8,13 +8,14 @@ const sections = [
     title: "Les données restent sur votre appareil",
     paragraphs: [
       "Wallet est conçue pour fonctionner localement. Vos comptes, transactions, catégories, budgets, objectifs, règles récurrentes et préférences sont enregistrés dans la base de données de l’application sur votre appareil.",
-      "L’application ne crée pas de compte utilisateur et ne propose pas de synchronisation cloud. Elle n’envoie pas vos données financières à un serveur Wallet.",
+      "Vous pouvez utiliser Wallet sans créer de compte. Si vous activez la synchronisation cloud, un compte est créé avec votre adresse email et vos données financières sont alors synchronisées entre vos appareils connectés. Cette activation reste facultative.",
     ],
   },
   {
     title: "Données enregistrées",
     paragraphs: [
       "Les données que vous saisissez sont utilisées uniquement pour afficher vos soldes, vos statistiques, vos budgets et vos objectifs. Les préférences de devise, de thème et de calendrier sont également conservées localement.",
+      "Lorsque la synchronisation cloud est activée, Wallet envoie les données nécessaires à votre espace de travail privé afin de les rendre disponibles sur vos autres appareils. Les pièces jointes synchronisées sont stockées dans un espace privé associé à votre compte.",
       "Si vous activez le verrouillage, le réglage du verrouillage ainsi que le sel et l’empreinte dérivée de votre code sont conservés dans le stockage sécurisé du système. Wallet ne peut pas lire ni récupérer vos données biométriques.",
     ],
   },
@@ -35,13 +36,14 @@ const sections = [
   {
     title: "Conservation et suppression",
     paragraphs: [
-      "Les données restent dans l’application jusqu’à leur suppression par vos soins, à la réinitialisation de l’application ou à la désinstallation de Wallet. Une sauvegarde exportée doit être supprimée séparément de l’emplacement où vous l’avez enregistrée.",
+      "Sans compte, les données restent dans l’application jusqu’à leur suppression par vos soins, à la réinitialisation de l’application ou à la désinstallation de Wallet. Avec un compte, vous pouvez demander la suppression du compte et de ses données cloud depuis les réglages ; les données locales et les sauvegardes exportées doivent être supprimées séparément.",
     ],
   },
   {
     title: "Services tiers et évolutions",
     paragraphs: [
       "Wallet ne contient pas de publicité ni de profilage. Si la configuration de la version installée contient un DSN Sentry, l’application peut envoyer à Sentry des rapports d’erreurs techniques et des informations de diagnostic nécessaires au dépannage. Cette télémétrie ne doit pas être activée sans mettre à jour cette politique et informer les utilisateurs concernés.",
+      "Le service cloud utilise PostgreSQL pour les données structurées, un stockage privé compatible S3 pour les pièces jointes et le serveur SMTP configuré par l’exploitant pour les emails de vérification et de récupération. Les mots de passe ne sont jamais stockés en clair.",
       "Le système d’exploitation peut appliquer ses propres règles aux fonctions de partage, de stockage sécurisé et d’authentification biométrique.",
       "Cette politique décrit le fonctionnement actuel de l’application. Elle sera mise à jour si les fonctionnalités ou les services utilisés changent.",
     ],

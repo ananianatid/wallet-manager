@@ -1,6 +1,6 @@
-import SettingsScreen from "../(tabs)/(settings)/index";
 import { WebAppShell } from "@/components/web-app-shell";
+import WebCloudSettings from "@/components/web-cloud-settings";
 
 export default function WebSettingsEntry() {
-  return <WebAppShell><SettingsScreen /></WebAppShell>;
+  return <WebAppShell><WebCloudSettings /></WebAppShell>;
 }

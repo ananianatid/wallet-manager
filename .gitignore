@@ -2,6 +2,9 @@
 
 # dependencies
 node_modules/
+server/node_modules/
+server/dist/
+server/.env
 
 # Expo
 .expo/
@@ -33,6 +36,7 @@ modules/**/android/build/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+nvim.log
 
 # macOS
 .DS_Store

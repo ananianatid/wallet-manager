@@ -92,6 +92,8 @@ export interface TransactionAttachment {
   size: number;
   createdAt: number;
   exists: boolean;
+  cloudAttachmentId?: string | null;
+  cloudUrl?: string | null;
 }
 
 export interface TransactionSplit {

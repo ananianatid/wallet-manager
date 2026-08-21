@@ -279,9 +279,9 @@ export default function DashboardScreen() {
         >
           {!hasAccounts ? (
             <EmptyState
-              title="Commencez par créer un compte"
-              message="Les transactions sont enregistrées sur un compte."
-              actionLabel="Créer un compte"
+              title="Ajoutez votre premier compte financier"
+              message="Ajoutez une banque, une caisse ou un portefeuille mobile pour enregistrer vos transactions."
+              actionLabel="Ajouter un compte financier"
               onAction={() => router.push("/(tabs)/(accounts)")}
             />
           ) : (

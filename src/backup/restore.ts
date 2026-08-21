@@ -3,10 +3,12 @@ import * as SQLite from "expo-sqlite";
 import { DATABASE_NAME, closeDatabase, getDatabase } from "@/db/database";
 import { DATABASE_VERSION } from "@/db/schema";
 import { decryptBackup } from "@/security/cipher";
+import {
+  detectBackupFormat,
+  type BackupStorageFormat,
+} from "@/security/backup-format";
 import { bumpDataEpoch } from "@/state/data-epoch";
 import { privateAttachmentDirectory } from "@/db/attachments";
-
-const SQLITE_MAGIC = "SQLite format 3\u0000";
 
 const REQUIRED_TABLES = [
   "categories",
@@ -34,16 +36,30 @@ export interface RestoredBackup {
   info: RestoredBackupInfo;
 }
 
-function startsWithSqliteMagic(bytes: Uint8Array): boolean {
-  if (bytes.length < SQLITE_MAGIC.length) {
-    return false;
+async function readBackupBytes(uri: string): Promise<Uint8Array> {
+  let file: File;
+  try {
+    file = new File(uri);
+  } catch {
+    throw new RestoreError("Impossible d'accéder au fichier choisi.");
   }
-  for (let i = 0; i < SQLITE_MAGIC.length; i++) {
-    if (bytes[i] !== SQLITE_MAGIC.charCodeAt(i)) {
-      return false;
+  if (!file.exists) {
+    throw new RestoreError("Le fichier choisi n'existe plus.");
+  }
+  return file.bytes();
+}
+
+export async function detectRestoredBackupKind(
+  uri: string,
+): Promise<BackupStorageFormat> {
+  try {
+    return detectBackupFormat(await readBackupBytes(uri));
+  } catch (error) {
+    if (error instanceof RestoreError) {
+      throw error;
     }
+    throw new RestoreError("Ce fichier n'est pas une sauvegarde Wallet valide.");
   }
-  return true;
 }
 
 async function validateDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -69,21 +85,18 @@ async function validateDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
 
 export async function readRestoredBackup(
   uri: string,
-  passphrase: string,
+  passphrase = "",
 ): Promise<RestoredBackup> {
-  let file: File;
+  const bytes = await readBackupBytes(uri);
+  let plaintext: Uint8Array;
   try {
-    file = new File(uri);
-  } catch {
-    throw new RestoreError("Impossible d'accéder au fichier choisi.");
-  }
-  if (!file.exists) {
-    throw new RestoreError("Le fichier choisi n'existe plus.");
-  }
-  const bytes = await file.bytes();
-  const plaintext = await decryptBackup(bytes, passphrase);
-  if (!startsWithSqliteMagic(plaintext)) {
-    throw new RestoreError("La sauvegarde décryptée n'est pas valide.");
+    const format = detectBackupFormat(bytes);
+    plaintext = format === "encrypted" ? await decryptBackup(bytes, passphrase) : bytes;
+  } catch (error) {
+    if (error instanceof Error && "userFacing" in error) {
+      throw error;
+    }
+    throw new RestoreError("La sauvegarde n'est pas valide ou ne peut pas être décryptée.");
   }
 
   const memory = await SQLite.deserializeDatabaseAsync(plaintext);

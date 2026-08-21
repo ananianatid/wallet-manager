@@ -58,11 +58,19 @@ function DownloadButton({ compact = false }: { compact?: boolean }) {
 }
 
 function OpenWebButton() {
+  const openWebApp = () => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.location.assign("/app/");
+      return;
+    }
+    void Linking.openURL("/app/");
+  };
+
   return (
     <Pressable
       accessibilityLabel="Ouvrir Wallet sur ordinateur"
       accessibilityRole="link"
-      onPress={() => void Linking.openURL("/app")}
+      onPress={openWebApp}
       style={({ pressed }) => [styles.webAppButton, pressed && styles.pressed]}
     >
       <ArrowUpRight size={18} color="#26352D" strokeWidth={2.3} />

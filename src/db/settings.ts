@@ -14,7 +14,12 @@ export type SettingKey =
   | "onboarding_account_id"
   | "onboarding_account_name"
   | "onboarding_currency"
-  | "onboarding_step";
+  | "onboarding_step"
+  | "cloud_sync_cursor"
+  | "cloud_sync_device_id"
+  | "cloud_sync_conflicts"
+  | "cloud_sync_initialized"
+  | "cloud_welcome_seen";
 
 export async function getSetting(
   db: SQLiteDatabase,

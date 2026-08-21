@@ -13,6 +13,9 @@ import {
   MIGRATION_V18,
   MIGRATION_V19,
   MIGRATION_V20,
+  MIGRATION_V21,
+  MIGRATION_V22,
+  MIGRATION_V23,
   MIGRATION_V2,
   MIGRATION_V3,
   MIGRATION_V4,
@@ -81,6 +84,9 @@ const MIGRATIONS: Record<number, string> = {
   18: MIGRATION_V18,
   19: MIGRATION_V19,
   20: MIGRATION_V20,
+  21: MIGRATION_V21,
+  22: MIGRATION_V22,
+  23: MIGRATION_V23,
 };
 
 class SqliteDb {
@@ -428,6 +434,9 @@ describe("migrations versionnées", () => {
     }
     const fresh = new SqliteDb();
     fresh.db.exec(SCHEMA_VERSION_1);
+    fresh.db.exec(MIGRATION_V21);
+    fresh.db.exec(MIGRATION_V22);
+    fresh.db.exec(MIGRATION_V23);
 
     expect(tableNames(ladder)).toEqual(tableNames(fresh));
     expect(indexNames(ladder)).toEqual(indexNames(fresh));

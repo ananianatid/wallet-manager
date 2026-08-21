@@ -22,6 +22,7 @@ import { initObservability } from "@/services/observability";
 import { runStartupHealth } from "@/utils/diagnostics";
 import { applyDueRecurring } from "@/db/recurring";
 import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
+import { CloudAuthProvider } from "@/cloud/auth-context";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
 
 const SPLASH_MIN_DURATION_MS = 800;
@@ -30,7 +31,7 @@ const splashStartedAt = Date.now();
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 initObservability();
 
-function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tabs)" | "onboarding" }) {
+function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tabs)" | "onboarding" | "cloud-welcome" }) {
   const theme = useTheme();
   const { scheme } = useThemeControl();
   const lock = useLockState();
@@ -64,9 +65,15 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tab
           <Stack.Screen name="app/planning" options={{ headerShown: false }} />
           <Stack.Screen name="app/statistics" options={{ headerShown: false }} />
           <Stack.Screen name="app/accounts" options={{ headerShown: false }} />
+          <Stack.Screen name="app/categories" options={{ headerShown: false }} />
           <Stack.Screen name="app/settings" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="cloud-welcome" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="cloud-account" options={{ title: "Compte et synchronisation" }} />
+          <Stack.Screen name="reset-password" options={{ title: "Nouveau mot de passe" }} />
+          <Stack.Screen name="recover-account" options={{ title: "Récupérer le compte" }} />
+          <Stack.Screen name="sync-conflicts" options={{ title: "Conflits de synchronisation" }} />
           <Stack.Screen
             name="new-transaction"
             options={{ presentation: "modal", title: "Nouvelle transaction" }}
@@ -98,6 +105,7 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tab
           <Stack.Screen name="privacy-policy" options={{ title: "Confidentialité" }} />
           <Stack.Screen name="diagnostics" options={{ title: "Diagnostics" }} />
           <Stack.Screen name="security" options={{ title: "Sécurité" }} />
+          <Stack.Screen name="data-management" options={{ title: "Données" }} />
           <Stack.Screen
             name="pin-setup"
             options={{ presentation: "modal", title: "Code" }}
@@ -123,6 +131,7 @@ export default function RootLayout() {
   const router = useRouter();
   const [isReady, setIsReady] = useState(Platform.OS === "web");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [needsCloudWelcome, setNeedsCloudWelcome] = useState(false);
   const hasRoutedToDashboard = useRef(false);
 
   useEffect(() => {
@@ -140,6 +149,7 @@ export default function RootLayout() {
 
     void (async () => {
       let shouldOnboard = false;
+      let shouldShowCloudWelcome = false;
       try {
         const db = await getDatabase();
         try {
@@ -153,11 +163,13 @@ export default function RootLayout() {
         );
         const completed = await getSetting(db, "onboarding_completed");
         const started = await getSetting(db, "onboarding_started");
+        const cloudWelcomeSeen = await getSetting(db, "cloud_welcome_seen");
         const hasAccounts = (accountCount?.count ?? 0) > 0;
         if (hasAccounts && completed !== "1" && started !== "1") {
           await setSetting(db, "onboarding_completed", "1");
         }
         shouldOnboard = completed !== "1" && (!hasAccounts || started === "1");
+        shouldShowCloudWelcome = cloudWelcomeSeen !== "1";
       } catch {
         // The regular app shell remains available if the startup check fails.
       }
@@ -165,6 +177,7 @@ export default function RootLayout() {
         return;
       }
       setNeedsOnboarding(shouldOnboard);
+      setNeedsCloudWelcome(shouldShowCloudWelcome);
       setIsReady(true);
       void runStartupHealth();
 
@@ -203,8 +216,8 @@ export default function RootLayout() {
     }
 
     hasRoutedToDashboard.current = true;
-    router.replace(needsOnboarding ? "/onboarding" : "/(tabs)/(dashboard)");
-  }, [isReady, needsOnboarding, router]);
+    router.replace(needsCloudWelcome ? "/cloud-welcome" : needsOnboarding ? "/onboarding" : "/(tabs)/(dashboard)");
+  }, [isReady, needsCloudWelcome, needsOnboarding, router]);
 
   if (!isReady) {
     return null;
@@ -212,15 +225,17 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AppThemeProvider>
-        <CurrencyProvider>
-          {Platform.OS === "web" ? (
-            <RootNavigator initialRouteName="index" />
-          ) : (
-            <RootNavigator initialRouteName={needsOnboarding ? "onboarding" : "(tabs)"} />
-          )}
-        </CurrencyProvider>
-      </AppThemeProvider>
+      <CloudAuthProvider>
+        <AppThemeProvider>
+          <CurrencyProvider>
+            {Platform.OS === "web" ? (
+              <RootNavigator initialRouteName="index" />
+            ) : (
+              <RootNavigator initialRouteName={needsCloudWelcome ? "cloud-welcome" : needsOnboarding ? "onboarding" : "(tabs)"} />
+            )}
+          </CurrencyProvider>
+        </AppThemeProvider>
+      </CloudAuthProvider>
     </SafeAreaProvider>
   );
 }
