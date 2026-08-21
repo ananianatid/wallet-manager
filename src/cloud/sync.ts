@@ -121,9 +121,7 @@ async function readOutbox(db: SQLiteDatabase, deviceId: string): Promise<SyncCha
        FROM sync_outbox
        GROUP BY entity_type, sync_id
      ) latest ON latest.id = o.id
-     ORDER BY o.id
-     LIMIT ?`,
-    OUTBOX_LIMIT,
+     ORDER BY o.id`,
   );
   const changes: SyncChange[] = [];
   for (const row of rows) {
@@ -299,7 +297,25 @@ export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
     const blocked = new Set(existingConflicts.map((item) => `${item.entityType}:${item.entityId}`));
     const pending = (await readOutbox(db, deviceId)).filter((item) => !blocked.has(`${item.entityType}:${item.entityId}`));
     publishSyncProgress({ active: true, phase: "uploading", completed: 0, total: pending.length, message: pending.length > 0 ? `Envoi de 0/${pending.length} modification${pending.length > 1 ? "s" : ""}…` : "Aucune modification locale à envoyer…" });
-    const pushed = pending.length > 0 ? await pushSyncChanges(pending) : { accepted: [], conflicts: [] };
+    const pushed = { accepted: [] as number[], conflicts: [] as SyncConflict[] };
+    for (let offset = 0; offset < pending.length; offset += OUTBOX_LIMIT) {
+      const batch = pending.slice(offset, offset + OUTBOX_LIMIT);
+      const result = await pushSyncChanges(batch);
+      pushed.accepted.push(...result.accepted);
+      pushed.conflicts.push(...result.conflicts);
+      for (const clientChangeId of result.accepted) {
+        const change = batch.find((item) => item.clientChangeId === clientChangeId);
+        if (!change || change.clientChangeId == null) continue;
+        const outboxId = change.clientChangeId;
+        if (change.operation === "upsert") {
+          const key = change.entityType === "transaction_tags" ? "rowid" : "id";
+          await db.runAsync(`UPDATE ${change.entityType} SET sync_version = ? WHERE ${key} = ?`, change.version, await localIdForChange(db, outboxId));
+        }
+        await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", change.entityId);
+      }
+      const completed = Math.min(offset + batch.length, pending.length);
+      publishSyncProgress({ active: true, phase: "uploading", completed, total: pending.length, message: `${completed}/${pending.length} modification${pending.length > 1 ? "s" : ""} envoyée${pending.length > 1 ? "s" : ""}` });
+    }
     const newConflicts = pushed.conflicts.map((conflict) => ({
       ...conflict,
       localId: pending.find((item) => item.entityType === conflict.entityType && item.entityId === conflict.entityId)?.localId,
@@ -307,17 +323,6 @@ export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
     const allConflicts = [...existingConflicts.filter((old) => !newConflicts.some((next) => next.entityType === old.entityType && next.entityId === old.entityId)), ...newConflicts];
     if (newConflicts.length > 0) await writeStoredConflicts(db, allConflicts);
     const conflictKeys = new Set(allConflicts.map((item) => `${item.entityType}:${item.entityId}`));
-    for (const clientChangeId of pushed.accepted) {
-      const change = pending.find((item) => item.clientChangeId === clientChangeId);
-      if (!change || change.clientChangeId == null) continue;
-      const outboxId = change.clientChangeId;
-      if (change.operation === "upsert") {
-        const key = change.entityType === "transaction_tags" ? "rowid" : "id";
-        await db.runAsync(`UPDATE ${change.entityType} SET sync_version = ? WHERE ${key} = ?`, change.version, await localIdForChange(db, outboxId));
-      }
-      await db.runAsync("DELETE FROM sync_outbox WHERE sync_id = ?", change.entityId);
-    }
-    publishSyncProgress({ active: true, phase: "uploading", completed: pending.length, total: pending.length, message: pending.length > 0 ? `${pending.length}/${pending.length} modification${pending.length > 1 ? "s" : ""} envoyée${pending.length > 1 ? "s" : ""}` : "Envoi terminé" });
     const cursor = Number((await getSetting(db, CURSOR_KEY as never)) ?? "0");
     publishSyncProgress({ active: true, phase: "downloading", completed: 0, total: 0, message: "Recherche des nouveautés…" });
     const pulled = await pullSyncChanges(cursor);
