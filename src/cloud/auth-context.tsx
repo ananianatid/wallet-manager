@@ -139,7 +139,13 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") void syncIfAllowed(user);
     });
-    return () => subscription.remove();
+    const interval = Platform.OS !== "web" && user?.emailVerified
+      ? setInterval(() => void syncIfAllowed(user), 15_000)
+      : null;
+    return () => {
+      subscription.remove();
+      if (interval) clearInterval(interval);
+    };
   }, [syncIfAllowed, user]);
 
   const value = useMemo(() => ({ status, user, signIn, signUp, signOut, refreshUser, resendVerification, syncNow }), [status, user, signIn, signUp, signOut, refreshUser, resendVerification, syncNow]);

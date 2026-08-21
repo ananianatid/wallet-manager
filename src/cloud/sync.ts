@@ -334,15 +334,25 @@ export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
     const conflictKeys = new Set(allConflicts.map((item) => `${item.entityType}:${item.entityId}`));
     const cursor = Number((await getSetting(db, CURSOR_KEY as never)) ?? "0");
     publishSyncProgress({ active: true, phase: "downloading", completed: 0, total: 0, message: "Recherche des nouveautés…" });
-    const pulled = await pullSyncChanges(cursor);
-    publishSyncProgress({ active: true, phase: "applying", completed: 0, total: pulled.changes.length, message: pulled.changes.length > 0 ? `Application de 0/${pulled.changes.length} donnée${pulled.changes.length > 1 ? "s" : ""}…` : "Données locales à jour" });
-    await applyRemoteChanges(db, pulled.changes, conflictKeys, (completed) => {
-      publishSyncProgress({ active: true, phase: "applying", completed, total: pulled.changes.length, message: `Application de ${completed}/${pulled.changes.length} donnée${pulled.changes.length > 1 ? "s" : ""}…` });
-    });
-    const nextCursor = pulled.nextCursor;
+    const pulledChanges: SyncChange[] = [];
+    let nextCursor = cursor;
+    let hasMore = true;
+    while (hasMore) {
+      const page = await pullSyncChanges(nextCursor, 200);
+      pulledChanges.push(...page.changes);
+      const pageCursor = page.nextCursor;
+      const pageCountBefore = pulledChanges.length - page.changes.length;
+      publishSyncProgress({ active: true, phase: "applying", completed: pageCountBefore, total: 0, message: page.changes.length > 0 ? `${pageCountBefore} donnée${pageCountBefore > 1 ? "s" : ""} reçue${pageCountBefore > 1 ? "s" : ""}…` : "Données locales à jour" });
+      await applyRemoteChanges(db, page.changes, conflictKeys, (completed) => {
+        const totalCompleted = pageCountBefore + completed;
+        publishSyncProgress({ active: true, phase: "applying", completed: totalCompleted, total: 0, message: `Application de ${totalCompleted} donnée${totalCompleted > 1 ? "s" : ""}…` });
+      });
+      hasMore = page.changes.length === 200 && pageCursor !== nextCursor;
+      nextCursor = pageCursor;
+    }
     if (nextCursor !== cursor) await setSetting(db, CURSOR_KEY as never, String(nextCursor));
-    publishSyncProgress({ active: false, phase: "completed", completed: pulled.changes.length, total: pulled.changes.length, message: "Synchronisation terminée" });
-    return { pushed: pushed.accepted.length, pulled: pulled.changes.length, conflicts: allConflicts, cursor: nextCursor };
+    publishSyncProgress({ active: false, phase: "completed", completed: pulledChanges.length, total: pulledChanges.length, message: "Synchronisation terminée" });
+    return { pushed: pushed.accepted.length, pulled: pulledChanges.length, conflicts: allConflicts, cursor: nextCursor };
   } catch (error) {
     publishSyncProgress({ active: false, phase: "error", completed: 0, total: 0, message: error instanceof Error ? error.message : "Synchronisation impossible." });
     throw error;
