@@ -2,9 +2,10 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import { randomUUID } from "expo-crypto";
 import { getSetting, setSetting } from "@/db/settings";
 import { uploadPendingCloudAttachments } from "./attachments";
-import { pullSyncChanges, pushSyncChanges, type SyncChange, type SyncConflict } from "./api";
+import type { SyncChange, SyncConflict } from "./types";
+import { pullSyncChanges, pushSyncChanges } from "./api";
 
-export type { SyncConflict } from "./api";
+export type { SyncConflict } from "./types";
 
 const CURSOR_KEY = "cloud_sync_cursor";
 const DEVICE_ID_KEY = "cloud_sync_device_id";
@@ -103,6 +104,26 @@ export function subscribeSyncProgress(listener: (progress: SyncProgress) => void
 }
 
 export type ConflictResolution = "server" | "local";
+
+export interface SyncRemoteAdapter {
+  push(changes: SyncChange[]): Promise<{ accepted: number[]; conflicts: SyncConflict[] }>;
+  pull(since: number, limit: number): Promise<{ changes: SyncChange[]; nextCursor: number }>;
+}
+
+export interface SyncDependencies {
+  remote: SyncRemoteAdapter;
+  uploadAttachments: (db: SQLiteDatabase) => Promise<void>;
+}
+
+const productionSyncDependencies: SyncDependencies = {
+  remote: {
+    push: pushSyncChanges,
+    pull: pullSyncChanges,
+  },
+  uploadAttachments: async (db) => {
+    await uploadPendingCloudAttachments(db);
+  },
+};
 
 async function getDeviceId(db: SQLiteDatabase): Promise<string> {
   const current = await getSetting(db, DEVICE_ID_KEY as never);
@@ -297,10 +318,13 @@ export async function resolveSyncConflict(db: SQLiteDatabase, conflict: SyncConf
   await writeStoredConflicts(db, remaining);
 }
 
-export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
+export async function runSync(
+  db: SQLiteDatabase,
+  dependencies: SyncDependencies = productionSyncDependencies,
+): Promise<SyncRunResult> {
   publishSyncProgress({ active: true, phase: "preparing", completed: 0, total: 0, message: "Préparation de la synchronisation…" });
   try {
-    await uploadPendingCloudAttachments(db);
+    await dependencies.uploadAttachments(db);
     const deviceId = await getDeviceId(db);
     const existingConflicts = await readStoredConflicts(db);
     const blocked = new Set(existingConflicts.map((item) => `${item.entityType}:${item.entityId}`));
@@ -309,7 +333,7 @@ export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
     const pushed = { accepted: [] as number[], conflicts: [] as SyncConflict[] };
     for (let offset = 0; offset < pending.length; offset += OUTBOX_LIMIT) {
       const batch = pending.slice(offset, offset + OUTBOX_LIMIT);
-      const result = await pushSyncChanges(batch);
+      const result = await dependencies.remote.push(batch);
       pushed.accepted.push(...result.accepted);
       pushed.conflicts.push(...result.conflicts);
       for (const clientChangeId of result.accepted) {
@@ -338,7 +362,7 @@ export async function runSync(db: SQLiteDatabase): Promise<SyncRunResult> {
     let nextCursor = cursor;
     let hasMore = true;
     while (hasMore) {
-      const page = await pullSyncChanges(nextCursor, 200);
+      const page = await dependencies.remote.pull(nextCursor, 200);
       pulledChanges.push(...page.changes);
       const pageCursor = page.nextCursor;
       const pageCountBefore = pulledChanges.length - page.changes.length;

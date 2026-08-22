@@ -2,8 +2,8 @@ import { Stack } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { listSyncConflicts, resolveSyncConflict, type SyncConflict } from "@/cloud/sync";
+import { type SyncConflict } from "@/cloud/sync";
+import { loadLocalSyncConflicts, resolveLocalSyncConflict } from "@/data/sync-conflicts";
 import { humanEntityLabel, formatConflictPayload } from "@/cloud/conflict-format";
 import { spacing, typography, useTheme, withAlpha } from "@/theme";
 
@@ -15,7 +15,7 @@ export default function SyncConflictsScreen() {
 
   const load = useCallback(async () => {
     try {
-      setConflicts(await listSyncConflicts(await getDatabase()));
+      setConflicts(await loadLocalSyncConflicts());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Lecture des conflits impossible.");
     }
@@ -30,7 +30,7 @@ export default function SyncConflictsScreen() {
     setBusyKey(key);
     setError(null);
     try {
-      await resolveSyncConflict(await getDatabase(), conflict, choice);
+      await resolveLocalSyncConflict(conflict, choice);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Résolution impossible.");

@@ -1,6 +1,25 @@
 import { Platform } from "react-native";
 import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
+import type {
+  CloudAttachment,
+  CloudBootstrap,
+  CloudEntity,
+  CloudSession,
+  CloudUser,
+  SyncChange,
+  SyncConflict,
+} from "./types";
+import { fetchHttpAdapter, type CloudHttpAdapter } from "./http";
+export type {
+  CloudAttachment,
+  CloudBootstrap,
+  CloudEntity,
+  CloudSession,
+  CloudUser,
+  SyncChange,
+  SyncConflict,
+} from "./types";
 
 const configuredApiBase = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
 const API_BASE = Platform.OS === "web"
@@ -13,30 +32,14 @@ const WEB_SESSION_HINT_KEY = "wallet.web-session-present";
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
+let httpAdapter: CloudHttpAdapter = fetchHttpAdapter;
 
-export interface CloudUser {
-  id: string;
-  email: string;
-  emailVerified: boolean;
-  workspaceId: string;
-}
-
-export interface CloudSession {
-  id: string;
-  deviceName: string;
-  createdAt: string;
-  lastSeenAt: string;
-  expiresAt: string;
-}
-
-export interface CloudAttachment {
-  id: string;
-  entityType: string;
-  entityId: string;
-  originalName: string;
-  mimeType: string;
-  sizeBytes: number;
-  url: string;
+export function setCloudHttpAdapter(adapter: CloudHttpAdapter): () => void {
+  const previous = httpAdapter;
+  httpAdapter = adapter;
+  return () => {
+    httpAdapter = previous;
+  };
 }
 
 interface SessionResponse {
@@ -44,43 +47,6 @@ interface SessionResponse {
   expiresIn: number;
   refreshToken?: string;
   emailVerified?: boolean;
-}
-
-export interface SyncChange {
-  clientChangeId?: number;
-  localId?: number;
-  sequence?: number;
-  entityType: string;
-  entityId: string;
-  version: number;
-  baseVersion?: number | null;
-  operation: "upsert" | "delete";
-  payload: Record<string, unknown> | null;
-  deviceId?: string | null;
-  createdAt?: string;
-}
-
-export interface SyncConflict {
-  entityType: string;
-  entityId: string;
-  serverVersion: number;
-  serverPayload: unknown;
-  serverOperation?: "upsert" | "delete";
-  localId?: number;
-}
-
-export interface CloudEntity {
-  entityType: string;
-  entityId: string;
-  version: number;
-  payload: Record<string, unknown> | null;
-  deletedAt: string | null;
-  updatedAt: string;
-}
-
-export interface CloudBootstrap {
-  workspaceId: string;
-  entities: CloudEntity[];
 }
 
 async function readRefreshToken(): Promise<string | null> {
@@ -108,7 +74,11 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
+  const response = await httpAdapter.request(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
   if (response.status === 401 && retry && path !== "/auth/refresh") {
     const refreshed = await refreshAccessToken();
     if (refreshed) return request<T>(path, init, false);

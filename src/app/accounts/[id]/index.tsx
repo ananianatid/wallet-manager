@@ -12,12 +12,10 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { TransactionRow } from "@/components/transaction-row";
 import { ScreenState } from "@/components/ui";
-import { deleteAccount, getAccount } from "@/db/accounts";
-import { getDatabase } from "@/db/database";
+import { deleteLocalAccount, loadAccountDetail } from "@/data/accounts";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
-import { listTransactionsByAccount } from "@/db/transactions";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDayLabel } from "@/utils/format";
@@ -40,12 +38,7 @@ export default function AccountDetailScreen() {
   const accountId = Number(id);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [acc, rows] = await Promise.all([
-      getAccount(db, accountId),
-      listTransactionsByAccount(db, accountId),
-    ]);
-    return { account: acc, transactions: rows };
+    return loadAccountDetail(accountId);
   }, [accountId]);
 
   const resource = useAsyncResource(load, "accounts.detail");
@@ -94,8 +87,7 @@ export default function AccountDetailScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              await deleteAccount(db, accountId);
+              await deleteLocalAccount(accountId);
               router.back();
             } catch (e) {
               log.error("accounts.delete", "Échec de la suppression du compte", e);

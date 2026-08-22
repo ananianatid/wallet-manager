@@ -34,11 +34,8 @@ import {
   InlineError,
   ScreenState,
 } from "@/components/ui";
-import { listAccountsByUsage } from "@/db/accounts";
-import { listCategories } from "@/db/categories";
-import { getDatabase } from "@/db/database";
+import { loadTransactionSearchOptions, searchLocalTransactions } from "@/data/transactions";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { searchTransactions } from "@/db/transactions";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
@@ -204,15 +201,7 @@ export default function TransactionSearchScreen() {
   const [pickerFallback] = useState(() => Date.now());
 
   const loadOptions = useCallback(async (): Promise<SearchOptions> => {
-    const db = await getDatabase();
-    const [accounts, categories] = await Promise.all([
-      listAccountsByUsage(db),
-      listCategories(db),
-    ]);
-    return {
-      accounts: accounts.filter((account) => !account.hidden),
-      categories: categories.filter((category) => category.type !== "account"),
-    };
+    return loadTransactionSearchOptions();
   }, []);
 
   const optionsResource = useAsyncResource(loadOptions, "search.options");
@@ -265,8 +254,7 @@ export default function TransactionSearchScreen() {
     const timer = setTimeout(() => {
       setStatus("loading");
       setError(null);
-      getDatabase()
-        .then((db) => searchTransactions(db, criteria))
+      searchLocalTransactions(criteria)
         .then((rows) => {
           if (!cancelled) {
             setResults(rows);

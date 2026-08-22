@@ -15,13 +15,10 @@ import { CategoryIcon } from "@/components/category-icons";
 import { EmptyState } from "@/components/empty-state";
 import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import {
-  deleteBudgetPlan,
-  getBudgetSnapshot,
-  listBudgetPlans,
-  setBudgetPlan,
-} from "@/db/budgets";
-import { listCategories } from "@/db/categories";
-import { getDatabase } from "@/db/database";
+  deleteLocalBudgetPlan,
+  loadBudgetsSnapshot,
+  saveLocalBudgetPlan,
+} from "@/data/budgets";
 import { useCurrency } from "@/currency/context";
 import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
@@ -158,13 +155,7 @@ export default function BudgetsScreen() {
   const [selectedMonth, setSelectedMonth] = useState(() => monthKey(new Date()));
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [plans, cats, snapshots] = await Promise.all([
-      listBudgetPlans(db),
-      listCategories(db, "expense"),
-      getBudgetSnapshot(db, selectedMonth),
-    ]);
-    return { plans, expenseCategories: cats, snapshots };
+    return loadBudgetsSnapshot(selectedMonth);
   }, [selectedMonth]);
 
   const resource = useAsyncResource(load, "budgets.load");
@@ -216,9 +207,8 @@ export default function BudgetsScreen() {
       Alert.alert("Choix invalide", "Sélectionnez la catégorie du budget.");
       return;
     }
-    const db = await getDatabase();
     try {
-      await setBudgetPlan(db, categoryId, parsed, baseCurrency, rolloverEnabled);
+      await saveLocalBudgetPlan(categoryId, parsed, baseCurrency, rolloverEnabled);
       cancelEdit();
       await resource.reload();
     } catch (e) {
@@ -234,8 +224,7 @@ export default function BudgetsScreen() {
         text: "Supprimer",
         style: "destructive",
         onPress: async () => {
-          const db = await getDatabase();
-          await deleteBudgetPlan(db, plan.id);
+          await deleteLocalBudgetPlan(plan.id);
           await resource.reload();
         },
       },

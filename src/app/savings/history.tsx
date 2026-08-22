@@ -3,10 +3,8 @@ import { useCallback, useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { ScreenState } from "@/components/ui";
-import { getDatabase } from "@/db/database";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { listSavingsRules } from "@/db/savings";
-import { listTransactions } from "@/db/transactions";
+import { loadSavingsHistory } from "@/data/savings";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { enumerateMonths, monthlySavingsBreakdown } from "@/utils/statistics";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
@@ -27,12 +25,7 @@ export default function SavingsHistoryScreen() {
   const convert = useCurrencyConverter();
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [rules, transactions] = await Promise.all([
-      listSavingsRules(db),
-      listTransactions(db, { order: "asc" }),
-    ]);
-    return { rules, transactions };
+    return loadSavingsHistory();
   }, []);
 
   const resource = useAsyncResource(load, "savings.history");

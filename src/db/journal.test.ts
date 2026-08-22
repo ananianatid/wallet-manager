@@ -1,12 +1,11 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import { createTestDb } from "@/test-utils/in-memory-db";
-import { createTransaction, deleteTransaction, updateTransaction } from "./transactions";
+import { createTransaction, deleteTransaction, searchTransactions, updateTransaction } from "./transactions";
 import {
   listReimbursementsForTransaction,
   listTransactionTags,
   settleReimbursement,
 } from "./journal";
-import { searchTransactions } from "./transactions";
 import type { TransactionInput } from "@/types";
 
 async function ids(db: SQLiteDatabase): Promise<{ income: number; expense: number }> {
@@ -137,7 +136,7 @@ describe("journal financier", () => {
 
   it("protège une dette réglée contre la modification et la suppression", async () => {
     const db = await setupDb();
-    const { expense, income } = await ids(db);
+    const { expense } = await ids(db);
     const debtTransactionId = await createTransaction(
       db,
       input({

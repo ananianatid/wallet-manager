@@ -5,8 +5,7 @@ import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { useCurrency } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
-import { changeReferenceCurrency } from "@/currency/service";
-import { getDatabase } from "@/db/database";
+import { updateReferenceCurrency } from "@/data/app-settings";
 import { spacing, typography, useTheme } from "@/theme";
 import { formatDate, formatTime } from "@/utils/format";
 import { log } from "@/utils/logger";
@@ -29,8 +28,7 @@ export default function CurrencySettingsScreen() {
     setError(null);
     setSaving(true);
     try {
-      const db = await getDatabase();
-      await changeReferenceCurrency(db, selected);
+      await updateReferenceCurrency(selected);
       await refresh(true);
       Alert.alert("Devise modifiée", `Les budgets et objectifs sont maintenant en ${selected}.`);
     } catch (error) {

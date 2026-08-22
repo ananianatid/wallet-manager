@@ -12,16 +12,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { getDatabase } from "@/db/database";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import {
-  closeGoal,
-  deleteGoal,
-  getGoal,
-  listGoalReservations,
-  releaseGoalReservation,
-} from "@/db/goals";
+import { closeLocalGoal, deleteLocalGoal, loadGoalDetail, releaseLocalGoalReservation } from "@/data/goals";
 import { radius, spacing, useTheme } from "@/theme";
 import type { GoalReservation } from "@/types";
 import { formatAmount, formatDate } from "@/utils/format";
@@ -36,12 +29,7 @@ export default function GoalDetailScreen() {
   const [imageFailed, setImageFailed] = useState(false);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [nextGoal, rows] = await Promise.all([
-      getGoal(db, goalId),
-      listGoalReservations(db, goalId),
-    ]);
-    return { goal: nextGoal, reservations: rows };
+    return loadGoalDetail(goalId);
   }, [goalId]);
 
   const resource = useAsyncResource(load, "goals.detail");
@@ -65,8 +53,7 @@ export default function GoalDetailScreen() {
           text: "Libérer",
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              await releaseGoalReservation(db, reservation.id);
+              await releaseLocalGoalReservation(reservation.id);
               await resource.reload();
             } catch (error) {
               setActionError(userMessage(error, "Impossible de libérer la réservation."));
@@ -86,8 +73,7 @@ export default function GoalDetailScreen() {
         text: "Clôturer",
         onPress: async () => {
           try {
-            const db = await getDatabase();
-            await closeGoal(db, goal.id);
+            await closeLocalGoal(goal.id);
             await resource.reload();
           } catch (error) {
             setActionError(userMessage(error, "Impossible de clôturer l'objectif."));
@@ -107,8 +93,7 @@ export default function GoalDetailScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            const db = await getDatabase();
-            await deleteGoal(db, goal.id);
+            await deleteLocalGoal(goal.id);
             router.back();
           } catch (e) {
             log.error("goals.delete", "Échec de la suppression de l'objectif", e);

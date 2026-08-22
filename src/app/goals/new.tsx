@@ -12,8 +12,7 @@ import {
   View,
 } from "react-native";
 import { ActionButton, FormField, KeyboardAwareScreen } from "@/components/ui";
-import { createGoal } from "@/db/goals";
-import { getDatabase } from "@/db/database";
+import { createLocalGoal } from "@/data/goals";
 import { useCurrency } from "@/currency/context";
 import { parseMoneyInput } from "@/currency/currencies";
 import { radius, spacing, useTheme } from "@/theme";
@@ -67,8 +66,7 @@ export default function NewGoalScreen() {
 
     setSaving(true);
     try {
-      const db = await getDatabase();
-      await createGoal(db, {
+      await createLocalGoal({
         name,
         description,
         imageUri,

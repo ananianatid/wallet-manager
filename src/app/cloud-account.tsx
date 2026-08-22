@@ -4,8 +4,7 @@ import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from "r
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { useCloudAuth } from "@/cloud/auth-context";
 import { deleteCloudAccount, listCloudSessions, loadCloudBootstrap, requestPasswordReset, revokeCloudSession, type CloudSession } from "@/cloud/api";
-import { getDatabase } from "@/db/database";
-import { getSetting } from "@/db/settings";
+import { readAppSetting } from "@/data/app-settings";
 import { spacing, typography, useTheme } from "@/theme";
 
 export default function CloudAccountScreen() {
@@ -42,7 +41,7 @@ export default function CloudAccountScreen() {
         setError(message);
         Alert.alert("Synchronisation impossible", message);
       });
-    void getDatabase().then((db) => getSetting(db, "cloud_sync_initialized")).then((initialized) => {
+    void readAppSetting("cloud_sync_initialized").then((initialized) => {
       if (initialized === "1") execute();
       else Alert.alert("Première synchronisation", "Wallet va comparer les données locales et cloud. Vous pourrez choisir la version à garder en cas de conflit.", [{ text: "Annuler", style: "cancel" }, { text: "Continuer", onPress: execute }]);
     });

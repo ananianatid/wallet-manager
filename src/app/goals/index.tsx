@@ -5,8 +5,7 @@ import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { EmptyState } from "@/components/empty-state";
 import { IconButton, ScreenState } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { listGoals } from "@/db/goals";
+import { loadGoals } from "@/data/goals";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
@@ -104,8 +103,7 @@ export default function GoalsScreen() {
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    return listGoals(db);
+    return loadGoals();
   }, []);
 
   const resource = useAsyncResource(load, "goals.load");

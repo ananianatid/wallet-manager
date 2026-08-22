@@ -18,12 +18,7 @@ import { ContentSection, ScreenState } from "@/components/ui";
 import { SyncBanner } from "@/components/sync-banner";
 import { CloudPromoCard } from "@/components/cloud-promo-card";
 import { MotionEntrance } from "@/components/motion";
-import { listBudgets } from "@/db/budgets";
-import {
-  calculateSafeToSpendFromInputs,
-  loadSafeToSpendInputs,
-} from "@/db/cashflow";
-import { getDatabase } from "@/db/database";
+import { loadDashboardSnapshot } from "@/data/dashboard";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
@@ -35,7 +30,6 @@ import {
   financialToneColor,
 } from "@/utils/financial-display";
 import { formatAmount, formatDayLabel, formatShortDate } from "@/utils/format";
-import { savingsByRule } from "@/utils/statistics";
 import { userMessage } from "@/utils/user-message";
 import { goalTotals } from "@/utils/goals";
 import type { Transaction } from "@/types";
@@ -95,61 +89,10 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    const db = await getDatabase();
-    const now = new Date();
-    const nowMs = now.getTime();
-    const startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const endMs = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-    const [inputs, budgets] = await Promise.all([
-      loadSafeToSpendInputs(db, nowMs, {
-        referenceCurrency: baseCurrency,
-        currencyRates: rates,
-      }),
-      listBudgets(db),
-    ]);
-    const allTransactions = [...inputs.transactions].reverse();
-    const monthTx = inputs.transactions
-      .filter(
-        (transaction) =>
-          transaction.transactionDate >= startMs &&
-          transaction.transactionDate < endMs,
-      )
-      .reverse();
-    const previousMonthTx = inputs.transactions
-      .filter(
-        (transaction) =>
-          transaction.transactionDate >= previousMonthStart &&
-          transaction.transactionDate < startMs,
-      )
-      .reverse();
-    const recent = inputs.transactions
-      .filter((transaction) => transaction.transactionDate < nowMs)
-      .slice(0, 5);
-    const upcoming = inputs.transactions
-      .filter((transaction) => transaction.transactionDate >= nowMs)
-      .reverse()
-      .slice(0, 3);
-
-    const savingsTotal = savingsByRule(allTransactions, inputs.savingsRules, 0, convert).reduce(
-      (sum, contribution) => sum + contribution.amount,
-      0,
-    );
-
-    return {
-      safeToSpend: calculateSafeToSpendFromInputs(inputs, nowMs),
-      accounts: inputs.accountsRows,
-      goals: inputs.goals,
-      budgets,
-      savingsRules: inputs.savingsRules,
-      monthTx,
-      previousMonthTx,
-      recent,
-      upcoming,
-      savingsTotal,
-    };
-  }, [baseCurrency, convert, rates]);
+  const load = useCallback(
+    () => loadDashboardSnapshot(baseCurrency, rates, convert),
+    [baseCurrency, convert, rates],
+  );
 
   const resource = useAsyncResource(load, "dashboard.load");
   const reload = resource.reload;

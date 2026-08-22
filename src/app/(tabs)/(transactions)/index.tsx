@@ -14,13 +14,12 @@ import { EmptyState } from "@/components/empty-state";
 import { MonthHeader } from "@/components/month-header";
 import { MonthlySummaryCard } from "@/components/safe-to-spend-card";
 import { TransactionRow } from "@/components/transaction-row";
-import { listAccounts } from "@/db/accounts";
-import { getDatabase } from "@/db/database";
+import {
+  checkRecurringForToday,
+  loadTransactionsSnapshot,
+  refreshTransactionsFromCloudIfConfigured,
+} from "@/data/transactions";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
-import { applyDueRecurring, listPendingRecurringOccurrences } from "@/db/recurring";
-import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
-import { getSetting, setSetting } from "@/db/settings";
-import { listTransactionAmountRows, listTransactions } from "@/db/transactions";
 import { setTransactionFilters, useTransactionFilters } from "@/state/transaction-filters";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Transaction } from "@/types";
@@ -34,7 +33,6 @@ import {
   formatDayLabel,
   formatMonthLabel,
 } from "@/utils/format";
-import { totals } from "@/utils/statistics";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
 
@@ -59,38 +57,7 @@ export default function TransactionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const startMs =
-      filters.mode === "month"
-        ? new Date(filters.year, filters.month, 1).getTime()
-        : null;
-    const endMs =
-      filters.mode === "month"
-        ? new Date(filters.year, filters.month + 1, 1).getTime()
-        : null;
-    const hasDisplayFilters =
-      filters.accountIds != null ||
-      filters.types.length !== 3 ||
-      filters.categoryIds != null;
-    const [rows, accs, summaryRows] = await Promise.all([
-      listTransactions(db, {
-        startMs,
-        endMs,
-        accountIds: filters.accountIds,
-        types: filters.types,
-        categoryIds: filters.categoryIds,
-        order: "desc",
-      }),
-      listAccounts(db),
-      hasDisplayFilters
-        ? listTransactionAmountRows(db, { startMs, endMs })
-        : Promise.resolve(null),
-    ]);
-    return {
-      transactions: rows,
-      accounts: accs,
-      monthTotals: totals(summaryRows ?? rows, convert),
-    };
+    return loadTransactionsSnapshot(filters, convert);
   }, [filters, convert]);
 
   const resource = useAsyncResource(load, "transactions.list");
@@ -100,21 +67,7 @@ export default function TransactionsScreen() {
   const monthTotals = resource.data?.monthTotals ?? null;
 
   const checkRecurring = useCallback(async () => {
-    const db = await getDatabase();
-    const today = new Date();
-    const todayKey = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    ).getTime();
-    const lastCheck = await getSetting(db, "recurring_last_check");
-    if (lastCheck === String(todayKey)) {
-      return (await listPendingRecurringOccurrences(db)).length;
-    }
-    await applyDueRecurring(db, Date.now());
-    await schedulePendingRecurringNotifications(db);
-    await setSetting(db, "recurring_last_check", String(todayKey));
-    return (await listPendingRecurringOccurrences(db)).length;
+    return checkRecurringForToday();
   }, []);
 
   useFocusEffect(
@@ -198,14 +151,7 @@ export default function TransactionsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      try {
-        const db = await getDatabase();
-        const cursorRaw = await getSetting(db, "cloud_sync_cursor");
-        if (cursorRaw !== null) {
-          const syncMod = await import("@/cloud/sync");
-          await syncMod.runSync(db).catch(() => {});
-        }
-      } catch {}
+      await refreshTransactionsFromCloudIfConfigured().catch(() => {});
       await reload();
     } finally {
       setRefreshing(false);

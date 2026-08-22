@@ -26,17 +26,14 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { IconButton, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
 import {
-  assignAccountGroup,
-  createAccountGroup,
-  listAccountGroups,
-  listDeletedAccountGroups,
-  renameAccountGroup,
-  reorderAccountGroups,
-  restoreAccountGroup,
-  softDeleteAccountGroup,
-} from "@/db/account-groups";
-import { listAccounts } from "@/db/accounts";
-import { getDatabase } from "@/db/database";
+  assignLocalAccountGroup,
+  createLocalAccountGroup,
+  deleteLocalAccountGroup,
+  loadAccountGroupsManagement,
+  renameLocalAccountGroup,
+  reorderLocalAccountGroups,
+  restoreLocalAccountGroup,
+} from "@/data/account-groups";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account, AccountGroup } from "@/types";
@@ -129,13 +126,7 @@ export default function AccountGroupsScreen() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [groups, deletedGroups, accounts] = await Promise.all([
-      listAccountGroups(db),
-      listDeletedAccountGroups(db),
-      listAccounts(db),
-    ]);
-    return { groups, deletedGroups, accounts };
+    return loadAccountGroupsManagement();
   }, []);
 
   const resource = useAsyncResource(load, "groups.load");
@@ -171,8 +162,7 @@ export default function AccountGroupsScreen() {
     }
     setFormError(null);
     try {
-      const db = await getDatabase();
-      await createAccountGroup(db, newName);
+      await createLocalAccountGroup(newName);
       setNewName("");
       setAdding(false);
       await reload();
@@ -195,8 +185,7 @@ export default function AccountGroupsScreen() {
     }
     setFormError(null);
     try {
-      const db = await getDatabase();
-      await renameAccountGroup(db, id, editName);
+      await renameLocalAccountGroup(id, editName);
       setEditingId(null);
       await reload();
     } catch (e) {
@@ -220,8 +209,7 @@ export default function AccountGroupsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              await softDeleteAccountGroup(db, group.id);
+              await deleteLocalAccountGroup(group.id);
               await reload();
             } catch (e) {
               log.error("groups.delete", "Échec de la suppression du groupe", e);
@@ -240,8 +228,7 @@ export default function AccountGroupsScreen() {
     const ids = next.map((g) => g.id);
     setOrder(ids);
     try {
-      const db = await getDatabase();
-      await reorderAccountGroups(db, ids);
+      await reorderLocalAccountGroups(ids);
     } catch (e) {
       log.error("groups.reorder", "Échec de la réorganisation des groupes", e);
       Alert.alert("Réorganisation impossible", userMessage(e));
@@ -251,8 +238,7 @@ export default function AccountGroupsScreen() {
 
   const restore = async (group: AccountGroup) => {
     try {
-      const db = await getDatabase();
-      await restoreAccountGroup(db, group.id);
+      await restoreLocalAccountGroup(group.id);
       await reload();
     } catch (e) {
       log.error("groups.restore", "Échec de la restauration du groupe", e);
@@ -266,8 +252,7 @@ export default function AccountGroupsScreen() {
     }
     const groupId = account.groupId === membershipGroup.id ? null : membershipGroup.id;
     try {
-      const db = await getDatabase();
-      await assignAccountGroup(db, account.id, groupId);
+      await assignLocalAccountGroup(account.id, groupId);
       await reload();
     } catch (e) {
       log.error("groups.assign", "Échec de l'affectation du compte au groupe", e);

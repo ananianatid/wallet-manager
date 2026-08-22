@@ -11,15 +11,10 @@ import { useCallback, useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenState } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { listBudgets } from "@/db/budgets";
-import { listGoals } from "@/db/goals";
-import { listPendingRecurringOccurrences, listRecurring } from "@/db/recurring";
-import { listSavingsRules } from "@/db/savings";
-import { listTransactions } from "@/db/transactions";
+import { loadPlansSnapshot } from "@/data/plans";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { budgetProgress, type BudgetProgressRow } from "@/utils/dashboard";
+import { type BudgetProgressRow } from "@/utils/dashboard";
 import { goalTotals } from "@/utils/goals";
 import { formatAmount } from "@/utils/format";
 import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
@@ -91,38 +86,10 @@ export default function PlansScreen() {
   const insets = useSafeAreaInsets();
   const { baseCurrency } = useCurrency();
   const convert = useCurrencyConverter();
-  const load = useCallback(async () => {
-    const db = await getDatabase();
-    const now = new Date();
-    const [budgets, goals, savingsRules, recurring, pendingOccurrences, transactions] = await Promise.all([
-      listBudgets(db),
-      listGoals(db),
-      listSavingsRules(db),
-      listRecurring(db),
-      listPendingRecurringOccurrences(db),
-      listTransactions(db, {
-        startMs: new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
-        endMs: new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime(),
-      }),
-    ]);
-    const spentByCategory = new Map<number, number>();
-    let totalExpense = 0;
-    for (const transaction of transactions) {
-      if (transaction.type !== "expense") continue;
-      const amount = convert(transaction.amount, transaction.accountCurrencyCode ?? baseCurrency) ?? 0;
-      totalExpense += amount;
-      if (transaction.categoryId != null) {
-        spentByCategory.set(transaction.categoryId, (spentByCategory.get(transaction.categoryId) ?? 0) + amount);
-      }
-    }
-    return {
-      budgetRows: budgetProgress(budgets, spentByCategory, totalExpense),
-      goals,
-      savingsRules,
-      recurring,
-      pendingOccurrences,
-    };
-  }, [baseCurrency, convert]);
+  const load = useCallback(
+    () => loadPlansSnapshot(baseCurrency, convert),
+    [baseCurrency, convert],
+  );
 
   const resource = useAsyncResource(load, "plans.load");
   const reload = resource.reload;

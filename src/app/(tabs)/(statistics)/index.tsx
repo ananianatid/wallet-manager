@@ -13,13 +13,11 @@ import { CategoryIcon } from "@/components/category-icons";
 import { LabeledDonutChart } from "@/components/labeled-donut-chart";
 import { MonthlySummaryCard } from "@/components/safe-to-spend-card";
 import { ScreenState } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { getSetting } from "@/db/settings";
+import { loadStatisticsSnapshot, loadWeekStartDaySetting } from "@/data/statistics";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { useScrollPerformance } from "@/hooks/use-scroll-performance";
 import { isPerformanceProfilingEnabled } from "@/services/performance";
-import { listTransactions, listTransactionsByRange } from "@/db/transactions";
 import { chartColors, radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 import { formatAmount, formatMonthLabel } from "@/utils/format";
 import { financialToneColor, signedAmountTone } from "@/utils/financial-display";
@@ -258,36 +256,10 @@ export default function StatisticsScreen() {
   }, [cursor, granularity, weekCursorMs, weekStartDay]);
   const periodKey = `${granularity}:${periodBounds.startMs ?? "all"}:${periodBounds.endMs ?? "all"}:${granularity === "week" ? weekStartDay : ""}`;
 
-  const load = useCallback(async () => {
-    const db = await getDatabase();
-    if (periodBounds.startMs == null || periodBounds.endMs == null) {
-      const rows = await listTransactions(db, { order: "asc" });
-      return {
-        transactions: rows,
-        comparisonTransactions: [],
-        periodKey,
-        periodStartMs: 0,
-        periodEndMs: null,
-      };
-    }
-    const periodStartMs = periodBounds.startMs;
-    const periodEndMs = periodBounds.endMs;
-    const previousStartMs = previousPeriodBounds?.startMs;
-    const previousEndMs = previousPeriodBounds?.endMs;
-    const [rows, comparisonTransactions] = await Promise.all([
-      listTransactionsByRange(db, periodStartMs, periodEndMs),
-      previousStartMs == null || previousEndMs == null
-        ? Promise.resolve([])
-        : listTransactionsByRange(db, previousStartMs, previousEndMs),
-    ]);
-    return {
-      transactions: rows,
-      comparisonTransactions,
-      periodKey,
-      periodStartMs,
-      periodEndMs,
-    };
-  }, [periodBounds, periodKey, previousPeriodBounds]);
+  const load = useCallback(
+    () => loadStatisticsSnapshot(periodBounds, previousPeriodBounds, periodKey),
+    [periodBounds, periodKey, previousPeriodBounds],
+  );
 
   const resource = useAsyncResource(load, "statistics.load");
   const reload = resource.reload;
@@ -320,8 +292,7 @@ export default function StatisticsScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void getDatabase()
-        .then((db) => getSetting(db, "week_start_day"))
+      void loadWeekStartDaySetting()
         .then((value) => {
           if (!cancelled) {
             const nextWeekStartDay = parseWeekStartDay(value);

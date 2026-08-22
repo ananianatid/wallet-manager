@@ -5,8 +5,7 @@ import { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeToSpendCard } from "@/components/safe-to-spend-card";
 import { ScreenState } from "@/components/ui";
-import { calculateSafeToSpend } from "@/db/cashflow";
-import { getDatabase } from "@/db/database";
+import { loadCashflow } from "@/data/cashflow";
 import { useCurrency } from "@/currency/context";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
@@ -18,11 +17,7 @@ export default function CashflowScreen() {
   const theme = useTheme();
   const { baseCurrency, lastRefresh, rates, stale } = useCurrency();
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    return calculateSafeToSpend(db, Date.now(), {
-      referenceCurrency: baseCurrency,
-      currencyRates: rates,
-    });
+    return loadCashflow(baseCurrency, rates);
   }, [baseCurrency, rates]);
 
   const resource = useAsyncResource(load, "cashflow.load");

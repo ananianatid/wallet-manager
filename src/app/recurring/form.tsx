@@ -14,15 +14,8 @@ import {
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { listAccountsByUsage } from "@/db/accounts";
-import { listCategories } from "@/db/categories";
-import { getDatabase } from "@/db/database";
+import { loadRecurringForm, saveLocalRecurring } from "@/data/recurring";
 import { parseMoneyInput } from "@/currency/currencies";
-import {
-  createRecurring,
-  getRecurring,
-  updateRecurring,
-} from "@/db/recurring";
 import { radius, spacing, useTheme } from "@/theme";
 import type {
   Account,
@@ -73,12 +66,7 @@ export default function RecurringFormScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [accs, cats, existing] = await Promise.all([
-      listAccountsByUsage(db),
-      listCategories(db),
-      recurringId ? getRecurring(db, recurringId) : Promise.resolve(null),
-    ]);
+    const { accounts: accs, categories: cats, existing } = await loadRecurringForm(recurringId);
     setAccounts(accs);
     setCategories(cats);
     if (existing) {
@@ -203,12 +191,7 @@ export default function RecurringFormScreen() {
 
     setSaving(true);
     try {
-      const db = await getDatabase();
-      if (recurringId) {
-        await updateRecurring(db, recurringId, input);
-      } else {
-        await createRecurring(db, input);
-      }
+      await saveLocalRecurring(recurringId, input);
       router.back();
     } catch (e) {
       Alert.alert("Impossible d'enregistrer", userMessage(e));

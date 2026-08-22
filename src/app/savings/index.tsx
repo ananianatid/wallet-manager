@@ -15,15 +15,8 @@ import { SelectField } from "@/components/select-field";
 import { CategoryIcon } from "@/components/category-icons";
 import { EmptyState } from "@/components/empty-state";
 import { IconButton, KeyboardAwareScreen, ScreenState } from "@/components/ui";
-import { listCategories } from "@/db/categories";
-import { getDatabase } from "@/db/database";
+import { deleteLocalSavingsRule, loadSavingsSnapshot, saveLocalSavingsRule } from "@/data/savings";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import {
-  deleteSavingsRule,
-  getFirstIncomeDate,
-  listSavingsRules,
-  setSavingsRule,
-} from "@/db/savings";
 import { radius, spacing, typography, useTheme, withAlpha, type ThemeColors } from "@/theme";
 import type { Category, SavingsRule } from "@/types";
 import { formatDate } from "@/utils/format";
@@ -201,13 +194,7 @@ export default function SavingsScreen() {
   const [busyRuleId, setBusyRuleId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [r, cats, firstIncome] = await Promise.all([
-      listSavingsRules(db),
-      listCategories(db, "income"),
-      getFirstIncomeDate(db),
-    ]);
-    return { rules: r, incomeCategories: cats, firstIncomeDate: firstIncome };
+    return loadSavingsSnapshot();
   }, []);
 
   const resource = useAsyncResource(load, "savings.load");
@@ -254,8 +241,7 @@ export default function SavingsScreen() {
     }
     setSaving(true);
     try {
-      const db = await getDatabase();
-      await setSavingsRule(db, {
+      await saveLocalSavingsRule({
         categoryId,
         percent: parsed,
         startDate,
@@ -278,8 +264,7 @@ export default function SavingsScreen() {
         text: "Supprimer",
         style: "destructive",
         onPress: async () => {
-          const db = await getDatabase();
-          await deleteSavingsRule(db, rule.id);
+          await deleteLocalSavingsRule(rule.id);
           await resource.reload();
         },
       },
@@ -289,8 +274,7 @@ export default function SavingsScreen() {
   const toggleRuleSubtract = async (rule: SavingsRule, next: boolean) => {
     setBusyRuleId(rule.id);
     try {
-      const db = await getDatabase();
-      await setSavingsRule(db, {
+      await saveLocalSavingsRule({
         categoryId: rule.categoryId,
         percent: rule.percent,
         startDate: rule.startDate,

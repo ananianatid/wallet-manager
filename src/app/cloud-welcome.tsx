@@ -2,17 +2,15 @@ import { Stack, router } from "expo-router";
 import { Check } from "lucide-react-native";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { ActionButton, KeyboardAwareScreen } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { getSetting, setSetting } from "@/db/settings";
+import { readAppSetting, writeAppSetting } from "@/data/app-settings";
 import { radius, spacing, typography, useTheme, withAlpha } from "@/theme";
 
 export default function CloudWelcomeScreen() {
   const theme = useTheme();
 
   const continueWithoutAccount = async () => {
-    const db = await getDatabase();
-    await setSetting(db, "cloud_welcome_seen", "1");
-    const completed = await getSetting(db, "onboarding_completed");
+    await writeAppSetting("cloud_welcome_seen", "1");
+    const completed = await readAppSetting("onboarding_completed");
     router.replace(completed === "1" ? "/(tabs)/(dashboard)" : "/onboarding");
   };
 

@@ -4,31 +4,19 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, KeyboardAwareScreen, ScreenState } from "@/components/ui";
-import { listAccountsByUsage } from "@/db/accounts";
-import { getReimbursement, settleReimbursement } from "@/db/journal";
-import { listCategories } from "@/db/categories";
-import { getDatabase } from "@/db/database";
+import { loadReimbursementSettlement, settleLocalReimbursement } from "@/data/transaction-detail";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate } from "@/utils/format";
 import { userMessage } from "@/utils/user-message";
-import type { TransactionType } from "@/types";
 
 export default function ReimbursementSettlementScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const reimbursementId = Number(id);
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const reimbursement = await getReimbursement(db, reimbursementId);
-    if (!reimbursement) return null;
-    const type: TransactionType = reimbursement.direction === "owed_to_me" ? "income" : "expense";
-    const [accounts, categories] = await Promise.all([
-      listAccountsByUsage(db),
-      listCategories(db, type),
-    ]);
-    return { reimbursement, accounts, categories, type };
+    return loadReimbursementSettlement(reimbursementId);
   }, [reimbursementId]);
   const resource = useAsyncResource(load, "reimbursement.settlement.load");
   const [amount, setAmount] = useState("");
@@ -73,8 +61,7 @@ export default function ReimbursementSettlementScreen() {
     }
     setSaving(true);
     try {
-      const db = await getDatabase();
-      await settleReimbursement(db, reimbursementId, parsed, {
+      await settleLocalReimbursement(reimbursementId, parsed, {
         type: data.type,
         amount: parsed,
         categoryId,

@@ -2,8 +2,7 @@ import { Check } from "lucide-react-native";
 import { Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { getDatabase } from "@/db/database";
-import { getSetting, setSetting } from "@/db/settings";
+import { readAppSetting, writeAppSetting } from "@/data/app-settings";
 import { InlineError, ScreenState } from "@/components/ui";
 import { radius, spacing, typography, useTheme } from "@/theme";
 import {
@@ -33,8 +32,7 @@ export default function CalendarSettingsScreen() {
   const load = useCallback(async () => {
     setStatus("loading");
     setError(null);
-    const db = await getDatabase();
-    const value = await getSetting(db, "week_start_day");
+    const value = await readAppSetting("week_start_day");
     setWeekStartDay(parseWeekStartDay(value));
     setStatus("ready");
   }, []);
@@ -42,8 +40,7 @@ export default function CalendarSettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void getDatabase()
-        .then((db) => getSetting(db, "week_start_day"))
+      void readAppSetting("week_start_day")
         .then((value) => {
           if (!cancelled) {
             setError(null);
@@ -68,8 +65,7 @@ export default function CalendarSettingsScreen() {
     setError(null);
     setWeekStartDay(next);
     try {
-      const db = await getDatabase();
-      await setSetting(db, "week_start_day", String(next));
+      await writeAppSetting("week_start_day", String(next));
     } catch {
       setWeekStartDay(previous);
       setError("Le premier jour de la semaine n’a pas pu être enregistré.");

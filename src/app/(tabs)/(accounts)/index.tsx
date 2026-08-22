@@ -21,14 +21,12 @@ import {
   KeyboardAwareView,
   ScreenState,
 } from "@/components/ui";
-import { listAccountGroups } from "@/db/account-groups";
 import {
-  createAccount,
-  deleteAccount,
-  listAccounts,
-  updateAccountFlags,
-} from "@/db/accounts";
-import { getDatabase } from "@/db/database";
+  createLocalAccount,
+  deleteLocalAccount,
+  loadAccountsSnapshot,
+  updateLocalAccountFlags,
+} from "@/data/accounts";
 import { useCurrency, useCurrencyConverter } from "@/currency/context";
 import { currencyLabel } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
@@ -62,12 +60,7 @@ export default function AccountsScreen() {
   };
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [accs, groups] = await Promise.all([
-      listAccounts(db),
-      listAccountGroups(db),
-    ]);
-    return { accounts: accs, accountGroups: groups };
+    return loadAccountsSnapshot();
   }, []);
 
   const resource = useAsyncResource(load, "accounts.list");
@@ -106,8 +99,7 @@ export default function AccountsScreen() {
     }
     setFormError(null);
     try {
-      const db = await getDatabase();
-      await createAccount(db, { name, groupId, currencyCode });
+      await createLocalAccount({ name, groupId, currencyCode });
       setName("");
       setGroupId(null);
       setCurrencyCode(baseCurrency);
@@ -126,8 +118,7 @@ export default function AccountsScreen() {
     flags: { hidden?: boolean; excludeFromTotal?: boolean },
   ) => {
     try {
-      const db = await getDatabase();
-      await updateAccountFlags(db, accountId, flags);
+      await updateLocalAccountFlags(accountId, flags);
       await resource.reload();
     } catch (error) {
       log.error("accounts.flags", "Échec de la modification du compte", error);
@@ -186,8 +177,7 @@ export default function AccountsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              await deleteAccount(db, account.id);
+              await deleteLocalAccount(account.id);
               await resource.reload();
             } catch (error) {
               log.error("accounts.delete", "Échec de la suppression du compte", error);

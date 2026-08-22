@@ -1,5 +1,4 @@
-import { AppState } from "react-native";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   loginCloudAccount,

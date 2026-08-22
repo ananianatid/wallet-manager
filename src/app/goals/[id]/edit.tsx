@@ -12,8 +12,7 @@ import {
   View,
 } from "react-native";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { getGoal, updateGoal } from "@/db/goals";
+import { loadGoalDetail, updateLocalGoal } from "@/data/goals";
 import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
@@ -38,8 +37,7 @@ export default function EditGoalScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const goal = await getGoal(db, goalId);
+    const { goal } = await loadGoalDetail(goalId);
     if (goal) {
       setName(goal.name);
       setTargetAmount((goal.targetAmount / 10 ** currencyDigits(goal.currencyCode)).toString());
@@ -81,8 +79,7 @@ export default function EditGoalScreen() {
     setSaving(true);
     setSaveError(null);
     try {
-      const db = await getDatabase();
-      await updateGoal(db, goalId, {
+      await updateLocalGoal(goalId, {
         name,
         description,
         imageUri,

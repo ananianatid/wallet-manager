@@ -4,13 +4,12 @@ import * as ImagePicker from "expo-image-picker";
 import { useCallback, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
-import { getDatabase } from "@/db/database";
-import { getTransactionDetail } from "@/db/transactions";
 import {
-  createTransactionAttachment,
-  deleteTransactionAttachment,
-  listTransactionAttachments,
-} from "@/db/attachments";
+  addLocalTransactionAttachment,
+  loadLocalTransactionAttachments,
+  loadLocalTransactionDetail,
+  removeLocalTransactionAttachment,
+} from "@/data/transaction-detail";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { spacing, useTheme } from "@/theme";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
@@ -20,16 +19,12 @@ export default function TransactionDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const transactionId = Number(id);
-  const load = useCallback(async () => {
-    const db = await getDatabase();
-    return getTransactionDetail(db, transactionId);
-  }, [transactionId]);
+  const load = useCallback(() => loadLocalTransactionDetail(transactionId), [transactionId]);
   const resource = useAsyncResource(load, "transaction.detail");
   const reload = resource.reload;
-  const [attachments, setAttachments] = useState<Awaited<ReturnType<typeof listTransactionAttachments>>>([]);
+  const [attachments, setAttachments] = useState<Awaited<ReturnType<typeof loadLocalTransactionAttachments>>>([]);
   const reloadAttachments = useCallback(async () => {
-    const db = await getDatabase();
-    setAttachments(await listTransactionAttachments(db, transactionId));
+    setAttachments(await loadLocalTransactionAttachments(transactionId));
   }, [transactionId]);
 
   useFocusEffect(
@@ -66,9 +61,7 @@ export default function TransactionDetailScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     try {
-      const db = await getDatabase();
-      await createTransactionAttachment(
-        db,
+      await addLocalTransactionAttachment(
         transaction.id,
         asset.uri,
         asset.fileName ?? "image.jpg",
@@ -87,9 +80,7 @@ export default function TransactionDetailScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     try {
-      const db = await getDatabase();
-      await createTransactionAttachment(
-        db,
+      await addLocalTransactionAttachment(
         transaction.id,
         asset.uri,
         asset.name,
@@ -192,8 +183,7 @@ export default function TransactionDetailScreen() {
                   Alert.alert("Supprimer le justificatif ?", "La transaction sera conservée.", [
                     { text: "Annuler", style: "cancel" },
                     { text: "Supprimer", style: "destructive", onPress: async () => {
-                      const db = await getDatabase();
-                      await deleteTransactionAttachment(db, attachment.id);
+                      await removeLocalTransactionAttachment(attachment.id);
                       await reloadAttachments();
                     } },
                   ])

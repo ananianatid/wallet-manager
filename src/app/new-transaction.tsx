@@ -9,7 +9,6 @@ import {
   ChevronUp,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Platform } from "react-native";
 import {
   Alert,
   ActivityIndicator,
@@ -20,22 +19,19 @@ import {
   Text,
   TextInput,
   View,
+  Platform,
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
-import { listAccountsByUsage } from "@/db/accounts";
-import { listCategoriesByUsage } from "@/db/categories";
-import { getDatabase } from "@/db/database";
-import { calculateRateFromMinor, currencyDigits, parseMoneyInput } from "@/currency/currencies";
-import { getRateForPair } from "@/currency/service";
-import { createGoalReservation, listGoals } from "@/db/goals";
-import {
-  createTransaction,
-  deleteTransaction,
-  getTransactionDetail,
-  updateTransaction,
-} from "@/db/transactions";
+import { currencyDigits, parseMoneyInput } from "@/currency/currencies";
+import { deleteLocalTransaction, loadTransactionEditor } from "@/data/transactions";
+import { loadLocalExchangeRate, saveLocalTransaction } from "@/data/transaction-editor";
 import { radius, spacing, useTheme } from "@/theme";
+import {
+  prepareTransactionEditorDraft,
+  toTransactionInput,
+  TransactionEditorValidationError,
+} from "@/domain/transactions/editor";
 import type {
   Account,
   Category,
@@ -44,7 +40,6 @@ import type {
   TransactionType,
 } from "@/types";
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
-import { calculateTransferFee } from "@/utils/transfer-fees";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
 import WebCloudTransaction from "@/components/web-cloud-transaction";
@@ -126,13 +121,7 @@ function NativeNewTransactionScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [accs, cats, goalRows, detail] = await Promise.all([
-      listAccountsByUsage(db),
-      listCategoriesByUsage(db),
-      listGoals(db),
-      transactionId ? getTransactionDetail(db, transactionId) : Promise.resolve(null),
-    ]);
+    const { accounts: accs, categories: cats, goals: goalRows, detail } = await loadTransactionEditor(transactionId);
     const existing = detail?.transaction ?? null;
     setAccounts(accs);
     if (!existing && accs.length === 1) {
@@ -276,8 +265,7 @@ function NativeNewTransactionScreen() {
       return;
     }
     const controller = new AbortController();
-    void getDatabase()
-      .then((db) => getRateForPair(db, sourceCurrency, destinationCurrency, { signal: controller.signal }))
+    void loadLocalExchangeRate(sourceCurrency, destinationCurrency, { signal: controller.signal })
       .then((rate) => {
         if (!rate) {
           setDestinationAmount("");
@@ -388,182 +376,92 @@ function NativeNewTransactionScreen() {
 
   const save = async (mode: "close" | "continue") => {
     setErrors({});
-    const parsedAmount = parseMoneyInput(amount, sourceCurrency);
-    let parsedFee: number | null = fee.trim() ? parseMoneyInput(fee, sourceCurrency) : null;
-    if (parsedAmount == null || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      setErrors({ amount: `Saisissez un montant valide en ${sourceCurrency}.` });
-      return;
-    }
-    if (accountId == null) {
-      setErrors({ account: "Choisissez un compte." });
-      return;
-    }
-    if (type !== "transfer" && categoryId == null && !splitEnabled) {
-      setErrors({ category: "Choisissez une catégorie." });
-      return;
-    }
-    let allocations: { categoryId: number; amount: number }[] | undefined;
-    if (splitEnabled) {
-      if (type === "transfer") {
-        setErrors({ category: "Un transfert ne peut pas être fractionné." });
-        return;
-      }
-      allocations = [];
-      for (const row of splitRows) {
-        const parsed = parseMoneyInput(row.amount, sourceCurrency);
-        if (row.categoryId == null || parsed == null || !Number.isInteger(parsed) || parsed <= 0) {
-          setErrors({ split: "Chaque répartition doit avoir une catégorie et un montant positif." });
-          return;
-        }
-        allocations.push({ categoryId: row.categoryId, amount: parsed });
-      }
-      if (allocations.length === 0 || allocations.reduce((total, row) => total + row.amount, 0) !== parsedAmount) {
-        setErrors({ split: "La somme des répartitions doit être exactement égale au montant." });
-        return;
-      }
-    }
-    let reimbursements:
-      | { personName: string; direction: ReimbursementDirection; amount: number }
-      | undefined;
-    if (reimbursementEnabled) {
-      const parsedReimbursementAmount = parseMoneyInput(reimbursementAmount, sourceCurrency);
-      if (
-        !reimbursementPerson.trim() ||
-        parsedReimbursementAmount == null ||
-        !Number.isInteger(parsedReimbursementAmount) ||
-        parsedReimbursementAmount <= 0
-      ) {
-        setErrors({ reimbursement: "Saisissez une personne et un montant positif." });
-        return;
-      }
-      reimbursements = {
-        personName: reimbursementPerson.trim(),
-        direction: reimbursementDirection,
-        amount: parsedReimbursementAmount,
-      };
-    }
-    if (type === "transfer" && destinationId == null && goalReservationId == null) {
-      setErrors({
-        destination: "Choisissez un compte de destination ou un objectif.",
+    let prepared: ReturnType<typeof prepareTransactionEditorDraft>;
+    try {
+      prepared = prepareTransactionEditorDraft({
+        type,
+        amount,
+        sourceCurrency,
+        accountId,
+        categoryId,
+        splitEnabled,
+        splitRows,
+        reimbursementEnabled,
+        reimbursementPerson,
+        reimbursementDirection,
+        reimbursementAmount,
+        destinationId,
+        goalReservationId,
+        fee,
+        feeMode,
+        debitedAmount,
+        destinationAmount,
+        destinationCurrency,
+        destinationEdited,
+        exchangeRate,
+        exchangeRateDate,
+        exchangeRateProvider,
+        note,
+        merchant,
+        tags,
+        transactionDate: date.getTime(),
       });
-      return;
-    }
-    if (
-      type === "transfer" &&
-      goalReservationId == null &&
-      feeMode === "calculated"
-    ) {
-      const parsedDebitedAmount = parseMoneyInput(debitedAmount, sourceCurrency);
-      try {
-        if (parsedDebitedAmount == null || Number.isNaN(parsedDebitedAmount)) {
-          throw new Error(`Saisissez le total débité en ${sourceCurrency}.`);
-        }
-        const computedFee = calculateTransferFee(parsedDebitedAmount, parsedAmount);
-        parsedFee = computedFee > 0 ? computedFee : null;
-      } catch (error) {
-        setErrors({
-          debitedAmount:
-            error instanceof Error && /Saisissez|positif/.test(error.message)
-              ? error.message
-              : "Le total débité est invalide.",
-        });
+    } catch (error) {
+      if (error instanceof TransactionEditorValidationError) {
+        setErrors({ [error.field]: error.message });
         return;
       }
-    }
-
-    let parsedDestinationAmount: number | null = null;
-    let savedExchangeRate: number | null = null;
-    let savedExchangeRateDate: string | null = null;
-    let savedExchangeRateProvider: string | null = null;
-    if (type === "transfer" && destinationId != null) {
-      parsedDestinationAmount = isCrossCurrency
-        ? parseMoneyInput(destinationAmount, destinationCurrency)
-        : parsedAmount;
-      if (
-        parsedDestinationAmount == null ||
-        Number.isNaN(parsedDestinationAmount) ||
-        parsedDestinationAmount <= 0
-      ) {
-        setErrors({ destinationAmount: `Saisissez le montant crédité en ${destinationCurrency}.` });
-        return;
-      }
-      savedExchangeRate = isCrossCurrency
-        ? destinationEdited
-          ? calculateRateFromMinor(
-              parsedAmount,
-              sourceCurrency,
-              parsedDestinationAmount,
-              destinationCurrency,
-            )
-          : exchangeRate
-        : 1;
-      savedExchangeRateDate = isCrossCurrency
-        ? destinationEdited
-          ? new Date().toISOString().slice(0, 10)
-          : exchangeRateDate
-        : new Date().toISOString().slice(0, 10);
-      savedExchangeRateProvider = isCrossCurrency
-        ? destinationEdited
-          ? "manual"
-          : exchangeRateProvider
-        : "same currency";
-      if (!savedExchangeRate || !savedExchangeRateDate || !savedExchangeRateProvider) {
-        setErrors({ destinationAmount: "Le taux de change est indisponible. Actualisez ou saisissez un montant." });
-        return;
-      }
-    }
-    if (
-      type === "transfer" &&
-      goalReservationId == null &&
-      feeMode === "manual" &&
-      parsedFee != null &&
-      (!Number.isInteger(parsedFee) || parsedFee <= 0)
-    ) {
-      setErrors({ fee: "Les frais doivent être un entier positif." });
-      return;
+      throw error;
     }
 
     const isGoalReservation = type === "transfer" && goalReservationId != null;
-    const destinationAccountId =
-      type === "transfer" && destinationId != null ? destinationId : null;
-    const input = {
-      type,
-      amount: parsedAmount,
-      categoryId: splitEnabled ? null : categoryId,
-      accountId: accountId!,
-      destinationAccountId,
-      fee: type === "transfer" && !isGoalReservation ? parsedFee : null,
-      destinationAmount: isGoalReservation ? null : parsedDestinationAmount,
-      exchangeRate: isGoalReservation ? null : savedExchangeRate,
-      exchangeRateDate: isGoalReservation ? null : savedExchangeRateDate,
-      exchangeRateProvider: isGoalReservation ? null : savedExchangeRateProvider,
-      note: note.trim() || null,
-      transactionDate: date.getTime(),
-      merchant: merchant.trim() || null,
-      tags,
-      allocations,
-      reimbursements: reimbursements ? [reimbursements] : undefined,
-    };
+    const input = toTransactionInput(
+      {
+        type,
+        amount,
+        sourceCurrency,
+        accountId,
+        categoryId,
+        splitEnabled,
+        splitRows,
+        reimbursementEnabled,
+        reimbursementPerson,
+        reimbursementDirection,
+        reimbursementAmount,
+        destinationId,
+        goalReservationId,
+        fee,
+        feeMode,
+        debitedAmount,
+        destinationAmount,
+        destinationCurrency,
+        destinationEdited,
+        exchangeRate,
+        exchangeRateDate,
+        exchangeRateProvider,
+        note,
+        merchant,
+        tags,
+        transactionDate: date.getTime(),
+      },
+      prepared,
+    );
 
     setSaving(true);
     try {
-      const db = await getDatabase();
-      if (isGoalReservation) {
-        if (transactionId) {
-          throw new Error("Une réservation d'objectif ne se modifie pas comme une transaction.");
-        }
-        await createGoalReservation(db, {
-          goalId: goalReservationId!,
-          sourceAccountId: accountId!,
-          amount: parsedAmount,
-          note: note.trim() || null,
-          reservationDate: date.getTime(),
-        });
-      } else if (transactionId) {
-        await updateTransaction(db, transactionId, input);
-      } else {
-        await createTransaction(db, input);
-      }
+      await saveLocalTransaction({
+        transactionId,
+        goalReservation: isGoalReservation
+          ? {
+              goalId: goalReservationId!,
+              sourceAccountId: accountId!,
+              amount: prepared.amount,
+              note: note.trim() || null,
+              reservationDate: date.getTime(),
+            }
+          : null,
+        transaction: isGoalReservation ? null : input,
+      });
       if (transactionId == null && mode === "continue") {
         setType("expense");
         setAmount("");
@@ -615,8 +513,7 @@ function NativeNewTransactionScreen() {
         text: "Supprimer",
         style: "destructive",
         onPress: async () => {
-          const db = await getDatabase();
-          await deleteTransaction(db, transactionId);
+          await deleteLocalTransaction(transactionId);
           router.back();
         },
       },

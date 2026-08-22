@@ -15,13 +15,7 @@ import {
 import { LegacySectionHeader, LegacyTextRow } from "@/components/legacy-money-manager";
 import { ScreenState } from "@/components/ui";
 import { EmptyState } from "@/components/empty-state";
-import { assignAccountGroup, listAccountGroups } from "@/db/account-groups";
-import {
-  listAccounts,
-  listDeletedAccounts,
-  restoreAccount,
-} from "@/db/accounts";
-import { getDatabase } from "@/db/database";
+import { assignLocalAccountGroup, loadAccountsManagement, restoreLocalAccount } from "@/data/account-groups";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Account } from "@/types";
@@ -39,13 +33,7 @@ export default function AccountsManagementScreen() {
   const [assigningAccount, setAssigningAccount] = useState<Account | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [groups, accounts, deletedAccounts] = await Promise.all([
-      listAccountGroups(db),
-      listAccounts(db),
-      listDeletedAccounts(db),
-    ]);
-    return { groups, accounts, deletedAccounts };
+    return loadAccountsManagement();
   }, []);
 
   const resource = useAsyncResource(load, "accounts.management");
@@ -91,8 +79,7 @@ export default function AccountsManagementScreen() {
 
   const restore = async (account: Account) => {
     try {
-      const db = await getDatabase();
-      await restoreAccount(db, account.id);
+      await restoreLocalAccount(account.id);
       await reload();
     } catch (e) {
       log.error("accounts.restore", "Échec de la restauration du compte", e);
@@ -105,8 +92,7 @@ export default function AccountsManagementScreen() {
       return;
     }
     try {
-      const db = await getDatabase();
-      await assignAccountGroup(db, assigningAccount.id, groupId);
+      await assignLocalAccountGroup(assigningAccount.id, groupId);
       await reload();
     } catch (e) {
       log.error("accounts.assign-group", "Échec de l'affectation du groupe", e);

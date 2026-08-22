@@ -10,15 +10,11 @@ import {
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen, ScreenState } from "@/components/ui";
-import { listAccountGroups } from "@/db/account-groups";
 import {
-  getAccount,
-  planBalanceAdjustment,
-  setAccountBalance,
-  updateAccountDetails,
-  updateAccountFlags,
-} from "@/db/accounts";
-import { getDatabase } from "@/db/database";
+  loadAccountEditor,
+  planLocalAccountBalanceAdjustment,
+  saveLocalAccountEdit,
+} from "@/data/accounts";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import { formatAmount } from "@/utils/format";
@@ -47,11 +43,7 @@ export default function EditAccountScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    const [acc, groups] = await Promise.all([
-      getAccount(db, accountId),
-      listAccountGroups(db),
-    ]);
+    const { account: acc, accountGroups: groups } = await loadAccountEditor(accountId);
     if (acc) {
       setName(acc.name);
       setGroupId(acc.groupId);
@@ -90,7 +82,7 @@ export default function EditAccountScreen() {
   const adjustment =
     target == null || Number.isNaN(target)
       ? null
-      : planBalanceAdjustment(balance, target);
+      : planLocalAccountBalanceAdjustment(balance, target);
 
   const save = async () => {
     const nextErrors: Record<string, string> = {};
@@ -107,17 +99,14 @@ export default function EditAccountScreen() {
     setSaveError(null);
     setSaving(true);
     try {
-      const db = await getDatabase();
-      await db.withTransactionAsync(async () => {
-        await updateAccountDetails(db, accountId, {
-          name,
-          groupId: groupId!,
-          description,
-        });
-        await updateAccountFlags(db, accountId, { hidden, excludeFromTotal });
-        if (target != null && adjustment != null) {
-          await setAccountBalance(db, accountId, target);
-        }
+      await saveLocalAccountEdit({
+        id: accountId,
+        name,
+        groupId,
+        description,
+        hidden,
+        excludeFromTotal,
+        targetBalance: target != null && adjustment != null ? target : null,
       });
       router.back();
     } catch (e) {

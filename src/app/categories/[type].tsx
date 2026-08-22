@@ -16,13 +16,7 @@ import {
   DEFAULT_CATEGORY_ICON,
   type CategoryIconName,
 } from "@/constants/category-icons";
-import {
-  createCategory,
-  deleteCategory,
-  listCategories,
-  updateCategory,
-} from "@/db/categories";
-import { getDatabase } from "@/db/database";
+import { createLocalCategory, deleteLocalCategory, loadCategories, updateLocalCategory } from "@/data/categories";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { radius, spacing, useTheme } from "@/theme";
 import type { Category, CategoryType } from "@/types";
@@ -54,8 +48,7 @@ export default function CategoriesByTypeScreen() {
   const [savingAction, setSavingAction] = useState<"add" | number | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    return listCategories(db, categoryType);
+    return loadCategories(categoryType);
   }, [categoryType]);
 
   const resource = useAsyncResource(load, "categories.load");
@@ -77,8 +70,7 @@ export default function CategoriesByTypeScreen() {
     setSavingAction("add");
     setFormError(null);
     try {
-      const db = await getDatabase();
-      await createCategory(db, {
+      await createLocalCategory({
         type: categoryType,
         name: trimmedName,
         icon: categoryType === "account" ? null : newIcon,
@@ -111,8 +103,7 @@ export default function CategoriesByTypeScreen() {
     setSavingAction(id);
     setFormError(null);
     try {
-      const db = await getDatabase();
-      await updateCategory(db, id, {
+      await updateLocalCategory(id, {
         name: trimmedName,
         icon: categoryType === "account" ? null : editIcon,
       });
@@ -137,8 +128,7 @@ export default function CategoriesByTypeScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              await deleteCategory(db, category.id);
+              await deleteLocalCategory(category.id);
               await reload();
             } catch (e) {
               log.error("categories.delete", "Échec de la suppression de la catégorie", e);

@@ -3,10 +3,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { exportPlainBackup, type ExportedBackup } from "@/backup/export";
-import { getDatabase } from "@/db/database";
-import { applyImportPlan, readMoneyManagerBackup, type ImportReport } from "@/db/import";
-import type { ImportPlan } from "@/db/money-manager";
-import { getSetting } from "@/db/settings";
+import { applyLocalMoneyManagerImport, loadLastBackupDate, readMoneyManagerBackup, type ImportPlan, type ImportReport } from "@/data/data-management";
 import { ActionButton, InlineError } from "@/components/ui";
 import { formatDate } from "@/utils/format";
 import { log } from "@/utils/logger";
@@ -42,8 +39,7 @@ export default function DataManagementScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      getDatabase()
-        .then((db) => getSetting(db, "backup_last_date"))
+      loadLastBackupDate()
         .then((value) => {
           if (!cancelled) setLastBackup(value == null ? null : Number(value));
         })
@@ -96,8 +92,7 @@ export default function DataManagementScreen() {
     setImportStatus("applying");
     setImportError(null);
     try {
-      const db = await getDatabase();
-      const report = await applyImportPlan(db, plan);
+      const report = await applyLocalMoneyManagerImport(plan);
       setImportReport(report);
       setImportStatus("success");
       Alert.alert(

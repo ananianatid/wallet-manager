@@ -9,19 +9,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { getDatabase } from "@/db/database";
 import { CategoryIcon } from "@/components/category-icons";
 import { IconButton, InlineError, ScreenState } from "@/components/ui";
-import {
-  applyDueRecurring,
-  approveRecurringOccurrence,
-  deleteRecurring,
-  listRecurring,
-  listPendingRecurringOccurrences,
-  rescheduleRecurringOccurrence,
-  skipRecurringOccurrence,
-} from "@/db/recurring";
-import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
+import { approveLocalRecurringOccurrence, deleteLocalRecurring, generateRecurringNow, loadRecurringSnapshot, rescheduleLocalRecurringOccurrence, skipLocalRecurringOccurrence } from "@/data/recurring";
 import { radius, spacing, typography, useTheme } from "@/theme";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import type { RecurringOccurrence, RecurringTransaction } from "@/types";
@@ -49,14 +39,7 @@ export default function RecurringScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const db = await getDatabase();
-    await applyDueRecurring(db);
-    await schedulePendingRecurringNotifications(db);
-    const [rules, pending] = await Promise.all([
-      listRecurring(db),
-      listPendingRecurringOccurrences(db),
-    ]);
-    return { rules, pending };
+    return loadRecurringSnapshot();
   }, []);
 
   const resource = useAsyncResource(load, "recurring.load");
@@ -77,8 +60,7 @@ export default function RecurringScreen() {
         text: "Supprimer",
         style: "destructive",
         onPress: async () => {
-          const db = await getDatabase();
-          await deleteRecurring(db, item.id);
+          await deleteLocalRecurring(item.id);
           await load();
         },
       },
@@ -89,9 +71,7 @@ export default function RecurringScreen() {
     setGenerating(true);
     setActionError(null);
     try {
-      const db = await getDatabase();
-      await applyDueRecurring(db);
-      await schedulePendingRecurringNotifications(db);
+      await generateRecurringNow();
       await resource.reload();
     } catch (e) {
       setActionError(userMessage(e));
@@ -105,8 +85,7 @@ export default function RecurringScreen() {
     setActingOccurrence(occurrence.id);
     setActionError(null);
     try {
-      const db = await getDatabase();
-      await approveRecurringOccurrence(db, occurrence.id);
+      await approveLocalRecurringOccurrence(occurrence.id);
       await resource.reload();
     } catch (e) {
       setActionError(userMessage(e));
@@ -120,8 +99,7 @@ export default function RecurringScreen() {
     setActingOccurrence(occurrence.id);
     setActionError(null);
     try {
-      const db = await getDatabase();
-      await skipRecurringOccurrence(db, occurrence.id);
+      await skipLocalRecurringOccurrence(occurrence.id);
       await resource.reload();
     } catch (e) {
       setActionError(userMessage(e));
@@ -144,8 +122,7 @@ export default function RecurringScreen() {
               setActingOccurrence(occurrence.id);
               setActionError(null);
               try {
-                const db = await getDatabase();
-                await rescheduleRecurringOccurrence(db, occurrence.id, occurrence.occurrenceDate + 86_400_000);
+                await rescheduleLocalRecurringOccurrence(occurrence.id, occurrence.occurrenceDate + 86_400_000);
                 await resource.reload();
               } catch (e) {
                 setActionError(userMessage(e));

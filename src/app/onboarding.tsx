@@ -17,11 +17,7 @@ import {
   currencyLabel,
   parseMoneyInput,
 } from "@/currency/currencies";
-import { createAccount, updateAccountForOnboarding } from "@/db/accounts";
-import { getDatabase } from "@/db/database";
-import { listCategories } from "@/db/categories";
-import { createTransaction } from "@/db/transactions";
-import { getSetting, setSetting } from "@/db/settings";
+import { finishOnboarding, loadOnboardingCategories, loadOnboardingState, saveOnboardingAccount, setOnboardingStep } from "@/data/onboarding";
 import { spacing, radius, useTheme, withAlpha } from "@/theme";
 import type { Category, TransactionType } from "@/types";
 import { log } from "@/utils/logger";
@@ -70,8 +66,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (step !== 2) return;
     let active = true;
-    void getDatabase()
-      .then((db) => listCategories(db))
+    void loadOnboardingCategories()
       .then((rows) => {
         if (active) setCategories(rows);
       })
@@ -90,26 +85,17 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     let active = true;
-    void getDatabase()
-      .then(async (db) => {
-        const started = await getSetting(db, "onboarding_started");
-        const draftName = await getSetting(db, "onboarding_account_name");
-        const draftCurrency = await getSetting(db, "onboarding_currency");
-        const draftStep = await getSetting(db, "onboarding_step");
-        const storedId = Number(await getSetting(db, "onboarding_account_id"));
+    void loadOnboardingState()
+      .then(({ started, draftName, draftCurrency, draftStep, account }) => {
 
         if (active && draftName) setAccountName(draftName);
         if (active && draftCurrency) setCurrencyCode(draftCurrency);
 
-        if (started !== "1" || !Number.isInteger(storedId) || storedId <= 0) {
+        if (started !== "1" || !account) {
           if (active && draftStep === "2") setStep(2);
           return;
         }
 
-        const account = await db.getFirstAsync<{ id: number; name: string; currencyCode: string }>(
-          "SELECT id, name, currency_code AS currencyCode FROM accounts WHERE id = ? AND deleted_at IS NULL",
-          storedId,
-        );
         if (active && account) {
           setAccountId(account.id);
           setAccountName(account.name);
@@ -131,17 +117,7 @@ export default function OnboardingScreen() {
     setSaving(true);
     setError(null);
     try {
-      const db = await getDatabase();
-      await setSetting(db, "onboarding_started", "1");
-      await setSetting(db, "onboarding_account_name", accountName.trim());
-      await setSetting(db, "onboarding_currency", currencyCode);
-      await setSetting(db, "onboarding_step", "2");
-      if (accountId != null) {
-        await updateAccountForOnboarding(db, accountId, {
-          name: accountName,
-          currencyCode,
-        });
-      }
+      await saveOnboardingAccount({ accountId, name: accountName, currencyCode });
       setStep(2);
     } catch (cause) {
       log.error("onboarding.account", "Échec de l'enregistrement du premier compte", cause);
@@ -164,34 +140,17 @@ export default function OnboardingScreen() {
     setSaving(true);
     setError(null);
     try {
-      const db = await getDatabase();
-      let resolvedAccountId = accountId;
-      await db.withTransactionAsync(async () => {
-        if (resolvedAccountId == null) {
-          resolvedAccountId = await createAccount(db, {
-            name: accountName,
-            groupId: null,
-            currencyCode,
-          });
-        }
-        if (withTransaction && resolvedAccountId != null) {
-          await createTransaction(db, {
-            type: transactionType,
-            amount: parsedAmount!,
-            categoryId: selectedCategoryId,
-            accountId: resolvedAccountId,
-            destinationAccountId: null,
-            fee: null,
-            note: null,
-            transactionDate: Date.now(),
-          });
-        }
-        await setSetting(db, "base_currency", currencyCode);
-        await setSetting(db, "onboarding_completed", "1");
+      const result = await finishOnboarding({
+        accountId,
+        accountName,
+        currencyCode,
+        withTransaction,
+        transactionType,
+        amount: parsedAmount,
+        categoryId: selectedCategoryId,
       });
       void refresh();
-      const welcomeSeen = await getSetting(db, "cloud_welcome_seen");
-      if (welcomeSeen !== "1") router.replace("/cloud-welcome");
+      if (!result.cloudWelcomeSeen) router.replace("/cloud-welcome");
       else router.replace("/(tabs)/(dashboard)");
     } catch (cause) {
       log.error("onboarding.finish", "Échec de la finalisation de l’onboarding", cause);
@@ -204,8 +163,7 @@ export default function OnboardingScreen() {
   const editAccount = () => {
     setError(null);
     setStep(1);
-    void getDatabase()
-      .then((db) => setSetting(db, "onboarding_step", "1"))
+    void setOnboardingStep(1)
       .catch(() => {});
   };
 

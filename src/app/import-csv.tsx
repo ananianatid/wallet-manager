@@ -5,15 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { ActionButton, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { SelectField } from "@/components/select-field";
-import { listAccountsByUsage } from "@/db/accounts";
-import { getDatabase } from "@/db/database";
-import {
-  applyCsvImport,
-  inferCsvMapping,
-  parseCsvText,
-  previewCsvImport,
-  type ParsedCsvDocument,
-} from "@/db/csv-import";
+import { applyLocalCsvImport, loadCsvAccounts, previewLocalCsvImport } from "@/data/csv-import";
+import { inferCsvMapping, parseCsvText, type ParsedCsvDocument } from "@/data/csv-import";
 import { spacing, useTheme } from "@/theme";
 import type { Account, CsvImportMapping, CsvImportPreview, CsvImportReport } from "@/types";
 import { userMessage } from "@/utils/user-message";
@@ -35,8 +28,7 @@ export default function CsvImportScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    void getDatabase()
-      .then((db) => listAccountsByUsage(db))
+    void loadCsvAccounts()
       .then((rows) => {
         setAccounts(rows);
         if (rows.length === 1) setAccountId(rows[0].id);
@@ -84,8 +76,7 @@ export default function CsvImportScreen() {
     setLoading(true);
     setError(null);
     try {
-      const db = await getDatabase();
-      const rows = await previewCsvImport(db, content, {
+      const rows = await previewLocalCsvImport(content, {
         accountId,
         currencyCode: selectedAccount.currencyCode,
         mapping,
@@ -104,8 +95,7 @@ export default function CsvImportScreen() {
     setLoading(true);
     setError(null);
     try {
-      const db = await getDatabase();
-      const result = await applyCsvImport(db, previews, {
+      const result = await applyLocalCsvImport(previews, {
         accountId,
         currencyCode: selectedAccount.currencyCode,
         mapping,

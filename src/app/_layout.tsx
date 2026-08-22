@@ -16,18 +16,15 @@ import { initLock, useLockState } from "@/state/lock";
 import { applyScreenSecurity } from "@/security/screen-capture";
 import { useDataEpoch } from "@/state/data-epoch";
 import { CurrencyProvider } from "@/currency/context";
-import { getDatabase } from "@/db/database";
-import { getSetting, setSetting } from "@/db/settings";
 import { initObservability } from "@/services/observability";
-import { runStartupHealth } from "@/utils/diagnostics";
-import { applyDueRecurring } from "@/db/recurring";
-import { schedulePendingRecurringNotifications } from "@/services/recurring-notifications";
 import { CloudAuthProvider } from "@/cloud/auth-context";
 import { SyncStatusProvider } from "@/cloud/sync-status";
+import { createApplicationBootstrap } from "@/bootstrap";
 export { default as ErrorBoundary } from "@/components/app-error-boundary";
 
 const SPLASH_MIN_DURATION_MS = 800;
 const splashStartedAt = Date.now();
+const bootstrapApplication = createApplicationBootstrap();
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 initObservability();
@@ -152,26 +149,9 @@ export default function RootLayout() {
       let shouldOnboard = false;
       let shouldShowCloudWelcome = false;
       try {
-        const db = await getDatabase();
-        try {
-          await applyDueRecurring(db);
-        } catch {
-          // A recurring-operation failure must not block access to the local
-          // application.
-        }
-        const accountCount = await db.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) AS count FROM accounts WHERE deleted_at IS NULL",
-        );
-        const completed = await getSetting(db, "onboarding_completed");
-        const started = await getSetting(db, "onboarding_started");
-        const cloudWelcomeSeen = await getSetting(db, "cloud_welcome_seen");
-        const hasAccounts = (accountCount?.count ?? 0) > 0;
-        if (hasAccounts && completed !== "1" && started !== "1") {
-          await setSetting(db, "onboarding_completed", "1");
-        }
-        shouldOnboard = completed !== "1" && (!hasAccounts || started === "1");
-        // Progressif : cloud-welcome seulement après l'onboarding terminé, jamais avant.
-        shouldShowCloudWelcome = cloudWelcomeSeen !== "1" && completed === "1" && !shouldOnboard;
+        const state = await bootstrapApplication();
+        shouldOnboard = state.needsOnboarding;
+        shouldShowCloudWelcome = state.needsCloudWelcome;
       } catch {
         // The regular app shell remains available if the startup check fails.
       }
@@ -181,16 +161,6 @@ export default function RootLayout() {
       setNeedsOnboarding(shouldOnboard);
       setNeedsCloudWelcome(shouldShowCloudWelcome);
       setIsReady(true);
-      void runStartupHealth();
-
-      // Notification permissions and scheduling are secondary startup work.
-      // They must not keep the native splash visible while Android waits for
-      // a permission response.
-      void getDatabase()
-        .then((db) => schedulePendingRecurringNotifications(db))
-        .catch(() => {
-          // Notifications are optional and must never prevent app access.
-        });
     })();
 
     return () => {

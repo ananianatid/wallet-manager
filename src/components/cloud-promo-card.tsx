@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Cloud, X } from "lucide-react-native";
 import { router } from "expo-router";
-import { getDatabase } from "@/db/database";
-import { getSetting, setSetting } from "@/db/settings";
+import { readAppSetting, writeAppSetting } from "@/data/app-settings";
 import { useCloudAuth } from "@/cloud/auth-context";
 import { radius, spacing, useTheme, withAlpha } from "@/theme";
-import { Platform } from "react-native";
 
 export function CloudPromoCard() {
   const theme = useTheme();
@@ -19,8 +17,7 @@ export function CloudPromoCard() {
       return;
     }
     try {
-      const db = await getDatabase();
-      const seen = await getSetting(db, "cloud_welcome_seen");
+      const seen = await readAppSetting("cloud_welcome_seen");
       setVisible(seen !== "1");
     } catch {
       setVisible(false);
@@ -35,8 +32,7 @@ export function CloudPromoCard() {
 
   const dismiss = useCallback(async () => {
     try {
-      const db = await getDatabase();
-      await setSetting(db, "cloud_welcome_seen", "1");
+      await writeAppSetting("cloud_welcome_seen", "1");
     } catch {}
     setVisible(false);
   }, []);
