@@ -1,9 +1,9 @@
 import { randomUUID } from "expo-crypto";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { loadCloudBootstrap, upsertCloudEntity, type CloudEntity } from "@/cloud/api";
-import { cloudFields, toCloudCategory, transactionPayload, type CloudCategory } from "@/cloud/domain";
+import { cloudFields, cloudRefs, toCloudCategory, transactionPayload, type CloudCategory } from "@/cloud/domain";
 import { ActionButton, InlineError } from "@/components/ui";
 import { spacing, typography, useTheme } from "@/theme";
 import type { TransactionType } from "@/types";
@@ -14,6 +14,8 @@ function parseAmount(value: string): number | null {
   const parsed = Number(value.replace(/\s/g, "").replace(",", "."));
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) : null;
 }
+function textValue(entity: CloudEntity, key: string, fallback = ""): string { const value = cloudFields(entity)[key]; return value == null ? fallback : String(value); }
+function dateValue(value: unknown): string { const timestamp = Number(value ?? 0); const milliseconds = timestamp > 0 && timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp; return milliseconds > 0 ? new Date(milliseconds).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16); }
 
 const TYPES: { value: TransactionType; label: string; help: string }[] = [
   { value: "expense", label: "Dépense", help: "Une sortie d’argent" },
@@ -23,6 +25,8 @@ const TYPES: { value: TransactionType; label: string; help: string }[] = [
 
 export default function WebCloudTransaction() {
   const theme = useTheme();
+  const { id: editingId } = useLocalSearchParams<{ id?: string }>();
+  const [existing, setExisting] = useState<CloudEntity | null>(null);
   const [accounts, setAccounts] = useState<CloudEntity[]>([]);
   const [categories, setCategories] = useState<CloudCategory[]>([]);
   const [type, setType] = useState<TransactionType>("expense");
@@ -49,14 +53,22 @@ export default function WebCloudTransaction() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void loadCloudBootstrap(["accounts", "categories"]).then((result) => {
+    void loadCloudBootstrap(["accounts", "categories", ...(editingId ? ["transactions"] : [])]).then((result) => {
       const live = result.entities.filter((entity) => entity.payload !== null);
       const nextAccounts = live.filter((entity) => entity.entityType === "accounts");
       setAccounts(nextAccounts);
       setCategories(live.filter((entity) => entity.entityType === "categories").map(toCloudCategory));
-      if (nextAccounts[0]) setAccountId(nextAccounts[0].entityId);
+      const next = editingId ? live.find((entity) => entity.entityType === "transactions" && entity.entityId === editingId) ?? null : null;
+      if (next) {
+        const item = cloudFields(next);
+        const refs = cloudRefs(next);
+        const nextType = textValue(next, "type", "expense") as TransactionType;
+        const allocations = Array.isArray(item.allocations) ? item.allocations.filter((row): row is { categoryId?: string; amount?: number } => typeof row === "object" && row !== null).map((row) => ({ categoryId: String(row.categoryId ?? ""), amount: String(Number(row.amount ?? 0) / 100) })) : [];
+        const reimbursements = Array.isArray(item.reimbursements) ? item.reimbursements.filter((row): row is { personName?: string; amount?: number } => typeof row === "object" && row !== null) : [];
+        setExisting(next); setType(nextType); setAccountId(refs.account_id ?? ""); setDestinationAccountId(refs.destination_account_id ?? ""); setCategoryId(refs.category_id ?? ""); setAmount(String(Number(item.amount ?? 0) / 100)); setDestinationAmount(item.destination_amount == null ? "" : String(Number(item.destination_amount) / 100)); setFee(item.fee == null ? "" : String(Number(item.fee) / 100)); setMerchant(textValue(next, "merchant")); setNote(textValue(next, "note")); setTagsInput(Array.isArray(item.tags) ? item.tags.map(String).join(", ") : ""); setDate(dateValue(item.transaction_date)); setSplitRows(allocations.length > 0 ? allocations : [{ categoryId: "", amount: "" }, { categoryId: "", amount: "" }]); setSplitEnabled(allocations.length > 0); setReimbursementEnabled(reimbursements.length > 0); setReimbursementPerson(reimbursements[0] ? String(reimbursements[0].personName ?? "") : ""); setReimbursementAmount(reimbursements[0] ? String(Number(reimbursements[0].amount ?? 0) / 100) : "");
+      } else if (nextAccounts[0]) setAccountId(nextAccounts[0].entityId);
     }).catch((cause) => setError(cause instanceof Error ? cause.message : "Impossible de charger les comptes et catégories.")).finally(() => setLoading(false));
-  }, []);
+  }, [editingId]);
 
   const source = useMemo(() => accounts.find((item) => item.entityId === accountId) ?? null, [accounts, accountId]);
   const destination = useMemo(() => accounts.find((item) => item.entityId === destinationAccountId) ?? null, [accounts, destinationAccountId]);
@@ -90,8 +102,9 @@ export default function WebCloudTransaction() {
     try {
       const sourceAmount = parsedAmount / 100;
       const targetAmount = parsedDestinationAmount ? parsedDestinationAmount / 100 : null;
+      const savedId = existing?.entityId ?? randomUUID();
       await upsertCloudEntity({
-        entityType: "transactions", entityId: randomUUID(), baseVersion: 0,
+        entityType: "transactions", entityId: savedId, baseVersion: existing?.version ?? 0,
         payload: transactionPayload({
           type, amount: parsedAmount, accountId: source.entityId,
           destinationAccountId: type === "transfer" ? destination!.entityId : null,
@@ -108,7 +121,7 @@ export default function WebCloudTransaction() {
           reimbursements: reimbursementEnabled ? [{ personName: reimbursementPerson.trim(), direction: "owed_to_me", amount: reimbursementAmountMinor! }] : [],
         }) as Record<string, unknown>,
       });
-      router.replace("/app/activity");
+      router.replace(existing ? { pathname: "/app/activity/[id]" as never, params: { id: savedId } } : "/app/activity");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Impossible d’enregistrer l’opération cloud."); }
     finally { setSaving(false); }
   };
@@ -117,8 +130,8 @@ export default function WebCloudTransaction() {
   return (
     <ScrollView contentContainerStyle={[styles.content, { backgroundColor: theme.background }]}>
       <Text style={[styles.eyebrow, { color: theme.secondaryLabel }]}>ESPACE CLOUD · OPÉRATION</Text>
-      <Text style={[styles.title, { color: theme.label }]}>Nouvelle opération</Text>
-      <Text style={[styles.lead, { color: theme.secondaryLabel }]}>Enregistrez une dépense, un revenu ou un transfert dans votre espace synchronisé.</Text>
+      <Text style={[styles.title, { color: theme.label }]}>{existing ? "Modifier l’opération" : "Nouvelle opération"}</Text>
+      <Text style={[styles.lead, { color: theme.secondaryLabel }]}>{existing ? "Corrigez cette opération sans perdre le lien avec ses comptes et catégories." : "Enregistrez une dépense, un revenu ou un transfert dans votre espace synchronisé."}</Text>
       {error ? <InlineError message={error} /> : null}
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
         <Text style={[styles.label, { color: theme.label }]}>Type d’opération</Text>
@@ -146,7 +159,7 @@ export default function WebCloudTransaction() {
           </Pressable>
           {reimbursementEnabled ? <View style={styles.advancedBody}><TextInput value={reimbursementPerson} onChangeText={setReimbursementPerson} placeholder="Personne concernée" placeholderTextColor={theme.secondaryLabel} style={[styles.input, { color: theme.label, borderColor: theme.separator }]} /><TextInput value={reimbursementAmount} onChangeText={setReimbursementAmount} placeholder="Montant remboursable" placeholderTextColor={theme.secondaryLabel} keyboardType="decimal-pad" style={[styles.input, { color: theme.label, borderColor: theme.separator }]} /></View> : null}
         </> : null}
-        <ActionButton label={saving ? "Enregistrement…" : "Enregistrer l’opération"} onPress={() => void save()} disabled={saving || accounts.length === 0} />
+        <ActionButton label={saving ? "Enregistrement…" : existing ? "Enregistrer les modifications" : "Enregistrer l’opération"} onPress={() => void save()} disabled={saving || accounts.length === 0} />
       </View>
     </ScrollView>
   );

@@ -1,8 +1,8 @@
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { deleteCloudEntity, loadCloudBootstrap, upsertCloudEntity, type CloudEntity } from "@/cloud/api";
-import { cloudFields, toCloudCategory, type CloudCategory } from "@/cloud/domain";
+import { deleteCloudEntity, loadCloudBootstrap, upsertCloudEntity } from "@/cloud/api";
+import { toCloudCategory, type CloudCategory } from "@/cloud/domain";
 import { ActionButton, InlineError } from "@/components/ui";
 import { CategoryIcon } from "@/components/category-icons";
 import { DEFAULT_CATEGORY_ICON } from "@/constants/category-icons";
@@ -25,6 +25,8 @@ export default function WebCloudCategories() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Impossible de charger les catégories."); }
     finally { setLoading(false); }
   }, []);
+  // The first remote load intentionally synchronizes component state after mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
 
   const visible = useMemo(() => items.filter((item) => item.type === type), [items, type]);

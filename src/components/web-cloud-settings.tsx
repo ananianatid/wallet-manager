@@ -56,6 +56,9 @@ export default function WebCloudSettings() {
       <Pressable accessibilityRole="link" accessibilityLabel="Gérer les catégories" onPress={() => router.push("/app/categories" as never)} style={[styles.categoryLink, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
         <View style={styles.copy}><Text style={[styles.cardTitle, { color: theme.label }]}>Catégories</Text><Text style={[styles.cardBody, { color: theme.secondaryLabel }]}>Gérez les catégories utilisées par vos revenus et dépenses.</Text></View><ChevronRight size={19} color={theme.accent} />
       </Pressable>
+      <Pressable accessibilityRole="link" accessibilityLabel="Consulter la politique de confidentialité" onPress={() => router.push("/privacy-policy" as never)} style={[styles.categoryLink, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+        <View style={styles.copy}><Text style={[styles.cardTitle, { color: theme.label }]}>Confidentialité et données</Text><Text style={[styles.cardBody, { color: theme.secondaryLabel }]}>La version web consulte votre espace cloud PostgreSQL. Les sauvegardes locales, le verrouillage et la biométrie restent des fonctions de l’application Android.</Text></View><ChevronRight size={19} color={theme.accent} />
+      </Pressable>
       {error ? <InlineError message={error} onRetry={() => void refresh()} /> : null}
       {syncMessage ? <Text style={[styles.success, { color: theme.income }]} accessibilityLiveRegion="polite">{syncMessage}</Text> : null}
       <View style={styles.actions}>

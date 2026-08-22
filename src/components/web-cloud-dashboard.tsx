@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw, WalletCards } from "lucide-react-native";
+import { ChevronRight, RefreshCw, Target, WalletCards } from "lucide-react-native";
+import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { loadCloudBootstrap, type CloudEntity } from "@/cloud/api";
-import { cloudFields, cloudRefs } from "@/cloud/domain";
+import { cloudRefs } from "@/cloud/domain";
 import { ActionButton, InlineError } from "@/components/ui";
 import { formatAmount } from "@/utils/format";
 import { spacing, typography, useTheme } from "@/theme";
@@ -43,7 +44,15 @@ export default function WebCloudDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadCloudBootstrap(["accounts", "transactions", "categories"]);
+      const result = await loadCloudBootstrap([
+        "accounts",
+        "transactions",
+        "categories",
+        "budget_plans",
+        "goals",
+        "savings_rules",
+        "recurring_transactions",
+      ]);
       setEntities(result.entities.filter((entity) => entity.payload !== null));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossible de charger vos données cloud.");
@@ -53,6 +62,8 @@ export default function WebCloudDashboard() {
   }, []);
 
   useEffect(() => {
+    // The first remote load intentionally synchronizes component state after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -62,6 +73,7 @@ export default function WebCloudDashboard() {
     [entities],
   );
   const categories = useMemo(() => entities.filter((entity) => entity.entityType === "categories"), [entities]);
+  const plans = useMemo(() => entities.filter((entity) => ["budget_plans", "goals", "savings_rules", "recurring_transactions"].includes(entity.entityType)), [entities]);
   const expenses = transactions.filter((transaction) => stringField(transaction, "type", "") === "expense");
   const expenseTotal = expenses.reduce((total, transaction) => total + numberField(transaction, "amount"), 0);
 
@@ -95,6 +107,7 @@ export default function WebCloudDashboard() {
         <Metric label="Comptes financiers" value={String(accounts.length)} />
         <Metric label="Transactions" value={String(transactions.length)} />
         <Metric label="Dépenses enregistrées" value={formatAmount(expenseTotal, "XOF")} />
+        <Metric label="Engagements actifs" value={String(plans.length)} />
       </View>
 
       {accounts.length === 0 ? (
@@ -107,13 +120,14 @@ export default function WebCloudDashboard() {
         <View style={styles.list}>
           <Text style={[styles.sectionTitle, { color: theme.label }]}>Comptes financiers</Text>
           {accounts.map((account) => (
-            <View key={account.entityId} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+            <Pressable key={account.entityId} accessibilityRole="link" accessibilityLabel={`Ouvrir ${stringField(account, "name", "Compte sans nom")}`} onPress={() => router.push({ pathname: "/app/accounts/[id]" as never, params: { id: account.entityId } })} style={({ pressed }) => [styles.row, { backgroundColor: theme.surface, borderColor: theme.separator }, pressed && styles.pressed]}>
               <WalletCards size={20} color={theme.accent} />
               <View style={styles.rowCopy}>
                 <Text style={[styles.rowTitle, { color: theme.label }]}>{stringField(account, "name", "Compte sans nom")}</Text>
                 <Text style={[styles.rowMeta, { color: theme.secondaryLabel }]}>{stringField(account, "currency_code", "XOF")}</Text>
               </View>
-            </View>
+              <ChevronRight size={18} color={theme.secondaryLabel} />
+            </Pressable>
           ))}
         </View>
       )}
@@ -122,17 +136,33 @@ export default function WebCloudDashboard() {
         <View style={styles.list}>
           <Text style={[styles.sectionTitle, { color: theme.label }]}>Dernières transactions</Text>
           {transactions.slice(0, 8).map((transaction) => (
-            <View key={transaction.entityId} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+            <Pressable key={transaction.entityId} accessibilityRole="link" accessibilityLabel={`Ouvrir ${stringField(transaction, "merchant", "Transaction")}`} onPress={() => router.push({ pathname: "/app/activity/[id]" as never, params: { id: transaction.entityId } })} style={({ pressed }) => [styles.row, { backgroundColor: theme.surface, borderColor: theme.separator }, pressed && styles.pressed]}>
               <View style={[styles.transactionDot, { backgroundColor: stringField(transaction, "type", "") === "expense" ? theme.expense : theme.income }]} />
               <View style={styles.rowCopy}>
                 <Text style={[styles.rowTitle, { color: theme.label }]}>{stringField(transaction, "merchant", stringField(transaction, "note", "Transaction"))}</Text>
                 <Text style={[styles.rowMeta, { color: theme.secondaryLabel }]}>{transactionTypeLabel(stringField(transaction, "type", "operation"))}{categoryFor(transaction, categories) ? ` · ${stringField(categoryFor(transaction, categories)!, "name", "Catégorie")}` : ""}</Text>
               </View>
               <Text style={[styles.amount, { color: theme.label }]}>{formatAmount(numberField(transaction, "amount"), "XOF")}</Text>
-            </View>
+              <ChevronRight size={18} color={theme.secondaryLabel} />
+            </Pressable>
           ))}
         </View>
       ) : null}
+
+      {plans.length > 0 ? (
+        <View style={styles.list}>
+          <View style={styles.sectionHeading}><Text style={[styles.sectionTitle, { color: theme.label }]}>Planification</Text><Pressable accessibilityRole="link" accessibilityLabel="Ouvrir la planification" onPress={() => router.push("/app/planning")}><Text style={[styles.link, { color: theme.accent }]}>Voir tout</Text></Pressable></View>
+          <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+            <Target size={22} color={theme.accent} />
+            <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: theme.label }]}>Vos engagements financiers</Text><Text style={[styles.rowMeta, { color: theme.secondaryLabel }]}>Budgets, objectifs, épargne et récurrences visibles au même endroit.</Text></View>
+            <ChevronRight size={18} color={theme.secondaryLabel} />
+          </View>
+        </View>
+      ) : null}
+      <Pressable accessibilityRole="link" accessibilityLabel="Ouvrir les dépenses sûres" onPress={() => router.push("/app/cashflow" as never)} style={({ pressed }) => [styles.cashflowCard, { backgroundColor: theme.surface, borderColor: theme.separator }, pressed && styles.pressed]}>
+        <WalletCards size={22} color={theme.accent} />
+        <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: theme.label }]}>Dépenses sûres</Text><Text style={[styles.rowMeta, { color: theme.secondaryLabel }]}>Estimez ce qui reste engageable à partir des données cloud synchronisées.</Text></View><ChevronRight size={18} color={theme.secondaryLabel} />
+      </Pressable>
     </ScrollView>
   );
 }
@@ -170,9 +200,14 @@ const styles = StyleSheet.create({
   rowMeta: { fontSize: 12, textTransform: "capitalize" },
   amount: { fontSize: 15, fontWeight: "800" },
   transactionDot: { width: 10, height: 10, borderRadius: 5 },
+  sectionHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  link: { fontSize: 13, fontWeight: "800" },
+  planCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: 16, padding: spacing.lg },
+  cashflowCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: 16, padding: spacing.lg },
   empty: { alignItems: "center", gap: spacing.md, borderWidth: 1, borderRadius: 20, padding: spacing.xl, maxWidth: 620 },
   emptyTitle: { fontSize: 18, fontWeight: "800" },
   emptyText: { fontSize: 14, lineHeight: 21, textAlign: "center" },
   state: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
   stateTitle: { fontSize: 18, fontWeight: "700", textAlign: "center" },
+  pressed: { opacity: 0.7 },
 }) as any;

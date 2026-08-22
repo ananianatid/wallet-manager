@@ -27,7 +27,9 @@ export function CloudPromoCard() {
     }
   }, [status]);
 
+  // This effect reads persisted local state when the card mounts.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void check();
   }, [check]);
 
