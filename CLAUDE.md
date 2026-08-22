@@ -13,7 +13,6 @@ Personal, offline, single-user expense tracker for Android. Expo SDK 57, Expo Ro
 ```bash
 npm start              # expo start
 npm run ios|android    # expo run:ios|android (native build)
-npm run web            # expo start --web
 npm run lint           # expo lint (eslint-config-expo flat config)
 npm test               # jest --runInBand (jest-expo preset)
 npx tsc --noEmit       # typecheck

@@ -7,7 +7,7 @@ import {
   ThemeProvider,
 } from "expo-router/react-navigation";
 import { ThemeProvider as AppThemeProvider, useTheme, useThemeControl } from "@/theme";
-import { Platform, StatusBar } from "react-native";
+import { StatusBar } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CompactStackHeader } from "@/components/compact-stack-header";
@@ -49,7 +49,7 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tab
             headerStyle: {
               backgroundColor: theme.background,
             },
-            header: CompactStackHeader,
+            header: (props) => <CompactStackHeader {...props} />,
             headerTitleStyle: { color: theme.label },
             headerShadowVisible: false,
             headerTintColor: theme.accent,
@@ -58,13 +58,6 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tab
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="app" options={{ headerShown: false }} />
-          <Stack.Screen name="app/activity" options={{ headerShown: false }} />
-          <Stack.Screen name="app/planning" options={{ headerShown: false }} />
-          <Stack.Screen name="app/statistics" options={{ headerShown: false }} />
-          <Stack.Screen name="app/accounts" options={{ headerShown: false }} />
-          <Stack.Screen name="app/categories" options={{ headerShown: false }} />
-          <Stack.Screen name="app/settings" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="cloud-welcome" options={{ headerShown: false, gestureEnabled: false }} />
@@ -127,16 +120,12 @@ function RootNavigator({ initialRouteName }: { initialRouteName: "index" | "(tab
 
 export default function RootLayout() {
   const router = useRouter();
-  const [isReady, setIsReady] = useState(Platform.OS === "web");
+  const [isReady, setIsReady] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [needsCloudWelcome, setNeedsCloudWelcome] = useState(false);
   const hasRoutedToDashboard = useRef(false);
 
   useEffect(() => {
-    if (Platform.OS === "web") {
-      return;
-    }
-
     let active = true;
     initLock();
     try {
@@ -183,7 +172,7 @@ export default function RootLayout() {
   }, [isReady]);
 
   useEffect(() => {
-    if (Platform.OS === "web" || !isReady || hasRoutedToDashboard.current) {
+    if (!isReady || hasRoutedToDashboard.current) {
       return;
     }
 
@@ -204,9 +193,7 @@ export default function RootLayout() {
         <SyncStatusProvider>
           <AppThemeProvider>
             <CurrencyProvider>
-            {Platform.OS === "web" ? (
-              <RootNavigator initialRouteName="index" />
-            ) : needsOnboarding ? (
+            {needsOnboarding ? (
               <RootNavigator initialRouteName="onboarding" />
             ) : needsCloudWelcome ? (
               <RootNavigator initialRouteName="cloud-welcome" />

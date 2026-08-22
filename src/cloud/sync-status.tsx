@@ -1,4 +1,4 @@
-import { AppState, Platform } from "react-native";
+import { AppState } from "react-native";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getDatabase } from "@/db/database";
 import { getSetting, setSetting } from "@/db/settings";
@@ -68,7 +68,7 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<SyncProgress>(getSyncProgress());
   const mounted = useRef(true);
 
-  const isCloudEnabled = status === "authenticated" && Boolean(user?.emailVerified) && Platform.OS !== "web";
+  const isCloudEnabled = status === "authenticated" && Boolean(user?.emailVerified);
 
   const refresh = useCallback(async () => {
     const meta = await readSyncMeta();

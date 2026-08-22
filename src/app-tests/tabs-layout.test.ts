@@ -11,8 +11,7 @@ describe("tab navigation animation", () => {
     expect(getTabAnimation("android", true)).toBe("none");
   });
 
-  it("does not change web or other native navigation", () => {
-    expect(getTabAnimation("web", false)).toBe("none");
+  it("keeps native navigation stable outside Android", () => {
     expect(getTabAnimation("ios", false)).toBe("none");
   });
 });

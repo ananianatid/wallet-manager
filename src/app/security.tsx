@@ -33,9 +33,6 @@ export default function SecurityScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (Platform.OS === "web") {
-      return;
-    }
     LocalAuthentication.hasHardwareAsync()
       .then((hasHardware) =>
         hasHardware ? LocalAuthentication.isEnrolledAsync() : false,
@@ -45,26 +42,10 @@ export default function SecurityScreen() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== "android") {
-      return;
-    }
     getBlockScreenshots()
       .then(setBlockScreenshotsEnabled)
       .catch(() => {});
   }, []);
-
-  if (Platform.OS === "web") {
-    return (
-      <>
-        <Stack.Screen options={{ title: "Sécurité" }} />
-        <View style={{ padding: spacing.lg }}>
-          <Text style={{ color: theme.secondaryLabel, fontSize: 13, lineHeight: 18 }}>
-            Le verrouillage n&apos;est pas disponible sur le web.
-          </Text>
-        </View>
-      </>
-    );
-  }
 
   const onToggleLock = (enabled: boolean) => {
     setError(null);

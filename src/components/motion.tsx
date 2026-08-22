@@ -4,7 +4,6 @@ import {
   Animated,
   Easing,
   Pressable,
-  Platform,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -67,7 +66,7 @@ export function AnimatedPressable({
       toValue,
       duration: reducedMotion ? 0 : motion.micro,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: Platform.OS !== "web",
+      useNativeDriver: true,
     }).start();
   };
 
@@ -112,14 +111,14 @@ export function MotionEntrance({
         delay: reducedMotion ? 0 : delay,
         duration: reducedMotion ? 0 : motion.entrance,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== "web",
+        useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         delay: reducedMotion ? 0 : delay,
         duration: reducedMotion ? 0 : motion.entrance,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== "web",
+        useNativeDriver: true,
       }),
     ]);
     animation.start();

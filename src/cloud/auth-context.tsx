@@ -1,4 +1,4 @@
-import { AppState, Platform } from "react-native";
+import { AppState } from "react-native";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   loginCloudAccount,
@@ -7,7 +7,6 @@ import {
   refreshCloudUser,
   resendVerificationEmail,
   restoreCloudSession,
-  loadCloudBootstrap,
   type CloudUser,
 } from "./api";
 import { getDatabase } from "@/db/database";
@@ -35,7 +34,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
   const syncInFlight = useRef(false);
 
   const syncIfAllowed = useCallback(async (candidate: CloudUser | null) => {
-    if (Platform.OS === "web" || !candidate?.emailVerified || syncInFlight.current) return;
+    if (!candidate?.emailVerified || syncInFlight.current) return;
     const db = await getDatabase();
     if ((await getSetting(db, "cloud_sync_initialized")) !== "1") return;
     syncInFlight.current = true;
@@ -71,7 +70,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const next = await loginCloudAccount({ email, password, deviceName: "Wallet Manager" });
-    if (Platform.OS !== "web") await setSetting(await getDatabase(), "cloud_welcome_seen", "1");
+    await setSetting(await getDatabase(), "cloud_welcome_seen", "1");
     setUser(next);
     setStatus("authenticated");
     void syncIfAllowed(next);
@@ -80,7 +79,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string) => {
     const next = await registerCloudAccount({ email, password, deviceName: "Wallet Manager" });
-    if (Platform.OS !== "web") await setSetting(await getDatabase(), "cloud_welcome_seen", "1");
+    await setSetting(await getDatabase(), "cloud_welcome_seen", "1");
     setUser(next);
     setStatus("authenticated");
     void syncIfAllowed(next);
@@ -105,10 +104,6 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
 
   const syncNow = useCallback(async () => {
     if (!user?.emailVerified) throw new Error("Vérifiez votre adresse email avant de synchroniser.");
-    if (Platform.OS === "web") {
-      const result = await loadCloudBootstrap();
-      return { pushed: 0, pulled: result.entities.filter((entity) => entity.payload !== null).length, conflicts: [], cursor: 0 };
-    }
     if (syncInFlight.current) {
       const cursor = Number((await getSetting(await getDatabase(), "cloud_sync_cursor")) ?? "0");
       return { pushed: 0, pulled: 0, conflicts: [], cursor };
@@ -138,7 +133,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") void syncIfAllowed(user);
     });
-    const interval = Platform.OS !== "web" && user?.emailVerified
+    const interval = user?.emailVerified
       ? setInterval(() => void syncIfAllowed(user), 15_000)
       : null;
     return () => {

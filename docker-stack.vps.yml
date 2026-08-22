@@ -1,26 +1,7 @@
 # Déploiement Docker Swarm/Dokploy.
 # Les images sont construites et chargées séparément ; aucun secret n'est
-# stocké dans ce fichier. Le service API rejoint le réseau de la vitrine afin
-# que Nginx puisse résoudre l'alias `wallet-api`.
+# stocké dans ce fichier. Le service API est exposé par son propre endpoint.
 services:
-  wallet-web:
-    image: ${WALLET_WEB_IMAGE:?WALLET_WEB_IMAGE is required}
-    networks:
-      wallet-private:
-      dokploy-network:
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      labels:
-        - traefik.enable=true
-        - traefik.swarm.network=dokploy-network
-        - traefik.http.routers.wallet-manager-independent.rule=Host(`wallet-manager.causalset.sbs`)
-        - traefik.http.routers.wallet-manager-independent.entrypoints=websecure
-        - traefik.http.routers.wallet-manager-independent.tls.certresolver=letsencrypt
-        - traefik.http.routers.wallet-manager-independent.priority=100
-        - traefik.http.services.wallet-manager-independent.loadbalancer.server.port=80
-
   wallet-api:
     image: ${WALLET_API_IMAGE:?WALLET_API_IMAGE is required}
     # Dokploy injecte les variables via `environment:` — plus de `env_file` qui

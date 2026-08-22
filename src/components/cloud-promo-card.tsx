@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Cloud, X } from "lucide-react-native";
 import { router } from "expo-router";
 import { readAppSetting, writeAppSetting } from "@/data/app-settings";
@@ -12,7 +12,7 @@ export function CloudPromoCard() {
   const [visible, setVisible] = useState(false);
 
   const check = useCallback(async () => {
-    if (Platform.OS === "web" || status !== "guest") {
+    if (status !== "guest") {
       setVisible(false);
       return;
     }
@@ -50,7 +50,7 @@ export function CloudPromoCard() {
       </View>
       <View style={styles.copy}>
         <Text style={[styles.title, { color: theme.label }]}>Emportez Wallet partout</Text>
-        <Text style={[styles.body, { color: theme.secondaryLabel }]}>Activez la synchronisation pour retrouver vos données sur votre téléphone et votre PC. Vous restez en mode local tant que vous le souhaitez.</Text>
+        <Text style={[styles.body, { color: theme.secondaryLabel }]}>Activez la synchronisation pour retrouver vos données sur vos appareils. Vous restez en mode local tant que vous le souhaitez.</Text>
         <View style={styles.actions}>
           <Pressable
             onPress={() => router.push("/cloud-welcome")}

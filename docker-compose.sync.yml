@@ -67,18 +67,6 @@ services:
     networks:
       - wallet-private
 
-  wallet-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      - wallet-api
-    ports:
-      - "127.0.0.1:8080:80"
-    networks:
-      - wallet-private
-
 volumes:
   wallet-postgres:
   wallet-minio:

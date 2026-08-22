@@ -7,8 +7,7 @@ cd "$project_root"
 package_name="com.ananianatid.wallettheapp"
 artifact="android/app/build/outputs/apk/release/app-release.apk"
 
-# L’APK doit utiliser une URL absolue : `/api` ne peut être résolu que par le
-# navigateur qui partage le domaine de la vitrine. Une valeur explicitement
+# L’APK doit utiliser une URL absolue vers l’API. Une valeur explicitement
 # fournie par l’environnement reste prioritaire pour les builds de test.
 export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://wallet-api.causalset.sbs/api}"
 export APP_BUILD_TIMESTAMP="${APP_BUILD_TIMESTAMP:-$(date -u '+%Y-%m-%d %H:%M:%S UTC')}"
@@ -53,13 +52,11 @@ output="dist/wallet-manager-arm64-${build_finished_at}.apk"
 mkdir -p dist
 cp "$artifact" "$output"
 
-# Rafraîchir aussi les chemins utilisés par la vitrine et les habitudes
-# d'installation existantes. Ils doivent toujours pointer vers ce build,
-# sinon un ancien APK peut encore être téléchargé et ouvrir la route web.
+# Rafraîchir les chemins utilisés par les habitudes d'installation existantes.
 cp "$artifact" "dist/app-release.apk"
 cp "$artifact" "public/app-release.apk"
 
 echo "==> APK prêt: $output"
 echo "==> Alias installation: dist/app-release.apk"
-echo "==> Téléchargement web: public/app-release.apk"
+echo "==> Alias public: public/app-release.apk"
 ls -lh "$output"

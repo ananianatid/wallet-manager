@@ -8,7 +8,6 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$project_root"
 
 : "${WALLET_API_IMAGE:?WALLET_API_IMAGE est requis}"
-: "${WALLET_WEB_IMAGE:?WALLET_WEB_IMAGE est requis}"
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD est requis}"
 : "${MINIO_ROOT_USER:?MINIO_ROOT_USER est requis}"
 : "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD est requis}"
@@ -43,16 +42,14 @@ echo "==> Attente de la convergence Swarm..."
 deadline=$((SECONDS + 120))
 while (( SECONDS < deadline )); do
   api_replicas="$(docker service ls --filter name=wallet-manager_wallet-api --format '{{.Replicas}}' | head -n 1)"
-  web_replicas="$(docker service ls --filter name=wallet-manager_wallet-web --format '{{.Replicas}}' | head -n 1)"
-  if [[ "$api_replicas" == "1/1" && "$web_replicas" == "1/1" ]]; then
-    echo "API convergée: $api_replicas; web convergent: $web_replicas"
+  if [[ "$api_replicas" == "1/1" ]]; then
+    echo "API convergée: $api_replicas"
     exit 0
   fi
-  echo "API: ${api_replicas:-service absente}; web: ${web_replicas:-service absent}; nouvelle vérification..."
+  echo "API: ${api_replicas:-service absente}; nouvelle vérification..."
   sleep 5
 done
 
 echo "ERREUR: la stack n'a pas convergé dans le délai prévu." >&2
 docker service ps wallet-manager_wallet-api --no-trunc || true
-docker service ps wallet-manager_wallet-web --no-trunc || true
 exit 1

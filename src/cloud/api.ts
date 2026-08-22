@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import type {
@@ -22,13 +21,10 @@ export type {
 } from "./types";
 
 const configuredApiBase = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
-const API_BASE = Platform.OS === "web"
-  ? (configuredApiBase || "/api")
-  : configuredApiBase && /^https?:\/\//i.test(configuredApiBase)
-    ? configuredApiBase
-    : "";
+const API_BASE = configuredApiBase && /^https?:\/\//i.test(configuredApiBase)
+  ? configuredApiBase
+  : "";
 const REFRESH_TOKEN_KEY = "wallet.refresh-token";
-const WEB_SESSION_HINT_KEY = "wallet.web-session-present";
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
@@ -50,20 +46,10 @@ interface SessionResponse {
 }
 
 async function readRefreshToken(): Promise<string | null> {
-  if (Platform.OS === "web") {
-    if (typeof localStorage === "undefined" || localStorage.getItem(WEB_SESSION_HINT_KEY) !== "1") return null;
-    return null;
-  }
   return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
 }
 
 async function writeRefreshToken(token: string | null): Promise<void> {
-  if (Platform.OS === "web") {
-    if (typeof localStorage === "undefined") return;
-    if (token) localStorage.setItem(REFRESH_TOKEN_KEY, token);
-    else localStorage.removeItem(REFRESH_TOKEN_KEY);
-    return;
-  }
   if (token) await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
   else await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
 }
@@ -95,9 +81,6 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
 
 async function saveSession(session: SessionResponse): Promise<void> {
   accessToken = session.accessToken;
-  if (Platform.OS === "web" && typeof localStorage !== "undefined") {
-    localStorage.setItem(WEB_SESSION_HINT_KEY, "1");
-  }
   if (session.refreshToken) await writeRefreshToken(session.refreshToken);
 }
 
@@ -114,7 +97,6 @@ export async function refreshAccessToken(): Promise<string | null> {
       return session.accessToken;
     } catch {
       accessToken = null;
-      if (Platform.OS === "web" && typeof localStorage !== "undefined") localStorage.removeItem(WEB_SESSION_HINT_KEY);
       await writeRefreshToken(null);
       return null;
     } finally {
@@ -132,7 +114,7 @@ export async function restoreCloudSession(): Promise<CloudUser | null> {
 export async function registerCloudAccount(input: { email: string; password: string; deviceName: string }): Promise<CloudUser> {
   const session = await request<SessionResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ ...input, client: Platform.OS === "web" ? "web" : "mobile" }),
+    body: JSON.stringify({ ...input, client: "mobile" }),
   }, false);
   await saveSession(session);
   return { ...(await request<CloudUser>("/auth/me")), emailVerified: Boolean(session.emailVerified) };
@@ -141,7 +123,7 @@ export async function registerCloudAccount(input: { email: string; password: str
 export async function loginCloudAccount(input: { email: string; password: string; deviceName: string }): Promise<CloudUser> {
   const session = await request<SessionResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ ...input, client: Platform.OS === "web" ? "web" : "mobile" }),
+    body: JSON.stringify({ ...input, client: "mobile" }),
   }, false);
   await saveSession(session);
   return { ...(await request<CloudUser>("/auth/me")), emailVerified: Boolean(session.emailVerified) };
@@ -149,11 +131,10 @@ export async function loginCloudAccount(input: { email: string; password: string
 
 export async function logoutCloudAccount(): Promise<void> {
   try {
-    const refreshToken = Platform.OS === "web" ? null : await readRefreshToken();
+    const refreshToken = await readRefreshToken();
     await request<void>("/auth/logout", { method: "POST", body: JSON.stringify(refreshToken ? { refreshToken } : {}) }, false);
   } finally {
     accessToken = null;
-    if (Platform.OS === "web" && typeof localStorage !== "undefined") localStorage.removeItem(WEB_SESSION_HINT_KEY);
     await writeRefreshToken(null);
   }
 }

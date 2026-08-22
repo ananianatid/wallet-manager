@@ -7,9 +7,6 @@
     "icon": "./assets/images/wallet-logo-green-v4.png",
     "scheme": "wallettheapp",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/images/wallet-logo-green-v4.png"
-    },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false,
@@ -19,11 +16,6 @@
         "backgroundColor": "#26352D"
       },
       "package": "com.ananianatid.wallettheapp"
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/wallet-logo-green-v4.png"
     },
     "plugins": [
       "expo-router",

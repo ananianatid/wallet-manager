@@ -1,9 +1,9 @@
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
 import { useCloudAuth } from "@/cloud/auth-context";
-import { deleteCloudAccount, listCloudSessions, loadCloudBootstrap, requestPasswordReset, revokeCloudSession, type CloudSession } from "@/cloud/api";
+import { deleteCloudAccount, listCloudSessions, requestPasswordReset, revokeCloudSession, type CloudSession } from "@/cloud/api";
 import { readAppSetting } from "@/data/app-settings";
 import { spacing, typography, useTheme } from "@/theme";
 
@@ -28,12 +28,6 @@ export default function CloudAccountScreen() {
   }, [status]);
 
   const synchronize = () => {
-    if (Platform.OS === "web") {
-      void loadCloudBootstrap()
-        .then((result) => setSyncMessage(`${result.entities.filter((entity) => entity.payload !== null).length} élément(s) cloud chargé(s) depuis PostgreSQL.`))
-        .catch((cause) => setError(cause instanceof Error ? cause.message : "Chargement cloud impossible."));
-      return;
-    }
     const execute = () => void syncNow()
       .then((result) => setSyncMessage(result.conflicts.length > 0 ? `${result.conflicts.length} conflit(s) à résoudre.` : `${result.pushed} élément(s) envoyé(s), ${result.pulled} reçu(s).`))
       .catch((cause) => {
@@ -59,14 +53,13 @@ export default function CloudAccountScreen() {
     setBusy(true);
     setError(null);
     try {
-      const next = mode === "login" ? await signIn(email, password) : await (async () => {
+      await (mode === "login" ? signIn(email, password) : (async () => {
         if (password !== passwordConfirmation) {
           setError("Les mots de passe ne correspondent pas.");
           return null;
         }
         return signUp(email, password);
-      })();
-      if (Platform.OS === "web" && next?.emailVerified) router.replace("/app");
+      })());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossible de contacter le serveur.");
     } finally {
@@ -87,9 +80,7 @@ export default function CloudAccountScreen() {
             <Text style={[styles.cardTitle, { color: theme.label }]}>Compte connecté</Text>
             <Text style={[styles.email, { color: theme.label }]}>{user.email}</Text>
             <Text style={[styles.hint, { color: theme.secondaryLabel }]}>
-              {user.emailVerified
-                ? Platform.OS === "web" ? "Adresse vérifiée. Vos données sont enregistrées dans PostgreSQL." : "Adresse vérifiée. La synchronisation peut être activée."
-                : "Vérifiez votre adresse email pour activer la synchronisation."}
+              {user.emailVerified ? "Adresse vérifiée. La synchronisation peut être activée." : "Vérifiez votre adresse email pour activer la synchronisation."}
             </Text>
             {!user.emailVerified ? (
               <View style={styles.inlineActions}>
@@ -99,7 +90,7 @@ export default function CloudAccountScreen() {
             ) : null}
             {user.emailVerified ? (
               <ActionButton
-                label={Platform.OS === "web" ? "Charger mes données cloud" : "Synchroniser maintenant"}
+                label="Synchroniser maintenant"
                 variant="secondary"
                 onPress={synchronize}
               />

@@ -26,29 +26,19 @@ In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Vitrine web
+## Application Android
 
-La racine web présente Wallet Manager dans la même direction visuelle que l'application et propose le téléchargement de l'APK Android depuis la dernière GitHub Release.
+Wallet Manager est livré comme application Android local-first avec SQLite. La synchronisation cloud facultative passe par l'API Fastify, PostgreSQL et MinIO ; Android doit recevoir une URL absolue via `EXPO_PUBLIC_API_URL`.
 
-L'application utilisable sur grand écran est disponible sous `/app`. Elle conserve le même cœur local-first que la version Android : tableau de bord, activité, planification, statistiques, comptes, réglages, import CSV, sauvegardes et récurrences réutilisent les modules métier existants. À partir de 1080 px, la navigation devient une barre latérale ; les écrans plus étroits gardent une barre de navigation basse adaptée au tactile.
-
-Le web est réservé aux comptes cloud vérifiés : les données sont chargées et enregistrées via l'API Fastify dans l'espace PostgreSQL de l'utilisateur. Le navigateur ne reçoit jamais les identifiants PostgreSQL et n'ouvre pas SQLite WASM. Android reste local-first avec SQLite et peut fonctionner sans compte.
-
-En développement, ouvrez `http://localhost:8081/app` après avoir lancé le serveur web Expo. En production, le chemin attendu est `https://votre-domaine/app`.
-
-Pour produire l'APK puis l'export web statique :
+Pour produire l'APK Android :
 
 ```bash
 npm run build:apk
-npx expo export --platform web
 ```
-
-Le fichier `public/app-release.apk` est ignoré par Git. Après le build, publiez-le comme asset d'une GitHub Release ; le bouton de la vitrine pointe vers l'asset stable `releases/latest/download/app-release.apk`.
 
 ## Déploiement Docker sur un VPS
 
@@ -63,19 +53,11 @@ MINIO_ROOT_PASSWORD='mot-de-passe-minio-fort' \
 docker compose -f docker-compose.sync.yml up -d --build
 ```
 
-Le fichier `server/.env` doit contenir au minimum `DATABASE_URL`, `WEB_ORIGIN`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` et `PUBLIC_API_URL`. Pour PostgreSQL interne au réseau privé, laissez `DATABASE_SSL=false` ; activez-le uniquement si le serveur PostgreSQL distant impose TLS. PostgreSQL et MinIO ne publient aucun port sur Internet ; Nginx transmet uniquement `/api/` au conteneur Fastify. Ne commitez jamais ces variables ni les mots de passe SMTP, PostgreSQL ou MinIO. Pour un APK Android, renseignez aussi `EXPO_PUBLIC_API_URL` avec l’URL absolue publique terminant par `/api` avant le build ; `/api` seul est réservé au web servi par le même domaine.
+Le fichier `server/.env` doit contenir au minimum `DATABASE_URL`, `WEB_ORIGIN`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` et `PUBLIC_API_URL`. Pour PostgreSQL interne au réseau privé, laissez `DATABASE_SSL=false` ; activez-le uniquement si le serveur PostgreSQL distant impose TLS. PostgreSQL et MinIO ne publient aucun port sur Internet. Ne commitez jamais ces variables ni les mots de passe SMTP, PostgreSQL ou MinIO. Pour un APK Android, renseignez `EXPO_PUBLIC_API_URL` avec l’URL absolue publique terminant par `/api` avant le build.
 
 Les routes d’authentification disponibles sont `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/verify-email`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/api/auth/delete-account`, `/api/auth/recover-account`, `/api/auth/sessions` et `/api/auth/me`. La synchronisation structurée utilise `/api/sync/push` et `/api/sync/pull` avec contrôle de version et réponse de conflit. Les pièces jointes cloud utilisent `/api/attachments` et sont limitées à 10 Mo par fichier.
 
-La production web est une image statique Nginx. Elle ne démarre ni Laravel ni un serveur Node ; elle transmet `/api/` au service Fastify, qui protège l'accès à PostgreSQL. Aucun stockage métier n'est conservé dans le navigateur.
-
-Construisez l'image web :
-
-```bash
-npm run docker:build
-```
-
-L'APK Android est indépendant du déploiement Docker de la vitrine. Pour produire l'asset de release :
+L'APK Android est indépendant du déploiement Docker de l'API. Pour produire l'asset de release :
 
 ```bash
 npm run build:apk-sm
@@ -84,42 +66,10 @@ gh release create v1.0.0 public/app-release.apk \
   --notes "Première version Android distribuable."
 ```
 
-La vitrine ne dépend pas de la présence locale de l’APK pendant le build Docker. Pour lancer uniquement le web localement :
-
-```bash
-docker run --rm \
-  --name wallet-manager-web \
-  -p 8080:80 \
-  wallet-manager-web:latest
-```
-
-Vérifications locales :
-
-```bash
-curl -I http://localhost:8080/
-curl http://localhost:8080/healthz
-curl -I -L https://github.com/ananianatid/wallet-manager/releases/latest/download/app-release.apk
-```
-
-Sur le VPS, publiez le port du conteneur uniquement en local afin que le reverse proxy HTTPS existant puisse le joindre :
-
-```bash
-docker run -d \
-  --name wallet-manager-web \
-  --restart unless-stopped \
-  -p 127.0.0.1:8080:80 \
-  wallet-manager-web:latest
-```
-
-Le reverse proxy du domaine doit ensuite transmettre le trafic vers `127.0.0.1:8080`. Le endpoint `/healthz` est prévu pour le contrôle de disponibilité.
-
-Pour un domaine avec compte cloud, utilisez `docker-compose.sync.yml` : le Nginx de cette image transmet `/api/` au service `wallet-api` du réseau Compose privé. Un conteneur web lancé seul sert les écrans locaux mais ne peut pas joindre l’API cloud.
-
-Sur ce VPS, `docker-stack.vps.yml` est un déploiement Docker Swarm manuel réalisé à côté de Dokploy. Il rejoint le réseau externe `dokploy-network` déjà utilisé par la vitrine, tout en gardant PostgreSQL et MinIO sur un réseau privé. Cette méthode n’apparaît pas dans l’historique des déploiements de l’application Dokploy ; pour obtenir cet historique, il faudra créer l’API comme application Dokploy et la déployer depuis Dokploy :
+Sur ce VPS, `docker-stack.vps.yml` est un déploiement Docker Swarm manuel réalisé à côté de Dokploy. L'API rejoint le réseau externe `dokploy-network`, tandis que PostgreSQL et MinIO restent sur un réseau privé :
 
 ```bash
 export WALLET_API_IMAGE='wallet-manager-api:release-YYYYMMDD-HHMM'
-export WALLET_WEB_IMAGE='wallet-manager-web:release-YYYYMMDD-HHMM'
 export POSTGRES_PASSWORD='mot-de-passe-fort'
 export MINIO_ROOT_USER='wallet-minio'
 export MINIO_ROOT_PASSWORD='mot-de-passe-minio-fort'
@@ -130,7 +80,6 @@ Pour automatiser le contrôle des variables, la validation de la configuration e
 
 ```bash
 WALLET_API_IMAGE='wallet-manager-api:release-YYYYMMDD-HHMM' \
-WALLET_WEB_IMAGE='wallet-manager-web:release-YYYYMMDD-HHMM' \
 POSTGRES_PASSWORD='...' \
 MINIO_ROOT_USER='...' \
 MINIO_ROOT_PASSWORD='...' \

@@ -8,7 +8,7 @@ export default function PlansLayout() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: theme.background },
-        header: CompactStackHeader,
+        header: (props) => <CompactStackHeader {...props} />,
         headerTitleStyle: { color: theme.label, fontSize: 17, fontWeight: "700" },
         headerShadowVisible: false,
         headerTintColor: theme.accent,

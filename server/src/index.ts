@@ -29,7 +29,11 @@ app.setErrorHandler((error, request, reply) => {
 });
 
 await app.register(cookie);
-await app.register(cors, { origin: config.WEB_ORIGIN, credentials: true });
+await app.register(cors, {
+  origin: config.WEB_ORIGIN,
+  credentials: true,
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+});
 await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 await app.register(rateLimit, { global: true, max: 120, timeWindow: "1 minute" });
 

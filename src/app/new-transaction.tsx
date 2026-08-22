@@ -19,7 +19,6 @@ import {
   Text,
   TextInput,
   View,
-  Platform,
 } from "react-native";
 import { SelectField } from "@/components/select-field";
 import { ActionButton, FormField, InlineError, KeyboardAwareScreen } from "@/components/ui";
@@ -42,7 +41,6 @@ import type {
 import { formatAmount, formatDate, formatTime } from "@/utils/format";
 import { log } from "@/utils/logger";
 import { userMessage } from "@/utils/user-message";
-import WebCloudTransaction from "@/components/web-cloud-transaction";
 
 type TransferFeeMode = "manual" | "calculated";
 
@@ -68,11 +66,6 @@ const TRANSACTION_TABS = [
 ] as const satisfies { value: TransactionType; label: string; icon: typeof ArrowDownLeft }[];
 
 export default function NewTransactionScreen() {
-  if (Platform.OS === "web") return <WebCloudTransaction />;
-  return <NativeNewTransactionScreen />;
-}
-
-function NativeNewTransactionScreen() {
   const theme = useTheme();
   const { id, goalId: goalParam, type: typeParam } = useLocalSearchParams<{
     id?: string;
